@@ -18,6 +18,8 @@ Read these before doing anything:
 
 ## Rules that constrain the code
 
+- **This repo is public.** Anything committed is readable by anyone. No credentials, no
+  personal data, no voice recordings of real people.
 - **No credentials in the repo.** No keys, passwords, or `.env` files — stated prohibition in
   the brief. `.env.example` with variable names only.
 - **Prompts and agent configurations are a required deliverable.** Keep the detective's system

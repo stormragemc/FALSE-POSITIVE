@@ -42,9 +42,14 @@ Repo requirements checklist:
 | ☐ | **Relevant prompts / agent configurations** committed (the detective's system prompt, goal policy, and any HuBERT-side config) |
 | ☐ | **Disclosure of third-party libraries, models, datasets, APIs** |
 | ☑ | **No credentials committed** — no keys, passwords, or `.env` files in git history |
-| ☐ | Repo set to **private** on GitHub |
-| ☐ | **`garena-ai-build-challenge`** added as a collaborator |
+| ☑ | Repo visibility — **staying public** (see decision below) |
 | ☐ | Repo link placed in the Google Drive submission (Google Doc or text file) |
+
+**Repo visibility decision (31 Jul 2026):** the brief's wording is *"set your repository to
+private and add `garena-ai-build-challenge` as a collaborator"* — the collaborator step exists
+to grant the judges access to a private repo. We were advised to keep the repo **public**, so
+neither step applies; judges can read it directly. The submitted Drive folder still needs the
+repo link. Revisit only if Garena asks for private.
 
 The prototype must demonstrate the *complete core experience*: witness the crime → hands-free
 interrogation → the detective adapting on both channels → an outcome shaped by what was said.

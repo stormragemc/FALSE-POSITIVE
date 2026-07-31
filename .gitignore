@@ -1,0 +1,43 @@
+# Secrets — the challenge brief explicitly prohibits committing credentials.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Build output
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Models & large local artefacts (HuBERT checkpoints, cached weights)
+*.pt
+*.bin
+*.onnx
+*.safetensors
+models/
+.cache/
+
+# Voice/session captures — never commit recordings of a real person
+recordings/
+*.wav
+*.mp3
+*.m4a
+!docs/assets/**
+
+# Logs & tooling
+*.log
+.gstack/
+.DS_Store
+.vscode/
+.idea/
+coverage/

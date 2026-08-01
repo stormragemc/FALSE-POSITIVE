@@ -9,6 +9,12 @@ this file and say what changed.
 
 ---
 
+## Problem Statement (How Might We)
+
+There is an opportunity to reimagine digital entertainment through an experience that treats the player's own voice, testimony and performance under pressure as part of the gameplay.
+
+How might we utilize multimodal AI to create gaming experiences that feel personal, responsive and different for every mystery and psychological enthusiast out there?
+
 ## Canonical pitch (as submitted)
 
 > We wanna build a new way to interact with digital entertainment, a game experience that

@@ -85,8 +85,6 @@ several minutes. It is not hung.
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Ownership, contracts between components, and the schedule to 9 Aug. |
 | [`docs/UNITY_CLIENT.md`](docs/UNITY_CLIENT.md) | Client and pipeline build notes — cop rigging, lip sync, VAD, debugging, proven-vs-wired status. |
 | [`Sidecar/README.md`](Sidecar/README.md) | Sidecar setup, endpoints, troubleshooting. |
-| [`AGENTS.md`](AGENTS.md) | Orientation for AI agents — identity gate, directory ownership, branch naming, integration gate. |
-| [`docs/AGENT_SETUP.md`](docs/AGENT_SETUP.md) | Shared agent working conventions. |
 
 ## Third-party components
 

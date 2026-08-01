@@ -75,19 +75,35 @@ Everything below is a restatement of the pitch, in the form the build has to res
   (Build Quality explicitly scores "genuine use of AI-driven behaviour").
 - Voice data handling is stated plainly to the player and in the README.
 
+## Decisions made
+
+Recorded here as they are taken, with the date and who took them. Implementation detail lives in
+[`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+
+| Date | Decision | Notes |
+|---|---|---|
+| 1 Aug 2026 | **Game engine: Unity.** | Team call. Godot was briefly considered and dropped. Giorgi owns the client. |
+| 1 Aug 2026 | **All API calls go to OpenAI**, on team credits. | The one exception is HuBERT, which runs locally in the sidecar — no audio leaves the machine for the affect channel. |
+| 1 Aug 2026 | **Model picks:** `gpt-5.6-terra` (detective turn), `gpt-5.6-sol` (consistency analyst), `gpt-4o-transcribe` (ASR), `gpt-4o-mini-tts` (detective's voice), `facebook/hubert-base-ls960` (prosody, local). | Rationale in the plan §2.3. Re-verify the IDs before the freeze and keep the README disclosure table in step. |
+| 1 Aug 2026 | **Unity client + local Python sidecar**, talking over WebSocket. | Keeps the API key out of the shipped build, makes HuBERT possible at all, and lets five people work in parallel. |
+
 ## Open decisions
 
 These are **not decided yet**. Do not treat any of them as settled, and do not silently pick
 one — raise it.
 
-- Platform and stack (web vs native; ASR choice; TTS voice for the detective).
+- **Pipeline (ASR → LLM → TTS) vs the Realtime API** for the voice loop. The plan proposes the
+  pipeline and argues it in §2.2; it needs team sign-off, and `gpt-realtime-2.1-mini` stays as a
+  labelled fallback if latency is unacceptable by D6.
 - How HuBERT features are consumed: raw representations vs a trained probe vs
-  hand-derived prosodic features, and what the detective actually receives.
+  hand-derived prosodic features, and what the detective actually receives. **Marcel's call, due
+  end of D1.**
 - Whether prosody arrives as a signal the LLM sees, or as a separate policy that steers it.
 - The case itself: crime, cast, ground truth, and what "the case unfolds" resolves into.
 - How consistency is tracked and scored across the interrogation.
 - Endings / outcome model.
 - Latency budget and the fallback when a response is slow or ASR fails.
+- **Team name** — required for the Drive folder before submission.
 
 ## Honesty rule
 

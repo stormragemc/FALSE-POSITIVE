@@ -48,10 +48,10 @@ Five people. One owner per box. The owner is the only person who merges into the
 | Person | Workstream | Owns | Primary directory |
 |---|---|---|---|
 | **Giorgi** | Unity client | The playable experience: crime sequence, mic capture, detective playback, notebook, outcome, all visible failure states | `unity/` |
-| **Marcel** | Prosody / HuBERT | The affect channel. HuBERT + prosodic features → `ProsodySignal` | `service/prosody/` |
-| **Bong** | Detective agent | The opponent. Goal policy, prompts, tactic selection, consistency analyst | `service/detective/`, `prompts/` |
+| **Marcel** | Prosody / HuBERT | The affect channel. HuBERT + prosodic features → `ProsodySignal`. **Owner** — Bong and Ado assist, see §1.1 | `service/prosody/` |
+| **Bong** | Detective agent | The opponent. Goal policy, prompts, tactic selection, consistency analyst. Also assists on prosody | `service/detective/`, `prompts/`, `service/prosody/` |
 | **Vinay** | AI security | Key handling, prompt-injection defence, output safety, cost limits, voice privacy, red-team report | `service/security/`, `docs/SECURITY.md`, `docs/PRIVACY.md` |
-| **Ado** | Core service + delivery | Sidecar skeleton, session orchestration, case data, consistency tracker, exception handling, tests, docs, CI. **Agent-executable** — see [§8](#8-ados-backlog-agent-executable) | `service/core/`, `service/cases/`, `docs/`, `tests/` |
+| **Ado** | Core service + delivery | Sidecar skeleton, session orchestration, case data, consistency tracker, exception handling, tests, docs, CI. Also assists on prosody. **Agent-executable** — see [§8](#8-ados-backlog-agent-executable) | `service/core/`, `service/cases/`, `docs/`, `tests/`, `service/prosody/` |
 
 **Ado does not touch `unity/`.** Per instruction. If Unity work is blocking, it goes to Giorgi.
 
@@ -59,6 +59,26 @@ Five people. One owner per box. The owner is the only person who merges into the
 `marcel/hubert-baseline`, `bong/tactic-selection`, `vinay/output-safety-filter`,
 `ado/session-orchestrator`. An agent that needs a new branch creates it under the name of the
 person it is working for, and says so. Full rules in [`AGENTS.md`](../AGENTS.md).
+
+### 1.1 `service/prosody/` is shared — three people, one owner
+
+The affect channel is the highest-risk part of the build and the one that most needs to be
+working by D4, so **Bong and Ado can both build inside `service/prosody/`**. Marcel remains the
+owner. That means:
+
+- **Marcel owns `ProsodySignal` (§3.1).** Bong and Ado implement against it; they do not change
+  its shape. A field added or removed is Marcel's call and gets announced to all five.
+- **Marcel reviews and merges** everything landing in `service/prosody/`, including work from the
+  other two. Branch under your own name (`bong/...`, `ado/...`), not Marcel's.
+- **Split by file, not by line.** Marcel takes the HuBERT path — checkpoint loading, hidden-state
+  extraction, `hubert_instability`, `hubert_baseline_distance`. The classical signal-processing
+  features (F0, energy, timing, pauses) and the test rig are separable work that Bong or Ado can
+  own end-to-end without touching Marcel's files. See A14 and A15.
+- **Bong's angle is the consumer's.** He is the one person who knows what the detective actually
+  needs from the signal, so if a field reads well in the schema but is useless in a prompt, he
+  should be the one to say so — before D4, not after.
+
+If two of you are about to edit the same file, that is the moment to talk rather than merge.
 
 ---
 
@@ -412,9 +432,20 @@ is the ordered backlog and its acceptance criteria.
 | A11 | Cost meter | `service/core/cost.py` | Running $ per session, exposed on `/health` and in the notebook; hard cap ends the session in-fiction |
 | A12 | README: setup + architecture + disclosure | `README.md`, `docs/SETUP.md` | Required by the brief (G4). Table complete with licences. Clean-machine tested by someone who did not write it |
 | A13 | CI: tests + secret scan | `.github/workflows/ci.yml` | `pytest` + `gitleaks` on every push; secret scan failing blocks the merge (G2) |
+| A14 | Classical prosody features (assisting Marcel) | `service/prosody/features_classical.py` | F0, energy, timing, pause detection per §3.1 — pure signal processing, no model, no HuBERT import. Unit-tested against synthetic tones with known pitch and known pause structure. **Marcel reviews and merges** |
+| A15 | Prosody test rig + fixture generator (assisting Marcel) | `tests/prosody/`, `tests/fixtures/generate_audio.py` | Generates fixture audio **at test time** via `gpt-4o-mini-tts` with contrasting delivery instructions (flat/brisk vs hesitant/slow) — see the fixture rule below. Asserts the two produce measurably different `ProsodySignal`s on `onset_delay_ms`, `long_pause_count` and `tension`. This is the D4 money shot as a test |
 
 **Dependency order:** A1 → A2 → A3 → (A4, A5 parallel) → A6 → A7 → A8 → A9 → (A10–A13 parallel).
-A7 unblocks everyone else; get to it early.
+A7 unblocks everyone else; get to it early. A14 and A15 sit outside that chain and can start as
+soon as A3 lands the contract — they are the two prosody tasks Ado or Bong can take without
+waiting on Marcel.
+
+> **Fixture audio rule (G2).** No `.wav`/`.mp3` is ever committed, and no recording of a real
+> person goes near this repo — `.gitignore` already blocks the extensions, and A15 must not work
+> around it. The generator script is committed; the audio it produces is not. Synthetic TTS
+> fixtures prove the pipeline reacts to delivery; they do **not** prove it reads real human
+> affect. For that, the team records themselves locally, keeps it local, and reports what they
+> saw. Do not let a green A15 stand in for the D4 demonstration (G10).
 
 ---
 
@@ -441,7 +472,7 @@ five people and eight days is how the D3 slice gets missed.
 | Risk | Mitigation | Owner |
 |---|---|---|
 | Turn latency makes it feel dead | Stream TTS, diegetic thinking beat, measure from D4 not D7; Realtime API is the labelled D6 escape hatch | Ado |
-| HuBERT adds nothing the transcript did not already say | Marcel demonstrates the money shot by D4: identical words, two deliveries, two different tactics. If it cannot be demonstrated, we say so honestly rather than claiming it | Marcel |
+| HuBERT adds nothing the transcript did not already say | The money shot by D4: identical words, two deliveries, two different tactics. Three people on the channel (§1.1) so it is not one person's single point of failure, and A15 makes it a test rather than a hope. If it cannot be demonstrated, we say so honestly rather than claiming it | Marcel, with Bong + Ado |
 | Detective is a branch table wearing an LLM costume | Tactic comes from model output; notebook exposes the reasoning; G9 is a review item on every PR | Bong |
 | Player talks the detective out of its role via voice | Transcript is data, never instruction; hardened system prompt; red-team on D6 | Vinay |
 | Unity is one person | Ado's harness means everything except the client is testable without Unity; Giorgi is never the bottleneck for four people | Giorgi |

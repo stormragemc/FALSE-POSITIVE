@@ -31,15 +31,26 @@ Once you have the answer, work only inside that person's directory:
 | Person | Workstream | Directory |
 |---|---|---|
 | Giorgi | Unity client | `unity/` |
-| Marcel | Prosody / HuBERT | `service/prosody/` |
-| Bong | Detective agent | `service/detective/`, `prompts/` |
+| Marcel | Prosody / HuBERT — **owner** | `service/prosody/` |
+| Bong | Detective agent, and assisting on prosody | `service/detective/`, `prompts/`, `service/prosody/` |
 | Vinay | AI security | `service/security/`, `docs/SECURITY.md`, `docs/PRIVACY.md` |
-| Ado | Core service, docs, tests, CI | `service/core/`, `service/cases/`, `docs/`, `tests/` |
+| Ado | Core service, docs, tests, CI, and assisting on prosody | `service/core/`, `service/cases/`, `docs/`, `tests/`, `service/prosody/` |
 
 Ado does not work in `unity/` — that is Giorgi's, always.
 
 If the task you have been given belongs to someone else's directory, say so and stop. The fix is
 for the two humans to talk, not for you to reach across.
+
+**`service/prosody/` is the one shared directory.** Marcel owns it; Bong and Ado build in it too.
+If you are working for Bong or Ado inside `service/prosody/`:
+
+- Do **not** change the shape of `ProsodySignal`. It is Marcel's contract and four other things
+  depend on it. If the task seems to require a schema change, stop and say so.
+- Do **not** edit the HuBERT files — checkpoint loading, hidden-state extraction,
+  `hubert_instability`, `hubert_baseline_distance`. Those are Marcel's. The classical features and
+  the test rig are the shared surface.
+- Branch under the name of the person you are working for, never `marcel/...`, and say in the
+  summary that Marcel has to review it.
 
 ## Branches
 

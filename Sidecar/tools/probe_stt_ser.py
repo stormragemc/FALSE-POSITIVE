@@ -1,0 +1,48 @@
+"""Feed a real PCM16/16kHz utterance through faster-whisper (STT) and the
+HuBERT emotion classifier (SER) directly, proving both halves of the
+"HuBERT detects the player's voice" pipeline independently of the HTTP
+/turn endpoint (whose TTS stage currently 402s until .env is updated,
+which would otherwise mask a working STT/SER stage as a total failure).
+
+Usage:
+    C:\\fpsc_venv\\Scripts\\python.exe tools\\probe_stt_ser.py <path_to.pcm>
+
+<path_to.pcm> must be raw PCM16 LE mono at 16kHz (no header) — see
+Sidecar/README.md's "Testing it in isolation" section for how to make one.
+"""
+
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+if len(sys.argv) < 2:
+    print("Usage: probe_stt_ser.py <path_to_16k_mono_pcm16.pcm>")
+    sys.exit(1)
+
+pcm_path = Path(sys.argv[1])
+raw_bytes = pcm_path.read_bytes()
+print(f"Loaded {len(raw_bytes)} bytes from {pcm_path}")
+
+import audio_utils
+import ser
+import stt
+
+audio_f32 = audio_utils.pcm16_bytes_to_float32(raw_bytes)
+print(f"{len(audio_f32)} samples ({len(audio_f32) / 16000:.2f}s @ 16kHz)")
+
+print("\nLoading STT (faster-whisper small.en)...")
+t0 = time.perf_counter()
+transcript, stt_ms = stt.transcribe(audio_f32)
+print(f"STT  ({stt_ms} ms, {int((time.perf_counter() - t0) * 1000)} ms incl. load): {transcript!r}")
+
+print("\nLoading SER (superb/hubert-base-superb-er)...")
+t0 = time.perf_counter()
+emotion, confidence, ser_ms = ser.classify(audio_f32)
+print(f"SER  ({ser_ms} ms, {int((time.perf_counter() - t0) * 1000)} ms incl. load): {emotion!r} (confidence {confidence:.2f})")
+
+if transcript.strip():
+    print("\nOK: STT produced a non-empty transcript from real speech audio.")
+else:
+    print("\nWARNING: STT returned empty transcript — check the input audio.")

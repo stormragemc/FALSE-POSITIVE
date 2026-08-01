@@ -30,17 +30,20 @@ Notes:
 
 ## 2. Source code of a working end-to-end prototype
 
-◐ Repo initialised; documentation only so far. No prototype code yet.
+◐ **A working vertical slice exists** as of 1 Aug 2026. Giorgi's Unity branch is merged into
+trunk: Unity client + local Python sidecar running mic → STT → speech emotion → LLM → TTS →
+playback with lip sync. The parts that carry the *pitch* rather than the plumbing are not built —
+consistency tracking, structured detective tactics, the case as data, and the outcome model.
 
 Repo requirements checklist:
 
 | ☐ | Requirement |
 |---|---|
-| ☐ | Complete source code |
-| ☐ | README with **setup instructions** |
-| ☐ | **Architecture overview** |
-| ☐ | **Relevant prompts / agent configurations** committed (the detective's system prompt, goal policy, and any HuBERT-side config) |
-| ☐ | **Disclosure of third-party libraries, models, datasets, APIs** |
+| ◐ | Complete source code — the voice loop runs; the game around it does not exist yet |
+| ☑ | README with **setup instructions** — written 1 Aug; ⚠ not yet clean-machine tested by someone who did not write it |
+| ☑ | **Architecture overview** — README + `IMPLEMENTATION_PLAN.md` §2, both redrawn to match the code |
+| ☐ | **Relevant prompts / agent configurations** committed — ⚠ **currently violated.** The detective's persona and the crime premise are inline string literals in `Sidecar/llm.py`. This is a *graded* deliverable. **Bong extracts them to files** |
+| ☑ | **Disclosure of third-party libraries, models, datasets, APIs** — table filled in 1 Aug; ⚠ several licences still marked unconfirmed, including **IEMOCAP** (restrictive academic licence) and **Avaturn** redistribution rights for a public repo |
 | ☑ | **No credentials committed** — no keys, passwords, or `.env` files in git history |
 | ☑ | Repo visibility — **staying public** (see decision below) |
 | ☐ | Repo link placed in the Google Drive submission (Google Doc or text file) |

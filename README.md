@@ -25,14 +25,20 @@ Read these before writing any code or making any design call.
 | [`docs/CHALLENGE_BRIEF.md`](docs/CHALLENGE_BRIEF.md) | The Garena case brief — deliverables, judging criteria and weights, rules, timeline. **Authoritative.** |
 | [`docs/CONCEPT.md`](docs/CONCEPT.md) | The shortlisted pitch verbatim, the load-bearing ideas, the non-negotiables, and what is still undecided. |
 | [`docs/DELIVERABLES.md`](docs/DELIVERABLES.md) | Live checklist for the three submission items and the submission mechanics. |
-| [`AGENTS.md`](AGENTS.md) | Orientation for AI agents working in this repo. |
+| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Who owns what, the architecture, the frozen contracts between components, and the schedule to 9 Aug. |
+| [`AGENTS.md`](AGENTS.md) | Orientation for AI agents working in this repo — identity gate, directory ownership, branch naming, integration gate. |
+| [`docs/AGENT_SETUP.md`](docs/AGENT_SETUP.md) | Shared agent working conventions: skills, planning and review gates, commit format. |
 | [`docs/reference/`](docs/reference) | The original case brief PDF, as received. |
 
 ## Status
 
-Pre-implementation. The repo currently holds documentation only — the stack is not chosen and
-no prototype code exists yet. Open decisions are listed at the bottom of
-[`docs/CONCEPT.md`](docs/CONCEPT.md); raise them rather than picking silently.
+Pre-implementation. The repo currently holds documentation only — no prototype code exists yet.
+
+The stack is now chosen: **Unity** client, local **Python** sidecar, **OpenAI** for every API
+call, **HuBERT** running locally for the affect channel. Recorded in
+[`docs/CONCEPT.md`](docs/CONCEPT.md#decisions-made), argued in
+[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md). What is still undecided is listed
+at the bottom of `CONCEPT.md`; raise those rather than picking silently.
 
 ## Setup
 

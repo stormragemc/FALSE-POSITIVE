@@ -1,0 +1,26 @@
+# Web server
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
+
+# STT (local, free)
+faster-whisper>=1.0.3
+
+# Speech emotion recognition (local, free)
+transformers>=4.44
+torch>=2.3
+
+# Audio
+soundfile>=0.12
+soxr>=0.5
+pydub>=0.25
+
+# LLM (Gemini 3.6 Flash)
+google-genai>=2.14
+
+# TTS
+elevenlabs>=1.9
+
+# Config + misc
+python-dotenv>=1.0
+psutil>=6.0

@@ -1,0 +1,17 @@
+{
+    "name": "FalsePositive.Runtime",
+    "rootNamespace": "FalsePositive",
+    "references": [
+        "Unity.InputSystem",
+        "uLipSync.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

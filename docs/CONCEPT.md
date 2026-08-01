@@ -83,9 +83,29 @@ Recorded here as they are taken, with the date and who took them. Implementation
 | Date | Decision | Notes |
 |---|---|---|
 | 1 Aug 2026 | **Game engine: Unity.** | Team call. Godot was briefly considered and dropped. Giorgi owns the client. |
-| 1 Aug 2026 | **All API calls go to OpenAI**, on team credits. | The one exception is HuBERT, which runs locally in the sidecar — no audio leaves the machine for the affect channel. |
-| 1 Aug 2026 | **Model picks:** `gpt-5.6-terra` (detective turn), `gpt-5.6-sol` (consistency analyst), `gpt-4o-transcribe` (ASR), `gpt-4o-mini-tts` (detective's voice), `facebook/hubert-base-ls960` (prosody, local). | Rationale in the plan §2.3. Re-verify the IDs before the freeze and keep the README disclosure table in step. |
-| 1 Aug 2026 | **Unity client + local Python sidecar**, talking over WebSocket. | Keeps the API key out of the shipped build, makes HuBERT possible at all, and lets five people work in parallel. |
+| 1 Aug 2026 | ~~**All API calls go to OpenAI**, on team credits.~~ | **Superseded — see 1 Aug (evening) below.** |
+| 1 Aug 2026 | ~~**Model picks:** `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-4o-transcribe`, `gpt-4o-mini-tts`, `facebook/hubert-base-ls960`.~~ | **Superseded — see 1 Aug (evening) below.** None of these were implemented. |
+| 1 Aug 2026 | **Unity client + local Python sidecar.** | Keeps the API key out of the shipped build, makes the speech models possible at all, and lets five people work in parallel. **Stands** — but the transport is HTTP, not WebSocket; see below. |
+
+### 1 Aug 2026, evening — stack reconciled with the implementation ⚠ PENDING SIGN-OFF
+
+Giorgi's `Unity` branch landed a working end-to-end voice loop on D1 using a different stack from
+the one recorded that morning. The team's choice was to **let the working code stand and move the
+plan to match**, rather than spend D1–D3 refactoring a running prototype onto contracts nobody had
+implemented yet.
+
+**These rows are not ratified.** They record what the code does so the documents stop contradicting
+it. Each still needs the owners' assent — Vinay in particular, since the vendor set changed.
+
+| Decision | Notes |
+|---|---|
+| **LLM: Gemini 3.6 Flash**, replacing `gpt-5.6-terra` / `gpt-5.6-sol`. | ⚠ Reverses "all API calls go to OpenAI, on team credits." Needs a named budget owner. Detective dialogue only — there is no consistency analyst yet. |
+| **STT: `faster-whisper` (`small.en`), local**, replacing `gpt-4o-transcribe`. | Runs on the player's machine, no key, no cost. Player audio never leaves the machine — this is *stronger* than the original privacy position, not weaker. |
+| **TTS: ElevenLabs**, replacing `gpt-4o-mini-tts`. | ⚠ Second vendor, second key, off team credits. Free tier only grants API access to voices you created — see `Sidecar/README.md`. |
+| **Affect: `superb/hubert-base-superb-er`, local** — a 4-class emotion classifier, replacing the 13-field `ProsodySignal` derived from `facebook/hubert-base-ls960`. | Still HuBERT, so the pitch's claim holds. But it is a much thinner signal than the contract specified. ⚠ **Marcel's call** whether to enrich it. ⚠ Trained on **IEMOCAP**, which carries a restrictive academic licence — disclosure obligation, see README. |
+| **Transport: HTTP `POST /turn`**, replacing the WebSocket protocol in the plan's §3.4. | Request/response per turn. Arrived at independently and it works; §3.4 is superseded. |
+| **Input: voice activity detection, not push-to-talk.** | ⚠ Reverses the plan's §10 mitigation for noisy demo rooms. Needs a decision before the demo machine is chosen. |
+| **Repo layout: Unity project and `Sidecar/` at the repo root**, not `unity/` and `service/`. | Relocating a working project on D1 is churn; the plan's paths move instead. |
 
 ## Open decisions
 

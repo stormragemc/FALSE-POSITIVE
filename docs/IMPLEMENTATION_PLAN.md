@@ -10,14 +10,38 @@ incomplete glimpses, be interrogated hands-free by voice, and reach an outcome s
 they said and how they said it.
 
 **Architecture:** a Unity client owns the experience (crime, mic, detective's voice, outcome). A
-local Python sidecar owns every model call. HuBERT runs locally inside the sidecar; everything
-else is OpenAI. The two channels of the pitch — *meaning* and *affect* — are separate services
-inside the sidecar that meet only at the detective's turn, so the split is visible in the
-architecture, not just the deck.
+local Python sidecar owns every model call. Speech-to-text and HuBERT run locally inside the
+sidecar; the LLM and TTS are hosted APIs. The two channels of the pitch — *meaning* and *affect*
+— are separate services inside the sidecar that meet only at the detective's turn, so the split
+is visible in the architecture, not just the deck.
 
-**Tech stack:** Unity 6 (C#) · Python 3.11 + FastAPI + WebSockets · PyTorch + HuggingFace
-`transformers` (HuBERT) · OpenAI API (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-4o-transcribe`,
-`gpt-4o-mini-tts`).
+**Tech stack:** Unity 6 (`6000.5.6f1`, C#) · Python 3.10–3.12 + FastAPI, HTTP · PyTorch +
+HuggingFace `transformers` (HuBERT) · `faster-whisper` (local STT) · Gemini API · ElevenLabs API.
+
+---
+
+> ### ⚠ Stack amendment — 1 Aug 2026, evening. **Pending team sign-off.**
+>
+> This plan was written on the morning of D1. That afternoon, Giorgi's `Unity` branch landed a
+> **working end-to-end voice loop** on a different stack. The team's call was to let the running
+> code stand and move the plan to match, rather than spend D1–D3 refactoring a working prototype
+> onto contracts nobody had implemented.
+>
+> The sections below have been amended to describe what exists: **§2** (architecture), **§2.2**
+> (pipeline rationale), **§2.3** (model choices). **§3.4** (the WebSocket protocol) is superseded
+> — the implemented transport is HTTP.
+>
+> **Nothing here is ratified.** It is a record of the code, written down so the documents stop
+> contradicting it. Owners still have to agree — Vinay especially, since the vendor set changed
+> and there is now a second API key. The full row-by-row diff is in
+> [`CONCEPT.md` → "1 Aug 2026, evening"](CONCEPT.md#decisions-made).
+>
+> Two amendments **reverse an earlier decision and need a real answer**, not just a nod:
+> 1. **Voice activity detection replaced push-to-talk** — that was §10's mitigation for a noisy
+>    demo room, and G5 says a stage that only works in a quiet room is worth zero.
+> 2. **`superb/hubert-base-superb-er` (4 classes + confidence) replaced the 13-field
+>    `ProsodySignal`** in §3.1. The pitch's HuBERT claim survives; the *richness* the detective
+>    was designed around does not. **Marcel's call.**
 
 ---
 
@@ -55,6 +79,22 @@ Five people. One owner per box. The owner is the only person who merges into the
 
 **Ado does not touch `unity/`.** Per instruction. If Unity work is blocking, it goes to Giorgi.
 
+**⚠ Paths as built.** The directories above are the *plan's* names. The merged tree puts the Unity
+project and the sidecar at the repo root, because relocating a working project on D1 is churn.
+**Ownership is unchanged** — only the paths move. Read the table through this map:
+
+| Plan says | On disk | Owner |
+|---|---|---|
+| `unity/` | `Assets/`, `Packages/`, `ProjectSettings/` (repo root) | Giorgi |
+| `service/core/` | `Sidecar/app.py`, `Sidecar/audio_utils.py` | Ado |
+| `service/prosody/` | `Sidecar/ser.py` | Marcel (shared — §1.1) |
+| `service/detective/` | `Sidecar/llm.py` | Bong |
+| `prompts/` | **does not exist yet** — the detective's persona is an inline literal in `Sidecar/llm.py`. **This is a live G3 violation on a graded deliverable.** Bong extracts it; see §8. | Bong |
+| `service/cases/`, `service/security/`, `tests/` | do not exist yet | Ado / Vinay / Ado |
+
+`docs/` is unchanged and is Ado's. [`AGENTS.md`](../AGENTS.md) still lists the plan's paths; it
+needs the same map before anyone drives an agent off it.
+
 **Branches carry the owner's name:** `<name>/<short-kebab-summary>` — `giorgi/mic-capture-ptt`,
 `marcel/hubert-baseline`, `bong/tactic-selection`, `vinay/output-safety-filter`,
 `ado/session-orchestrator`. An agent that needs a new branch creates it under the name of the
@@ -84,88 +124,112 @@ If two of you are about to edit the same file, that is the moment to talk rather
 
 ## 2. Architecture
 
+**As built, 1 Aug 2026.** Solid boxes exist and run. `┄` marks what is planned and not yet written.
+
 ```
 ┌─────────────────────────────────┐         ┌──────────────────────────────────────────┐
-│  UNITY CLIENT  (Giorgi)         │         │  SIDECAR  service/  (Ado)                │
-│                                 │         │  FastAPI · localhost:8765                │
-│  • crime sequence (3 glimpses)  │  WS     │                                          │
-│  • mic capture 16 kHz mono PCM  │◄───────►│  ┌────────────────────────────────────┐  │
-│  • push-to-talk                 │ JSON +  │  │ session orchestrator (Ado)         │  │
-│  • detective audio playback     │ binary  │  └───┬──────────┬──────────┬──────────┘  │
-│  • detective's notebook panel   │         │      │          │          │             │
-│  • outcome screen               │         │      ▼          ▼          ▼             │
-│  • visible failure states       │         │  ┌────────┐ ┌────────┐ ┌──────────────┐  │
-└─────────────────────────────────┘         │  │PROSODY │ │TRANSCR.│ │ DETECTIVE    │  │
-                                            │  │Marcel  │ │  Ado   │ │ Bong         │  │
-   ships NO api key ────────────────────►   │  │HuBERT  │ │gpt-4o- │ │gpt-5.6-terra │  │
-                                            │  │ LOCAL  │ │transcr.│ │+ analyst sol │  │
-                                            │  └────────┘ └────────┘ └──────┬───────┘  │
+│  UNITY CLIENT  (Giorgi)         │         │  SIDECAR  Sidecar/  (Ado)                │
+│  Assets/_Project/               │         │  FastAPI · 127.0.0.1:8765                │
+│                                 │  HTTP   │                                          │
+│  • mic capture 16 kHz mono      │  POST   │  ┌────────────────────────────────────┐  │
+│  • voice activity detection     │  /turn  │  │ turn handler                       │  │
+│    ⚠ was push-to-talk           │────────►│  └───┬──────────┬──────────┬──────────┘  │
+│  • detective audio playback     │  wav    │      │          │          │             │
+│  • cop lip sync + idle anim     │         │      ▼          ▼          ▼             │
+│  • debug overlay (F1)           │◄────────│  ┌────────┐ ┌────────┐ ┌──────────────┐  │
+│  ┄ crime sequence (3 glimpses)  │  mp3 +  │  │AFFECT  │ │  STT   │ │ DETECTIVE    │  │
+│  ┄ detective's notebook panel   │  text   │  │Marcel  │ │  Ado   │ │ Bong         │  │
+│  ┄ outcome screen               │         │  │hubert- │ │faster- │ │Gemini 3.6    │  │
+│  ┄ visible failure states       │         │  │superb  │ │whisper │ │Flash ───►API │  │
+└─────────────────────────────────┘         │  │-er     │ │small.en│ │              │  │
+                                            │  │ LOCAL  │ │ LOCAL  │ │┄ analyst     │  │
+   ships NO api key ────────────────────►   │  └────────┘ └────────┘ └──────┬───────┘  │
                                             │       │                       │          │
-                                            │       └──── ProsodySignal ────┘          │
-                                            │                               ▼          │
+                                            │       └── label + conf ───────┘          │
+                                            │       ⚠ not ProsodySignal     ▼          │
                                             │                        ┌────────────┐    │
-                                            │  security layer        │ TTS        │    │
-                                            │  (Vinay) wraps all ───►│gpt-4o-mini │    │
-                                            │  egress + all output   │   -tts     │    │
+                                            │  ┄ security layer      │ TTS        │    │
+                                            │  ┄ (Vinay) wraps ────► │ ElevenLabs │    │
+                                            │  ┄ egress + output     │   ───►API  │    │
                                             └────────────────────────┴────────────┘────┘
                                                             │
-                                                            ▼  OpenAI API
+                                                            ▼  Gemini API · ElevenLabs API
 ```
+
+**Player audio never leaves the machine.** Both local models consume the waveform; only the
+*transcript* and the *emotion label* go to Gemini, and only the reply *text* goes to ElevenLabs.
+That is a stronger privacy position than this plan originally had — say it plainly in the deck.
 
 ### 2.1 Why a sidecar and not "all in Unity"
 
 Three reasons, in order of weight:
 
-1. **HuBERT is PyTorch.** There is no honest way to run it inside Unity in eight days. The pitch
-   names HuBERT; the sidecar is what makes that claim true rather than aspirational.
-2. **The API key must never ship in the game build.** A key embedded in a Unity binary is
-   extractable in minutes. Key lives in the sidecar's environment only. (G2, and Vinay's first
-   task.)
-3. **Five people can work in parallel** behind one frozen WebSocket contract.
+1. **HuBERT and Whisper are PyTorch.** There is no honest way to run them inside Unity in eight
+   days. The pitch names HuBERT; the sidecar is what makes that claim true rather than
+   aspirational.
+2. **The API keys must never ship in the game build.** A key embedded in a Unity binary is
+   extractable in minutes. Keys live in `Sidecar/.env` only — two of them now, Gemini and
+   ElevenLabs. (G2, and Vinay's first task.)
+3. **Five people can work in parallel** behind one frozen HTTP contract.
 
-### 2.2 Why a pipeline and not the Realtime API — **needs team sign-off**
+This reasoning held. It is the one part of §2 the implementation confirmed rather than changed.
 
-OpenAI's `gpt-realtime-2.1` would give lower latency and a more natural interruption feel. We are
-**not** using it for the PoC. The reasoning, so it can be argued with:
+### 2.2 Why a pipeline and not a speech-to-speech model — **settled by the implementation**
 
-| | Pipeline (chosen) | Realtime API |
+A speech-to-speech model (OpenAI's `gpt-realtime-2.1`, or Gemini's Live API) would give lower
+latency and a more natural interruption feel. We are **not** using one. This was argued on D1
+morning and then built the same way that afternoon, independently — which is about as strong a
+confirmation as a design decision gets.
+
+| | Pipeline (chosen, built) | Speech-to-speech |
 |---|---|---|
-| HuBERT gets raw audio | Yes, one obvious fork point | Yes, but audio path is owned by the SDK |
+| HuBERT gets raw audio | Yes, one obvious fork point | Yes, but the audio path is owned by the SDK |
 | Two channels visible in architecture | **Yes — this is the pitch** | Blurred inside one model |
 | Parallel work by 5 people | Each stage independently testable | One integration everyone waits on |
 | Visible exception handling (scored) | Per-stage, easy to surface | Harder to decompose |
-| Cost | ~$0.015/min TTS + text tokens | $32/$64 per M audio in/out tokens |
+| Cost | ElevenLabs TTS + Gemini text tokens | Audio tokens in *and* out, ~an order of magnitude more |
 | Latency | ~2.0–3.5 s per turn | ~0.5 s |
-| Unity integration | Plain WebSocket | WebRTC, fiddly in Unity |
+| Unity integration | Plain HTTP POST | WebRTC, fiddly in Unity |
 
-Latency is the real cost. Mitigations, all of which are also good drama: stream TTS (first chunk
-lands in ~300–600 ms), start speaking on the first complete sentence, and give the detective a
-diegetic beat — a pen tap, a page turn — while it thinks. A detective who pauses before answering
-is not a bug.
+Latency is the real cost, and it is now measurable rather than estimated — the sidecar reports
+per-stage timings, and the F1 overlay shows them. Mitigations, all of which are also good drama:
+stream TTS, start speaking on the first complete sentence, and give the detective a diegetic beat
+— a pen tap, a page turn — while it thinks. A detective who pauses before answering is not a bug.
 
-**Fallback path, labelled:** if the turn loop lands above 4 s on the demo machine by Day 6, the
-labelled stretch is `gpt-realtime-2.1-mini` for the utterance only, with prosody and consistency
+**Fallback path, labelled:** if the turn loop is still above 4 s on the demo machine by Day 6, the
+labelled stretch is a speech-to-speech model for the *utterance only*, with affect and consistency
 still on the pipeline. Do not start this before Day 6.
 
-### 2.3 Model choices
+### 2.3 Model choices — ⚠ amended, pending sign-off
 
-Every API call goes to OpenAI on team credits. HuBERT is the sole exception and runs locally.
+**This table describes what the code calls.** The morning-of-D1 version — all-OpenAI on team
+credits — is preserved in [`CONCEPT.md`](CONCEPT.md#decisions-made) as superseded. Two models are
+**local**, so the player's audio never leaves the machine; two are **hosted APIs**, and they are
+what the keys are for.
 
-| Role | Model | Why this one |
-|---|---|---|
-| Detective turn (in the loop, latency-critical) | `gpt-5.6-terra` | Balanced intelligence/cost tier. It is on the critical path of every turn; `sol` is too slow to sit there. |
-| Consistency analyst (async, latency-tolerant) | `gpt-5.6-sol` | Consistency is *the* determining factor of the outcome (CONCEPT §4). This runs off the critical path after each answer, so we pay for the best reasoning available. |
-| Transcription | `gpt-4o-transcribe` | Materially better word error rate than `whisper-1` on accents, background noise and variable speaking speed. Our players are a multinational team demoing in a noisy room — this is the exact failure mode it fixes. |
-| Detective's voice | `gpt-4o-mini-tts` | Streaming, ~$0.015/min, and it accepts **prompt-based control of tone, pace and delivery** — so the detective's shift from sympathetic to cold is expressed in the voice, driven by the same model output that chose the tactic. Genuine product fit, not just the cheap option. |
-| Prosody / affect | `facebook/hubert-base-ls960` (local) | The pitch names HuBERT. Runs on CPU. **Marcel: confirm the checkpoint licence and add it to the README table before first commit (G4).** |
+| Role | Model | Where | Why this one |
+|---|---|---|---|
+| Detective turn (in the loop, latency-critical) | `gemini-3.6-flash` | API | Fast enough to sit on the critical path of every turn, cheap enough to iterate on all week, and long-context enough to carry the whole interrogation transcript as the consistency substrate. ⚠ **Reverses the all-OpenAI decision — needs a named budget owner.** |
+| Consistency analyst (async, latency-tolerant) | *not yet implemented* | — | Consistency is *the* determining factor of the outcome (CONCEPT §4) and there is currently **nothing tracking it**. This is the single biggest gap in the build, and it is Ado's A6. |
+| Transcription | `faster-whisper`, `small.en` | **LOCAL** | Runs on the player's machine: no key, no per-minute cost, no audio egress. `small.en` is the accuracy/latency knee on CPU. ⚠ The original argument for a hosted ASR was *accented speech in a noisy room* — that risk is now real again, so bench `small.en` against the team's actual voices before D6 and be ready to step up to `medium.en`. |
+| Detective's voice | ElevenLabs TTS | API | Best-in-class delivery for an interrogator, which is a character whose *voice* is most of the performance. ⚠ Second vendor, second key, and **not** on team credits. Free tier only grants API access to voices you created yourself — see `Sidecar/README.md`. |
+| Affect | `superb/hubert-base-superb-er` | **LOCAL** | The pitch names HuBERT, and this is HuBERT — fine-tuned on IEMOCAP for 4-class emotion recognition (neutral / happy / angry / sad) plus a confidence. Runs on CPU. ⚠ Far thinner than the 13-field `ProsodySignal` in §3.1: **Marcel's call** whether to enrich it with classical prosodic features or move the contract. ⚠ IEMOCAP carries a restrictive academic licence — the lineage is disclosed in the README and the terms still need checking (G4). |
 
-**Degradation ladder** (Vinay owns, Ado wires): `gpt-5.6-terra` → `gpt-5.6-luna` on timeout or
-429 → scripted holding line, visibly labelled in the notebook as a fallback. Never a silent
-failure.
+**On the affect model's weakness — this is a feature, and the deck should say so.** The checkpoint
+is roughly 0.68 accurate on its own benchmark, and the sidecar's own docstring calls it "a soft
+impression, not ground truth". A frequently-wrong affect detector *is the thesis of the game.* The
+title is `FALSE POSITIVE`. Do not quietly paper over the error rate; state it, and show the
+detective acting on a reading that may be wrong. (G6, G10.)
 
-> Model IDs verified against OpenAI's model list on 1 Aug 2026. Re-verify at
-> `developers.openai.com/api/docs/models` before the freeze; if any ID has moved, the README
-> disclosure table (G4) has to move with it.
+**Degradation ladder** (Vinay owns, Ado wires) — **not built yet.** On Gemini timeout or 429:
+retry once, then a scripted holding line, visibly labelled as a fallback. On TTS failure: show the
+detective's line as text rather than dropping the turn. On empty transcription: the detective
+reacts to the silence rather than the pipeline erroring. Never a silent failure — exception
+handling is explicitly scored.
+
+> Model IDs re-verified against the implementation on 1 Aug 2026. Re-verify against the vendors'
+> live model lists before the freeze; if any ID has moved, the README disclosure table (G4) has to
+> move with it.
 
 ---
 
@@ -174,6 +238,18 @@ failure.
 **These are frozen at the end of Day 1 and are the reason five people can work at once.** Changing
 one after Day 1 requires telling all five owners in the group chat. Everything below is version
 `v1`; every payload carries `"v": 1`.
+
+> **⚠ Status against the implementation, 1 Aug evening.** None of these four are implemented yet;
+> the working slice predates them and passes plain strings between stages. That is fine for a
+> vertical slice and **not** fine for five people building in parallel, so the contracts still
+> stand — but two need an owner's decision before they can be treated as frozen:
+>
+> | | Status |
+> |---|---|
+> | **3.1 `ProsodySignal`** | ⚠ **Contested.** The affect model emits a 4-class label + confidence, not these 13 fields. **Marcel decides** by end of D2: enrich the model to fill the contract, or shrink the contract to the model. Bong is blocked on the answer. |
+> | **3.2 `DetectiveAction`** | ⚠ Not implemented — `llm.py` returns plain dialogue text. Structured output is what makes the tactic *visible* (G9, and the notebook panel). **Bong's** to build. |
+> | **3.3 `CaseState`** | ⚠ Not implemented — the case is a hardcoded premise string in `llm.py`. **Ado's** A5. |
+> | **3.4 WebSocket protocol** | ❌ **Superseded.** Transport is HTTP `POST /turn`; see the amended §3.4. |
 
 ### 3.1 `ProsodySignal` — Marcel produces, Bong consumes
 
@@ -272,35 +348,54 @@ The structured output of the detective's turn.
 }
 ```
 
-### 3.4 WebSocket protocol — Giorgi ↔ Ado
+### 3.4 HTTP protocol — Giorgi ↔ Ado — ⚠ **amended; supersedes the WebSocket design**
 
-`ws://localhost:8765/session`. Text frames are JSON; binary frames are raw 16-bit PCM, 16 kHz,
-mono.
+The WebSocket event protocol previously specified here was never built. Giorgi implemented
+request/response over HTTP instead, and it works, so **HTTP is the contract**. Recorded here as
+built, from `Sidecar/app.py`.
 
-**Client → server**
+`http://127.0.0.1:8765`. One request per turn, `multipart/form-data` in, JSON out.
 
-| Event | Payload | Meaning |
+| Endpoint | Request | Response |
 |---|---|---|
-| `session.start` | `{"case_id": "case_01_the_stairwell"}` | Begin |
-| `calibration.audio` | binary PCM | Baseline capture (§4.1) |
-| `utterance.begin` | `{"utterance_id": "u_007"}` | Push-to-talk pressed |
-| `utterance.audio` | binary PCM | Streamed while held |
-| `utterance.end` | `{"utterance_id": "u_007"}` | Released |
-| `utterance.abort` | `{"reason": "mic_lost" \| "too_short" \| "player_cancelled"}` | Client-side failure |
+| `GET /health` | — | `{"status": "ok" \| "loading", "models_loaded": bool, "version": "0.1.0"}` — Unity polls this and auto-launches the sidecar if nothing answers |
+| `POST /session/reset` | `session_id` | `{"ok": true}` — clears that session's turn history |
+| `POST /turn` | `session_id`, `sample_rate` (default 16000), `audio` (16-bit PCM mono; **omit to make the detective open the interrogation**) | the turn payload below |
+| `GET /debug/last_turn` | — | the last turn payload, success or failure. Feeds the F1 overlay |
 
-**Server → client**
+**Turn payload** — the same keys on success and failure, so the client has one shape to parse:
 
-| Event | Payload | Meaning |
-|---|---|---|
-| `transcript.partial` | `{"text": "..."}` | Shown as ghost text |
-| `transcript.final` | `{"utterance_id","text"}` | Locked in |
-| `detective.thinking` | `{"beat": "page_turn"}` | Cover the latency |
-| `detective.action` | `DetectiveAction` | Notebook + subtitle |
-| `detective.audio` | binary MP3 chunks | Streamed playback |
-| `detective.audio.end` | `{}` | Playback complete |
-| `state.update` | `{"pressure","turn","consistency_score"}` | HUD |
-| `session.fault` | `{"stage","code","message","recovery"}` | **Visible failure — see §6** |
-| `session.end` | `{"ending_id","summary"}` | Outcome screen |
+```jsonc
+{
+  "ok": true,
+  "error": "",                  // populated, and HTTP 500, on any stage failure
+  "transcript": "...",          // faster-whisper
+  "emotion": "neutral",         // 4-class: neutral | happy | angry | sad
+  "emotion_confidence": 0.61,
+  "reply_text": "...",          // Gemini
+  "audio_b64": "...",           // base64 PCM of the ElevenLabs speech
+  "audio_sample_rate": 24000,
+  "audio_channels": 1,
+  "stt_ms": 0, "ser_ms": 0, "llm_ms": 0, "tts_ms": 0, "total_ms": 0
+}
+```
+
+**Two things worth keeping.** STT and affect run *concurrently* on the same buffer via
+`asyncio.gather` — they are independent reads, and serialising them would waste the cheaper of the
+two. And the per-stage timings are already in the payload, which makes §2.2's latency argument
+measurable instead of asserted.
+
+**What HTTP costs us, to be honest about it.** No `transcript.partial` ghost text, no
+`detective.thinking` beat, and no streamed audio — the player waits on one blocking response with
+no feedback. That is a real UX regression against the WebSocket design and it will be visible on
+stage. The cheap fix is client-side: Giorgi plays a diegetic beat (pen tap, page turn) while the
+request is in flight. **Do not reopen the transport decision to get streaming back** unless the
+turn loop is still unacceptable at D6.
+
+**Still to add to this contract** (Ado, and the reason A5/A6 exist): `case_id` on the session,
+`DetectiveAction` in place of bare `reply_text`, a consistency score in the payload, and a
+structured `fault` object with `{stage, code, message, recovery}` so failures are *visible* rather
+than a 500 with a stack-trace string (§6).
 
 ---
 
@@ -417,28 +512,31 @@ criteria, and a test. TDD — the test is written and seen to fail before the im
 Per-task detail lives in `docs/superpowers/plans/` and is generated one workstream at a time; this
 is the ordered backlog and its acceptance criteria.
 
+**⚠ Rebased onto the merged tree, 1 Aug evening.** Three of these arrived for free in Giorgi's
+sidecar, one is superseded, and the paths moved per §1. Status key: ☑ done · ◐ partial · ☐ open.
+
 | # | Task | Files | Done when |
 |---|---|---|---|
-| A1 | Sidecar skeleton + health endpoint | `service/main.py`, `service/config.py`, `pyproject.toml` | `GET /health` returns `{"ok":true,"models":{...}}` listing the four model IDs from `models.yaml`; `pytest tests/test_health.py` passes |
-| A2 | `.env.example` + config loader | `.env.example`, `service/config.py` | Only variable *names* committed (G2); loader raises a named error listing the missing var, never a stack trace |
-| A3 | Contract models as code | `service/contracts.py` | Pydantic models for all four §3 schemas; round-trip test on the exact JSON in this document; **test asserting no deception-like key exists** (G6) |
-| A4 | WebSocket session endpoint | `service/core/session.py` | Every §3.4 event accepted/emitted; unknown event → `session.fault` not a crash; `tests/test_protocol.py` covers all twelve |
-| A5 | Case data model + loader | `service/cases/schema.py`, `service/cases/case_01_the_stairwell.yaml` | Case loads from YAML, validates, exposes ground truth / glimpses / topics / traps; invalid case fails loudly at startup |
-| A6 | Consistency tracker | `service/core/consistency.py` | Given a transcript, extracts claims, detects contradictions, produces `CaseState`; fixture test of a known 8-turn contradictory transcript scores below 0.5, a clean one above 0.8 |
-| A7 | Transcript replay harness | `tests/replay.py`, `tests/fixtures/*.jsonl` | Runs a whole session from a fixture with **no mic and no Unity**; this is how the other four test their work |
-| A8 | Turn orchestrator | `service/core/orchestrator.py` | Forks audio to prosody and transcription concurrently, joins, calls detective, streams TTS; a stage failure produces the §6 fault, never an exception to the client |
-| A9 | Fault handling F1–F6 | `service/core/faults.py` | Each fault forced by a test; each produces `session.fault` with a `recovery` string |
-| A10 | Structured session logging | `service/core/telemetry.py` | Per-turn JSONL: latencies per stage, tokens, cost, tactic chosen. **No audio, no transcript text** unless `FP_LOG_TRANSCRIPTS=1` (Vinay reviews) |
-| A11 | Cost meter | `service/core/cost.py` | Running $ per session, exposed on `/health` and in the notebook; hard cap ends the session in-fiction |
-| A12 | README: setup + architecture + disclosure | `README.md`, `docs/SETUP.md` | Required by the brief (G4). Table complete with licences. Clean-machine tested by someone who did not write it |
-| A13 | CI: tests + secret scan | `.github/workflows/ci.yml` | `pytest` + `gitleaks` on every push; secret scan failing blocks the merge (G2) |
-| A14 | Classical prosody features (assisting Marcel) | `service/prosody/features_classical.py` | F0, energy, timing, pause detection per §3.1 — pure signal processing, no model, no HuBERT import. Unit-tested against synthetic tones with known pitch and known pause structure. **Marcel reviews and merges** |
-| A15 | Prosody test rig + fixture generator (assisting Marcel) | `tests/prosody/`, `tests/fixtures/generate_audio.py` | Generates fixture audio **at test time** via `gpt-4o-mini-tts` with contrasting delivery instructions (flat/brisk vs hesitant/slow) — see the fixture rule below. Asserts the two produce measurably different `ProsodySignal`s on `onset_delay_ms`, `long_pause_count` and `tension`. This is the D4 money shot as a test |
+| ☑ A1 | Sidecar skeleton + health endpoint | `Sidecar/app.py` | **Done in the merge.** `GET /health` returns `{"status","models_loaded","version"}`. Remainder: it does not list the model IDs — add that, it is the cheapest possible G4 self-check |
+| ☑ A2 | `.env.example` + config loader | `Sidecar/.env.example`, `Sidecar/config.py` | **Done in the merge.** Variable names only (G2); the sidecar fails fast with a named error naming the missing var |
+| ☐ A3 | Contract models as code | `Sidecar/contracts.py` | Pydantic models for the §3 schemas; round-trip test on the exact JSON in this document; **test asserting no deception-like key exists** (G6). ⚠ Blocked on Marcel's §3.1 decision |
+| ❌ A4 | ~~WebSocket session endpoint~~ | — | **Superseded.** Transport is HTTP and it works (§3.4). The part worth keeping moves into A9: an unknown or malformed request must produce a structured fault, not a 500 with a stack-trace string |
+| ☐ A5 | Case data model + loader | `Sidecar/cases/schema.py`, `Sidecar/cases/case_01_the_stairwell.yaml` | Case loads from YAML, validates, exposes ground truth / glimpses / topics / traps; invalid case fails loudly at startup. ⚠ Today the case is a hardcoded premise string in `llm.py` — **coordinate with Bong**, this straddles the two boxes |
+| ☐ A6 | **Consistency tracker** | `Sidecar/consistency.py` | Given a transcript, extracts claims, detects contradictions, produces `CaseState`; fixture test of a known 8-turn contradictory transcript scores below 0.5, a clean one above 0.8. **The biggest gap in the build — the pitch calls consistency the determining factor and nothing tracks it. Start here.** |
+| ☐ A7 | Transcript replay harness | `tests/replay.py`, `tests/fixtures/*.jsonl` | Runs a whole session from a fixture with **no mic and no Unity**; this is how the other four test their work |
+| ◐ A8 | Turn orchestrator | `Sidecar/app.py` | **Half done in the merge** — STT and affect already fork concurrently via `asyncio.gather` and rejoin before the LLM call. Remainder: consistency in the join, `DetectiveAction` out, and a stage failure producing a §6 fault rather than a bare 500 |
+| ☐ A9 | Fault handling F1–F6 | `Sidecar/faults.py` | Each fault forced by a test; each produces a structured fault with a `recovery` string. ⚠ Today every failure is one 500 with `str(e)` — honest, but not *visible*, and exception handling is scored |
+| ☐ A10 | Structured session logging | `Sidecar/telemetry.py` | Per-turn JSONL: latencies per stage, tokens, cost, tactic chosen. **No audio, no transcript text** unless `FP_LOG_TRANSCRIPTS=1` (Vinay reviews). Per-stage timings already exist in the turn payload — persist them |
+| ☐ A11 | Cost meter | `Sidecar/cost.py` | Running $ per session, exposed on `/health` and in the notebook; hard cap ends the session in-fiction. ⚠ Now spans **two** vendors |
+| ◐ A12 | README: setup + architecture + disclosure | `README.md` | **Rewritten in the merge** with the disclosure table filled in for the first time (G4). Remainder: the ⚠ rows — IEMOCAP, Avaturn, ffmpeg/soxr, Unity licence tier — need their licences confirmed, and it needs a clean-machine test by someone who did not write it |
+| ☐ A13 | CI: tests + secret scan | `.github/workflows/ci.yml` | `pytest` + `gitleaks` on every push; secret scan failing blocks the merge (G2) |
+| ☐ A14 | Classical prosody features (assisting Marcel) | `Sidecar/features_classical.py` | F0, energy, timing, pause detection per §3.1 — pure signal processing, no model, no HuBERT import. Unit-tested against synthetic tones with known pitch and known pause structure. **Marcel reviews and merges.** ⚠ This is now the obvious way to close the §3.1 gap without touching Marcel's HuBERT files |
+| ☐ A15 | Prosody test rig + fixture generator (assisting Marcel) | `tests/prosody/`, `tests/fixtures/generate_audio.py` | Generates fixture audio **at test time** via ElevenLabs with contrasting delivery (flat/brisk vs hesitant/slow) — see the fixture rule below. Asserts the two produce measurably different signals. This is the D4 money shot as a test |
 
-**Dependency order:** A1 → A2 → A3 → (A4, A5 parallel) → A6 → A7 → A8 → A9 → (A10–A13 parallel).
-A7 unblocks everyone else; get to it early. A14 and A15 sit outside that chain and can start as
-soon as A3 lands the contract — they are the two prosody tasks Ado or Bong can take without
-waiting on Marcel.
+**Dependency order, rebased:** A1 ☑ → A2 ☑ → **A6** → A5 → A3 → A7 → A8 → A9 → (A10–A13 parallel).
+A6 jumps the queue: it is the biggest gap, it is stack-independent, and it needs nothing from the
+contested contracts. A14 and A15 sit outside the chain and are the two prosody tasks Ado or Bong
+can take without waiting on Marcel.
 
 > **Fixture audio rule (G2).** No `.wav`/`.mp3` is ever committed, and no recording of a real
 > person goes near this repo — `.gitignore` already blocks the extensions, and A15 must not work
@@ -476,7 +574,7 @@ five people and eight days is how the D3 slice gets missed.
 | Detective is a branch table wearing an LLM costume | Tactic comes from model output; notebook exposes the reasoning; G9 is a review item on every PR | Bong |
 | Player talks the detective out of its role via voice | Transcript is data, never instruction; hardened system prompt; red-team on D6 | Vinay |
 | Unity is one person | Ado's harness means everything except the client is testable without Unity; Giorgi is never the bottleneck for four people | Giorgi |
-| Demo machine has no network / noisy room | Push-to-talk not VAD; cached case data; test on the actual machine D7 | All |
+| Demo machine has no network / noisy room | ⚠ **Mitigation currently broken.** The build uses VAD, not push-to-talk, so a noisy room can trigger turns the player did not intend — and G5 says a stage that only works in a quiet room is worth zero. Either add push-to-talk as an override, or prove VAD holds in a room with people talking. Decide by D5, test on the actual machine D7 | Giorgi, decided by all |
 | Credits burn on a runaway loop | A11 hard cap per session | Vinay |
 
 ---

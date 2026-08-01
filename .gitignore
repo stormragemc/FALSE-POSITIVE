@@ -105,3 +105,11 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Sidecar secrets — never commit API keys
+Sidecar/.env
+**/.env
+Sidecar/.venv/
+Sidecar/__pycache__/
+**/__pycache__/
+*.pyc

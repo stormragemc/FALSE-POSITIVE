@@ -148,6 +148,7 @@ recordings/
 # Editors & OS
 # =============================================================================
 .gstack/
+.worktrees/
 .DS_Store
 .vscode/
 .idea/

@@ -241,7 +241,24 @@ A claim that dies on stage costs more than the feature was worth.
 
 ## 9. Distribution: the backend is local
 
-**Added 4 Aug 2026, in response to the itch.io plan. This is unresolved and it is architectural.**
+> ## ⚠ DECIDED 4 Aug 2026 — read this before the analysis below
+>
+> **The team chose Option B: migrate the whole backend to Google Cloud Run.** The section
+> below is kept as the record of *why*, but its recommendation ("Option A, judge-only local
+> build") is **superseded** and must not be acted on.
+>
+> - **Design:** [`superpowers/specs/2026-08-04-cloud-hosted-backend-design.md`](superpowers/specs/2026-08-04-cloud-hosted-backend-design.md)
+> - **Task-by-task plan:** [`superpowers/plans/2026-08-04-cloud-hosted-backend.md`](superpowers/plans/2026-08-04-cloud-hosted-backend.md)
+> - **Who does what (3 people):** [`superpowers/plans/2026-08-04-cloud-backend-work-split.md`](superpowers/plans/2026-08-04-cloud-backend-work-split.md)
+>
+> Decided alongside it: STT moves to Google Cloud Speech-to-Text, Gemini moves to Vertex AI so
+> the $300 of credits actually pays, ElevenLabs stays, and **player audio now leaves the
+> machine** — an explicit team decision that makes the privacy rewrite a submission blocker.
+>
+> This section gets rewritten as the migration record in Task 9 of the plan. Until then, treat
+> the banner as authoritative and the analysis below as history.
+
+**Added 4 Aug 2026, in response to the itch.io plan. ~~This is unresolved and it is architectural.~~ Resolved the same day — see the banner above.**
 
 ### What we built
 

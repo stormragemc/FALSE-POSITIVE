@@ -9,7 +9,6 @@ only — this process holds two paid API keys and must not be LAN-reachable.
 import argparse
 import asyncio
 import base64
-from collections import OrderedDict
 from dataclasses import replace
 import os
 import sys
@@ -29,6 +28,7 @@ import features_classical
 import llm
 import prosody
 import ser
+import session_store
 import stt
 import tts
 
@@ -37,9 +37,9 @@ config.validate()
 _stt_pool = ThreadPoolExecutor(max_workers=1)
 _ser_pool = ThreadPoolExecutor(max_workers=1)
 
-# In-memory conversation history per session. Single-player, single machine —
-# no persistence needed for v1. Keyed by the GUID Unity mints at scene start.
-_sessions: OrderedDict[str, list[dict]] = OrderedDict()
+# Conversation history per session, keyed by the GUID Unity mints at scene
+# start. See session_store.py for why in-memory is correct here.
+_session_store = session_store.InMemorySessionStore(config.SIDECAR_MAX_SESSIONS)
 _prosody_registry = prosody.ProsodyRegistry(
     max_sessions=config.SIDECAR_MAX_SESSIONS,
     reference_turns=config.PROSODY_BASELINE_TURNS,
@@ -103,7 +103,7 @@ def _validate_session_id(session_id: str) -> str:
 
 
 def _history_for(session_id: str) -> list[dict]:
-    return _sessions.get(session_id, [])
+    return _session_store.history(session_id)
 
 
 def _commit_history(
@@ -116,10 +116,7 @@ def _commit_history(
     history_kind = llm.HISTORY_KIND_SCENE if is_opening else llm.HISTORY_KIND_WITNESS
     history.append({"role": "user", "content": user_text, "kind": history_kind})
     history.append({"role": "assistant", "content": reply_text})
-    _sessions.pop(session_id, None)
-    _sessions[session_id] = history
-    while len(_sessions) > config.SIDECAR_MAX_SESSIONS:
-        evicted_id, _evicted_history = _sessions.popitem(last=False)
+    for evicted_id in _session_store.commit(session_id, history):
         _prosody_registry.reset(evicted_id)
 
 
@@ -205,7 +202,7 @@ async def session_reset(session_id: str = Form(...)):
     global _session_reset_epoch
     session_id = (session_id or "").strip()
     _session_reset_epoch += 1
-    _sessions.pop(session_id, None)
+    _session_store.reset(session_id)
     _prosody_registry.reset(session_id)
     return {"ok": True}
 

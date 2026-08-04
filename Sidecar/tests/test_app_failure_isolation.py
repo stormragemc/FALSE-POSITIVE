@@ -140,7 +140,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         cls.app._ser_pool.shutdown(wait=True)
 
     def setUp(self):
-        self.app._sessions.clear()
+        self.app._session_store.clear()
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(4, 3, 0.4)
         self.app._session_reset_epoch = 0
         self.captured_signals.clear()
@@ -212,13 +212,13 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(set(prosody_health_fields), set(health_payload["prosody"]))
 
     def test_reset_clears_dialogue_and_prosody_state(self):
-        self.app._sessions["session-a"] = [{"role": "user", "content": "hello"}]
+        self.app._session_store.commit("session-a", [{"role": "user", "content": "hello"}])
         original_tracker = self.app._prosody_registry.get("session-a")
 
         result = asyncio.run(self.app.session_reset("session-a"))
 
         self.assertEqual(result, {"ok": True})
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
         self.assertIsNot(self.app._prosody_registry.get("session-a"), original_tracker)
 
     def test_invalid_pcm_does_not_create_session_state(self):
@@ -227,7 +227,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
 
     def test_internal_value_error_is_not_exposed_as_client_input_error(self):
         with patch.object(
@@ -254,7 +254,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.content["error"], "turn pipeline failed; retry the utterance")
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
         self.assertIn("forced STT failure", output.getvalue())
 
     def test_classical_feature_failure_degrades_to_transcript_only_turn(self):
@@ -275,12 +275,15 @@ class AppFailureIsolationTests(unittest.TestCase):
 
     def test_history_eviction_resets_matching_prosody_tracker(self):
         original_tracker = self.app._prosody_registry.get("session-a")
-        with patch.object(self.app.config, "SIDECAR_MAX_SESSIONS", 2):
+        # The cap is fixed when the store is constructed, so express it by
+        # building a store rather than by patching config after the fact.
+        store = self.app.session_store.InMemorySessionStore(2)
+        with patch.object(self.app, "_session_store", store):
             asyncio.run(self.app.turn("session-a", 16000, 0, None))
             asyncio.run(self.app.turn("session-b", 16000, 0, None))
             asyncio.run(self.app.turn("session-c", 16000, 0, None))
 
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(store.history("session-a"), [])
         self.assertIsNot(self.app._prosody_registry.get("session-a"), original_tracker)
 
     def test_opening_history_uses_shared_scene_kind(self):
@@ -288,7 +291,7 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(
-            self.app._sessions["session-a"][0]["kind"],
+            self.app._session_store.history("session-a")[0]["kind"],
             self.app.llm.HISTORY_KIND_SCENE,
         )
 
@@ -316,15 +319,18 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
 
     def test_failed_new_session_does_not_evict_live_session_state(self):
-        self.app._sessions["live-session"] = [{"role": "user", "content": "hello"}]
+        # A single-slot store, already full: a failing turn must not evict the
+        # live session to make room for one that never completes.
+        store = self.app.session_store.InMemorySessionStore(1)
+        store.commit("live-session", [{"role": "user", "content": "hello"}])
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(1, 3, 0.4)
         live_tracker = self.app._prosody_registry.get("live-session")
         pcm = (np.sin(np.arange(16000 * 2) * 0.1) * 8000).astype("<i2").tobytes()
 
-        with patch.object(self.app.config, "SIDECAR_MAX_SESSIONS", 1), patch.object(
+        with patch.object(self.app, "_session_store", store), patch.object(
             self.app.tts, "synthesize", side_effect=RuntimeError("forced TTS failure")
         ):
             response = asyncio.run(
@@ -332,8 +338,8 @@ class AppFailureIsolationTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 500)
-        self.assertIn("live-session", self.app._sessions)
-        self.assertNotIn("failed-session", self.app._sessions)
+        self.assertNotEqual(store.history("live-session"), [])
+        self.assertEqual(store.history("failed-session"), [])
         self.assertIs(self.app._prosody_registry.get("live-session"), live_tracker)
 
     def test_successful_turn_commits_prosody_reference_once(self):
@@ -359,7 +365,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
         self.assertEqual(result["prosody"]["reference_turns"], 1)
-        self.assertEqual(len(self.app._sessions["session-a"]), 2)
+        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
         source = DTO_PATH.read_text(encoding="utf-8")
         self.assertEqual(set(result), set(_class_fields(source, "SidecarTurnResponse")))
 
@@ -391,7 +397,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertTrue(first["ok"])
         self.assertEqual(second.status_code, 500)
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
-        self.assertEqual(len(self.app._sessions["session-a"]), 2)
+        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
 
     def test_affect_and_classical_features_use_same_bounded_audio_window(self):
         sample_count = 16000 * 2
@@ -460,7 +466,7 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertTrue(first["ok"])
         self.assertTrue(second["ok"])
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
 
 

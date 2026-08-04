@@ -16,7 +16,7 @@ Experiences*). Shortlisted; deliverables due **9 Aug 2026**.
 
 ---
 
-## Status — 1 Aug 2026
+## Status — 3 Aug 2026
 
 A **working vertical slice exists**: Unity client plus a local Python sidecar running the full
 voice loop — microphone → speech-to-text → speech emotion recognition → LLM reply → text-to-speech
@@ -43,7 +43,7 @@ Two halves, one boundary between them.
 │  • first-person room, sit/   │◄──────►│  POST /turn                        │
 │    stand camera              │  POST  │    ├─ faster-whisper   STT  LOCAL  │
 │  • mic capture + VAD         │ /turn  │    ├─ hubert-base-superb-er        │
-│  • cop lip sync + idle anim  │        │    │    emotion         LOCAL      │
+│  • cop lip sync + idle anim  │        │    │    affect + change LOCAL      │
 │  • debug overlay (F1)        │        │    ├─ Gemini 3.6 Flash  ──► API    │
 │                              │        │    └─ ElevenLabs TTS    ──► API    │
 │  ships NO api key ───────────┼───────►│  keys live only in Sidecar/.env    │
@@ -56,8 +56,13 @@ minutes. The sidecar binds `127.0.0.1` only and is the sole holder of credential
 
 **HuBERT is the emotion model here, not the speech recogniser.** Worth stating plainly, since
 "HuBERT" is easy to read as ASR. Transcription is Whisper's job; HuBERT reads tone, not words.
-Its output is a 4-class label plus a confidence score, and it is framed to the LLM as a soft
-impression rather than a fact — the detector is frequently wrong, and the prompt says so.
+The checkpoint's full four-class distribution is combined with deterministic timing, pause,
+pitch, energy, uncertainty, and hidden-state-change measurements. A session-local early reference
+makes calibrated change more useful than an isolated label. Failed turns are not committed to that
+reference, low-quality readings are suppressed, witness text is isolated from sensor context, the
+model is optional at runtime, and the LLM receives only a bounded soft impression. It is never
+framed as a lie detector. See the primary-source research and reviewed design in
+[`docs/HUBERT_ORCHESTRATION_PLAN.md`](docs/HUBERT_ORCHESTRATION_PLAN.md).
 
 ## Setup
 
@@ -83,6 +88,7 @@ several minutes. It is not hung.
 | [`docs/CONCEPT.md`](docs/CONCEPT.md) | The shortlisted pitch verbatim, the non-negotiables, decisions taken, and what is still open. |
 | [`docs/DELIVERABLES.md`](docs/DELIVERABLES.md) | Live checklist for the three submission items and the submission mechanics. |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Ownership, contracts between components, and the schedule to 9 Aug. |
+| [`docs/HUBERT_ORCHESTRATION_PLAN.md`](docs/HUBERT_ORCHESTRATION_PLAN.md) | HuBERT primary-source research, model limits, orchestration design, failure policy, and test plan. |
 | [`docs/UNITY_CLIENT.md`](docs/UNITY_CLIENT.md) | Client and pipeline build notes — cop rigging, lip sync, VAD, debugging, proven-vs-wired status. |
 | [`Sidecar/README.md`](Sidecar/README.md) | Sidecar setup, endpoints, troubleshooting. |
 
@@ -95,7 +101,7 @@ Rows marked **⚠** still need their licence confirmed by the owner of that area
 
 | Component | Type | Used for | Licence / terms |
 |---|---|---|---|
-| `superb/hubert-base-superb-er` | Model | Speech emotion recognition (4-class + confidence) | Apache-2.0 ⚠ confirm on the model card |
+| `superb/hubert-base-superb-er` | Model | Four-class speech-affect observation plus hidden representations | Apache-2.0 (model card) |
 | **IEMOCAP** | Dataset | Training data behind the checkpoint above | ⚠ **Restrictive academic licence.** We use released weights, not the corpus — but G4 covers datasets, so the lineage must be disclosed and the terms checked |
 | Whisper `small.en` | Model | Speech-to-text weights | MIT (OpenAI) |
 | Gemini 3.6 Flash | API | Detective dialogue | Google APIs Terms of Service ⚠ confirm commercial-use terms |
@@ -134,6 +140,7 @@ required variable *names* only.
 
 The player's microphone audio is processed **entirely on the local machine** — Whisper and HuBERT
 both run inside the sidecar, and the audio itself is never uploaded. Only the resulting *text*
-transcript and the emotion label leave the machine, sent to the Gemini API to generate the
-detective's reply; the reply text is then sent to ElevenLabs to be spoken. Audio is held in memory
-for the duration of a turn and is not written to disk.
+transcript and a bounded derived affect impression leave the machine, sent to the Gemini API to
+generate the detective's reply; raw class vectors, embeddings, and the early-session reference stay
+local. The reply text is then sent to ElevenLabs to be spoken. Audio is held in memory for the
+duration of a turn and is not written to disk.

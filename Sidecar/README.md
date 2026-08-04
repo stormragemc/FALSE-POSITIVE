@@ -6,9 +6,9 @@ reply, and the officer's TTS voice. Unity never holds an API key — both keys
 live only in this folder's `.env`, and this process only ever binds to
 `127.0.0.1`.
 
-See the implementation plan (`C:\Users\Giorg\.claude\plans\devise-a-great-and-gentle-wolf.md`)
-for the full architecture and reasoning; this file is just the practical
-setup/run steps.
+See [`../docs/HUBERT_ORCHESTRATION_PLAN.md`](../docs/HUBERT_ORCHESTRATION_PLAN.md)
+for the primary-source HuBERT research, model limits, reviewed architecture,
+and reliability policy. This file contains the practical setup/run steps.
 
 ## One-time setup
 
@@ -44,6 +44,38 @@ Everything else — speech-to-text (`faster-whisper`) and emotion recognition
 Both models download to the Hugging Face cache the first time the sidecar
 starts, which is why first launch can take a few minutes.
 
+### Affect orchestration controls
+
+The default HuBERT checkpoint predicts only neutral, happy, angry, and sad and
+is not a fear or deception detector. The sidecar retains its full probability
+distribution and combines it with uncertainty, pauses, energy/pitch variation,
+hidden-state change, response onset, and an in-memory early-session reference.
+Raw cosine distance remains debug data; actionable change is normalized to the
+spread of that player's early reference turns. Only a successfully synthesized
+turn is committed, preventing TTS retries from double-counting it. Low-quality
+readings are visible in debug data but suppressed from Gemini, and witness text
+is escaped into a separate trust block so it cannot imitate the sensor marker.
+HuBERT and the classical features inspect the same `HUBERT_MAX_SECONDS` prefix;
+Whisper still receives the complete bounded utterance for transcription.
+When a turn exceeds that affect window, its full duration remains observable,
+the signal is flagged `affect_window_truncated`, and session speech-rate
+comparison is suppressed rather than mixing full-transcript words with a
+partial acoustic window.
+
+All controls are optional and documented in `.env.example`. The quickest
+rollback is `PROSODY_ENABLED=false`: Whisper, Gemini, and TTS continue normally
+without loading HuBERT. `/health` reports whether affect is enabled and loaded,
+the exact checkpoint, device, orchestration version, and a bounded load-error
+category. A HuBERT load or inference failure never cancels a dialogue turn.
+`HUBERT_DEVICE=auto` chooses CUDA when present and CPU otherwise. MPS is an
+explicit opt-in because tested Apple builds can terminate during model warm-up
+instead of raising a recoverable Python exception.
+`PROSODY_MIN_CONFIDENCE` is capped at `0.75`, matching the maximum confidence
+the conservative policy can emit.
+An overridden `HUBERT_MODEL_ID` must expose exactly the neutral, happy, angry,
+and sad labels; startup rejects incompatible classifiers instead of silently
+zeroing Unity's fixed four-label debug DTO.
+
 ## Running it
 
 **Manually** (recommended while iterating on the Python side):
@@ -63,6 +95,20 @@ started sidecar (the normal iteration workflow) is transparently reused
 either way.
 
 ## Testing it in isolation (do this before touching Unity)
+
+The orchestration unit suite uses generated signals and needs no API keys,
+network access, or model download. Run this from `Sidecar/`:
+
+```
+python -m unittest discover -s tests -v
+```
+
+To inspect a real file through Whisper and the richer HuBERT observation (this
+does download/load both local models):
+
+```
+python tools/probe_stt_ser.py tools/sample.pcm
+```
 
 ```
 curl http://127.0.0.1:8765/health
@@ -90,10 +136,13 @@ start.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | `{status, models_loaded, version}` — also the launch gate |
-| `POST` | `/turn` | The main pipeline call — see above |
-| `POST` | `/session/reset` | Clears one session's conversation history |
+| `GET` | `/health` | Launch status plus nested HuBERT availability/model/device |
+| `POST` | `/turn` | Main pipeline; accepts optional `onset_delay_ms`, returns additive `prosody` |
+| `POST` | `/session/reset` | Clears conversation history and the prosody reference together |
 | `GET` | `/debug/last_turn` | Dumps the last `/turn` response, for curl debugging |
+
+A reset also invalidates state commits from any turn that was already in
+flight, so an old history/reference cannot reappear after the reset completes.
 
 ## Troubleshooting
 
@@ -101,6 +150,12 @@ start.
   — `.env` doesn't exist or is missing a key. Copy `.env.example` to `.env`.
 - **First `/turn` call is very slow** — models are still downloading/loading;
   wait for the "Models loaded. Ready." console line before testing.
+- **A turn's `prosody.available` is false** — inspect that `/turn` response's
+  `prosody.reliability_reason`: `prosody_disabled`, `hubert_load_failed`,
+  `hubert_inference_failed`, and `feature_extraction_failed` name the degraded
+  stage. For startup state, `/health` uses `prosody.error`: `loading`,
+  `disabled`, empty when ready, or the bounded exception class from a failed
+  load.
 - **TTS request fails with `402 payment_required`** — the configured voice
   isn't API-usable on your plan (see the `ELEVENLABS_VOICE_ID` note above).
   Run `python tools/probe_tts.py` to find one that is; `tts.py` now surfaces

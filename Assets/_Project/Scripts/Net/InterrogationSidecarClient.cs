@@ -44,6 +44,7 @@ namespace FalsePositive.Net
             string sessionId,
             float[] pcmSamples,
             int sampleRate,
+            int onsetDelayMs,
             Action<SidecarTurnResponse> onSuccess,
             Action<string> onError)
         {
@@ -52,13 +53,14 @@ namespace FalsePositive.Net
                 onError?.Invoke("A turn is already in flight.");
                 return;
             }
-            StartCoroutine(TurnRoutine(sessionId, pcmSamples, sampleRate, onSuccess, onError));
+            StartCoroutine(TurnRoutine(sessionId, pcmSamples, sampleRate, onsetDelayMs, onSuccess, onError));
         }
 
         private IEnumerator TurnRoutine(
             string sessionId,
             float[] pcmSamples,
             int sampleRate,
+            int onsetDelayMs,
             Action<SidecarTurnResponse> onSuccess,
             Action<string> onError)
         {
@@ -68,6 +70,7 @@ namespace FalsePositive.Net
             {
                 new MultipartFormDataSection("session_id", sessionId),
                 new MultipartFormDataSection("sample_rate", sampleRate.ToString()),
+                new MultipartFormDataSection("onset_delay_ms", Mathf.Max(0, onsetDelayMs).ToString()),
             };
 
             if (pcmSamples != null && pcmSamples.Length > 0)

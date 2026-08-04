@@ -26,6 +26,7 @@ raw_bytes = pcm_path.read_bytes()
 print(f"Loaded {len(raw_bytes)} bytes from {pcm_path}")
 
 import audio_utils
+import features_classical
 import ser
 import stt
 
@@ -37,10 +38,26 @@ t0 = time.perf_counter()
 transcript, stt_ms = stt.transcribe(audio_f32)
 print(f"STT  ({stt_ms} ms, {int((time.perf_counter() - t0) * 1000)} ms incl. load): {transcript!r}")
 
-print("\nLoading SER (superb/hubert-base-superb-er)...")
+print(f"\nLoading SER ({ser.config.HUBERT_MODEL_ID})...")
 t0 = time.perf_counter()
-emotion, confidence, ser_ms = ser.classify(audio_f32)
-print(f"SER  ({ser_ms} ms, {int((time.perf_counter() - t0) * 1000)} ms incl. load): {emotion!r} (confidence {confidence:.2f})")
+observation = ser.analyze(audio_f32)
+features = features_classical.extract(audio_f32)
+print(
+    f"SER  ({observation.elapsed_ms} ms, "
+    f"{int((time.perf_counter() - t0) * 1000)} ms incl. load): "
+    f"{observation.label!r} (confidence {observation.confidence:.2f})"
+)
+print(f"     probabilities={observation.probabilities}")
+print(
+    f"     entropy={observation.normalized_entropy:.3f} "
+    f"margin={observation.top_two_margin:.3f} "
+    f"hidden_instability={observation.frame_instability:.3f}"
+)
+print(
+    f"     speech_ratio={features.speech_ratio:.2f} pauses={features.long_pause_count} "
+    f"pitch_var={features.pitch_variability:.3f} energy_var={features.energy_variability:.3f} "
+    f"flags={list(features.flags)}"
+)
 
 if transcript.strip():
     print("\nOK: STT produced a non-empty transcript from real speech audio.")

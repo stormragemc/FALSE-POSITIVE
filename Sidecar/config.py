@@ -21,6 +21,28 @@ HOST = os.environ.get("SIDECAR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SIDECAR_PORT", "8765"))
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+HUBERT_MODEL_ID = os.environ.get("HUBERT_MODEL_ID", "superb/hubert-base-superb-er")
+HUBERT_DEVICE = os.environ.get("HUBERT_DEVICE", "auto")
+HUBERT_HIDDEN_LAYER = int(os.environ.get("HUBERT_HIDDEN_LAYER", "9"))
+HUBERT_MAX_SECONDS = max(1.0, float(os.environ.get("HUBERT_MAX_SECONDS", "20")))
+PROSODY_ENABLED = _env_bool("PROSODY_ENABLED", True)
+PROSODY_BASELINE_TURNS = max(1, int(os.environ.get("PROSODY_BASELINE_TURNS", "3")))
+PROSODY_MIN_CONFIDENCE = min(
+    0.75, max(0.0, float(os.environ.get("PROSODY_MIN_CONFIDENCE", "0.40")))
+)
+SIDECAR_MAX_AUDIO_SECONDS = max(
+    1.0, float(os.environ.get("SIDECAR_MAX_AUDIO_SECONDS", "30"))
+)
+SIDECAR_MAX_SESSIONS = max(1, int(os.environ.get("SIDECAR_MAX_SESSIONS", "32")))
+
+
 def validate() -> None:
     """Fail fast at startup rather than three minutes into a playtest."""
     missing = []

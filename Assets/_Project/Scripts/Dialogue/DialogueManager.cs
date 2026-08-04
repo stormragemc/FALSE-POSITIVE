@@ -47,6 +47,8 @@ namespace FalsePositive.Dialogue
         public DialogueState State { get; private set; } = DialogueState.Idle;
 
         private string _sessionId;
+        private float _listeningStartedAt;
+        private int _lastSpeechOnsetDelayMs;
 
         private void Awake()
         {
@@ -57,12 +59,14 @@ namespace FalsePositive.Dialogue
         {
             recorder.UtteranceCaptured += OnUtteranceCaptured;
             copVoice.Stopped += OnCopFinishedSpeaking;
+            vad.SpeakingStateChanged += OnSpeakingStateChanged;
         }
 
         private void OnDisable()
         {
             recorder.UtteranceCaptured -= OnUtteranceCaptured;
             copVoice.Stopped -= OnCopFinishedSpeaking;
+            vad.SpeakingStateChanged -= OnSpeakingStateChanged;
         }
 
         /// <summary>Called once by GameBootstrap once the sidecar is confirmed healthy — requests the officer's scripted opening line (no audio part = opening trigger, see Sidecar/app.py).</summary>
@@ -70,7 +74,7 @@ namespace FalsePositive.Dialogue
         {
             SetState(DialogueState.Uploading);
             vad.SetGated(true);
-            sidecarClient.PostTurn(_sessionId, null, 16000, OnTurnSuccess, OnTurnError);
+            sidecarClient.PostTurn(_sessionId, null, 16000, 0, OnTurnSuccess, OnTurnError);
         }
 
         private void OnUtteranceCaptured(float[] samples, int sampleRate)
@@ -80,7 +84,13 @@ namespace FalsePositive.Dialogue
             PlayFiller();
             SetState(DialogueState.Uploading);
             vad.SetGated(true);
-            sidecarClient.PostTurn(_sessionId, samples, sampleRate, OnTurnSuccess, OnTurnError);
+            sidecarClient.PostTurn(
+                _sessionId,
+                samples,
+                sampleRate,
+                _lastSpeechOnsetDelayMs,
+                OnTurnSuccess,
+                OnTurnError);
         }
 
         private void OnTurnSuccess(SidecarTurnResponse response)
@@ -111,14 +121,28 @@ namespace FalsePositive.Dialogue
 
             // Never hard-fail the conversation — just re-arm listening so
             // the player can try again.
-            SetState(DialogueState.Listening);
-            vad.SetGated(false);
+            BeginListening();
         }
 
         private void OnCopFinishedSpeaking()
         {
             if (State != DialogueState.Speaking) return;
             copMouth.Stop();
+            BeginListening();
+        }
+
+        private void OnSpeakingStateChanged(bool speaking)
+        {
+            if (!speaking || State != DialogueState.Listening) return;
+            _lastSpeechOnsetDelayMs = Mathf.Max(
+                0,
+                Mathf.RoundToInt((Time.realtimeSinceStartup - _listeningStartedAt) * 1000f));
+        }
+
+        private void BeginListening()
+        {
+            _lastSpeechOnsetDelayMs = 0;
+            _listeningStartedAt = Time.realtimeSinceStartup;
             SetState(DialogueState.Listening);
             vad.SetGated(false);
         }

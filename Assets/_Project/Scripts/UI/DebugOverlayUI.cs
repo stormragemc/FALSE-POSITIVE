@@ -67,9 +67,26 @@ namespace FalsePositive.UI
         private void OnTurnCompleted(SidecarTurnResponse r)
         {
             if (lastTurnText == null) return;
+            SidecarProsodySignal p = r.prosody;
+            string flags = p?.flags != null && p.flags.Length > 0
+                ? string.Join(",", p.flags)
+                : "-";
+            bool hasProsody = p != null && !string.IsNullOrEmpty(p.version);
+            string affect = !hasProsody
+                ? "prosody: legacy response"
+                : $"prosody: {(p.reliable ? "usable" : p.reliability_reason)} " +
+                  $"signal={p.confidence_in_signal:F2} tension={p.tension:F2} " +
+                  $"referenceΔ={(p.reference_comparison_available ? p.hubert_baseline_distance.ToString("F2") : "n/a")} " +
+                  $"relative={(p.reference_comparison_available ? p.hubert_reference_change.ToString("F2") + "x" : "n/a")} trend={p.trend}\n" +
+                  $"onset={p.onset_delay_ms}ms calibration={p.calibration_state} " +
+                  $"flags={flags}";
+            string emotion = hasProsody && !p.reliable
+                ? $"emotion: raw {r.emotion} ({r.emotion_confidence:F2}) [suppressed]"
+                : $"emotion: {r.emotion} ({r.emotion_confidence:F2})";
             lastTurnText.text =
                 $"transcript: {r.transcript}\n" +
-                $"emotion: {r.emotion} ({r.emotion_confidence:F2})\n" +
+                $"{emotion}\n" +
+                $"{affect}\n" +
                 $"reply: {r.reply_text}\n" +
                 $"stt={r.stt_ms}ms ser={r.ser_ms}ms llm={r.llm_ms}ms tts={r.tts_ms}ms total={r.total_ms}ms";
         }

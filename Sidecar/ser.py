@@ -1,71 +1,181 @@
-"""Speech emotion recognition via a local HuBERT checkpoint — local, free, no
-API key.
+"""Structured HuBERT speech-affect observations.
 
-`hubert-base-superb-er` is the v1 default over `hubert-large-superb-er`: the
-turn-latency budget is the single biggest risk to this feature (see plan
-section 0), and the base checkpoint is roughly a third of the size for a
-similar accuracy band on this 4-class task. Both load through this same
-module's interface, so upgrading to the large checkpoint later is a one-line
-change to _MODEL_ID.
-
-This is a weak, 4-class signal (~0.68 accuracy on IEMOCAP at the -large
-checkpoint) — treat the output as a soft impression, not ground truth. The
-caller (llm.py) is responsible for framing it that way to the model.
+The default checkpoint is a four-class IEMOCAP emotion classifier. Its output
+is a fallible acoustic impression, never evidence of deception, guilt, intent,
+or truth. ``prosody.py`` owns reliability and session-relative interpretation.
 """
 
+from dataclasses import dataclass
+import math
 import time
 
 import numpy as np
 import torch
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
-_MODEL_ID = "superb/hubert-base-superb-er"
+import config
 
-# Confirmed by smoke-testing the actual model: its id2label uses IEMOCAP's
-# abbreviated class names ("hap", not "happy"), which reads oddly dropped
-# straight into an LLM prompt. Expand to the words the prompt in llm.py
-# actually expects.
+
 _LABEL_DISPLAY_NAMES = {
     "neu": "neutral",
+    "neutral": "neutral",
     "hap": "happy",
+    "happy": "happy",
     "ang": "angry",
+    "angry": "angry",
     "sad": "sad",
 }
+SUPPORTED_EMOTION_LABELS = frozenset({"neutral", "happy", "angry", "sad"})
 
 _feature_extractor = None
 _model = None
+_device = "unavailable"
+
+
+@dataclass(frozen=True)
+class HubertObservation:
+    label: str
+    confidence: float
+    probabilities: dict[str, float]
+    normalized_entropy: float
+    top_two_margin: float
+    embedding: np.ndarray
+    frame_instability: float
+    elapsed_ms: int
+    model_id: str
+
+
+def _resolve_device(requested: str) -> str:
+    requested = requested.strip().lower()
+    if requested != "auto":
+        return requested
+    if torch.cuda.is_available():
+        return "cuda"
+    # HuBERT sequence classification has terminated the process inside MPS
+    # warm-up on tested Apple hardware instead of raising a catchable error.
+    # CPU is the safe automatic fallback; advanced users may still opt into
+    # HUBERT_DEVICE=mps explicitly to retest newer torch/transformers builds.
+    return "cpu"
 
 
 def load():
-    global _feature_extractor, _model
+    global _feature_extractor, _model, _device
     if _model is None:
-        print(f"[Sidecar] Loading emotion model '{_MODEL_ID}' (downloads on first run)...")
-        _feature_extractor = AutoFeatureExtractor.from_pretrained(_MODEL_ID)
-        _model = AutoModelForAudioClassification.from_pretrained(_MODEL_ID)
-        _model.eval()
-        # Warm up the forward pass once.
-        _classify_impl(np.zeros(16000, dtype=np.float32))
-        print("[Sidecar] Emotion model ready.")
+        target_device = _resolve_device(config.HUBERT_DEVICE)
+        try:
+            print(
+                f"[Sidecar] Loading affect model '{config.HUBERT_MODEL_ID}' "
+                f"on {target_device} (downloads on first run)..."
+            )
+            extractor = AutoFeatureExtractor.from_pretrained(config.HUBERT_MODEL_ID)
+            model = AutoModelForAudioClassification.from_pretrained(config.HUBERT_MODEL_ID)
+            model.to(target_device)
+            model.eval()
+            _feature_extractor = extractor
+            _model = model
+            _device = target_device
+            # Validate the richer forward path now, while startup status is observable.
+            warmup = _analyze_impl(np.zeros(16000, dtype=np.float32))
+            observed_labels = set(warmup.probabilities)
+            if observed_labels != SUPPORTED_EMOTION_LABELS:
+                raise RuntimeError(
+                    "HuBERT checkpoint has incompatible emotion labels: "
+                    f"expected {sorted(SUPPORTED_EMOTION_LABELS)}, got {sorted(observed_labels)}"
+                )
+        except Exception:
+            _feature_extractor = None
+            _model = None
+            _device = "unavailable"
+            raise
+        print("[Sidecar] Affect model ready.")
     return _feature_extractor, _model
 
 
-def _classify_impl(audio_f32_16k: np.ndarray) -> tuple[str, float]:
-    inputs = _feature_extractor(audio_f32_16k, sampling_rate=16000, return_tensors="pt")
-    with torch.no_grad():
-        logits = _model(**inputs).logits
-    probs = torch.softmax(logits, dim=-1)[0]
-    idx = int(torch.argmax(probs).item())
-    raw_label = _model.config.id2label[idx]
-    label = _LABEL_DISPLAY_NAMES.get(raw_label, raw_label)
-    confidence = float(probs[idx].item())
-    return label, confidence
+def is_loaded() -> bool:
+    return _model is not None
+
+
+def device() -> str:
+    return _device if is_loaded() else "unavailable"
+
+
+def _display_label(raw_label: str) -> str:
+    return _LABEL_DISPLAY_NAMES.get(str(raw_label).lower(), str(raw_label).lower())
+
+
+def _analyze_impl(audio_f32_16k: np.ndarray) -> HubertObservation:
+    audio = np.asarray(audio_f32_16k, dtype=np.float32).reshape(-1)
+    if audio.size == 0:
+        raise ValueError("HuBERT requires non-empty audio")
+    if not np.all(np.isfinite(audio)):
+        raise ValueError("HuBERT audio contains non-finite samples")
+
+    maximum_samples = int(round(config.HUBERT_MAX_SECONDS * 16000))
+    if audio.size > maximum_samples:
+        audio = audio[:maximum_samples]
+
+    t0 = time.perf_counter()
+    inputs = _feature_extractor(audio, sampling_rate=16000, return_tensors="pt")
+    inputs = {name: value.to(_device) for name, value in inputs.items()}
+    with torch.inference_mode():
+        outputs = _model(**inputs, output_hidden_states=True, return_dict=True)
+
+    probs_tensor = torch.softmax(outputs.logits, dim=-1)[0].detach().float().cpu()
+    values = probs_tensor.numpy().astype(np.float64)
+    if values.size == 0 or not np.all(np.isfinite(values)):
+        raise RuntimeError("HuBERT returned invalid probabilities")
+
+    probabilities: dict[str, float] = {}
+    for index, value in enumerate(values):
+        raw = _model.config.id2label.get(index, str(index))
+        label = _display_label(raw)
+        probabilities[label] = probabilities.get(label, 0.0) + float(value)
+
+    ranked = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)
+    label, confidence = ranked[0]
+    runner_up = ranked[1][1] if len(ranked) > 1 else 0.0
+    distribution = np.asarray(list(probabilities.values()), dtype=np.float64)
+    entropy = -float(np.sum(distribution * np.log(np.maximum(distribution, 1e-12))))
+    normalized_entropy = entropy / math.log(distribution.size) if distribution.size > 1 else 0.0
+
+    hidden_states = outputs.hidden_states
+    if not hidden_states:
+        raise RuntimeError("HuBERT did not return hidden states")
+    layer_index = config.HUBERT_HIDDEN_LAYER
+    if layer_index < 0:
+        layer_index += len(hidden_states)
+    layer_index = min(max(layer_index, 0), len(hidden_states) - 1)
+    hidden = hidden_states[layer_index][0].detach().float().cpu().numpy()
+    if hidden.ndim != 2 or hidden.shape[0] == 0 or not np.all(np.isfinite(hidden)):
+        raise RuntimeError("HuBERT returned invalid hidden states")
+    embedding = np.mean(hidden, axis=0).astype(np.float32)
+    if hidden.shape[0] > 1:
+        frame_deltas = np.diff(hidden, axis=0)
+        instability = float(np.mean(np.linalg.norm(frame_deltas, axis=1)) / math.sqrt(hidden.shape[1]))
+    else:
+        instability = 0.0
+    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+
+    return HubertObservation(
+        label=label,
+        confidence=round(float(confidence), 6),
+        probabilities={key: round(value, 6) for key, value in probabilities.items()},
+        normalized_entropy=round(normalized_entropy, 6),
+        top_two_margin=round(float(confidence - runner_up), 6),
+        embedding=embedding,
+        frame_instability=round(instability, 6),
+        elapsed_ms=elapsed_ms,
+        model_id=config.HUBERT_MODEL_ID,
+    )
+
+
+def analyze(audio_f32_16k: np.ndarray) -> HubertObservation:
+    """Return the full local HuBERT observation for 16 kHz mono float audio."""
+    load()
+    return _analyze_impl(audio_f32_16k)
 
 
 def classify(audio_f32_16k: np.ndarray) -> tuple[str, float, int]:
-    """audio_f32_16k: mono float32 samples at 16kHz.
-    Returns (label, confidence, elapsed_ms)."""
-    load()
-    t0 = time.perf_counter()
-    label, confidence = _classify_impl(audio_f32_16k)
-    ms = int((time.perf_counter() - t0) * 1000)
-    return label, confidence, ms
+    """Compatibility wrapper returning the legacy label/confidence tuple."""
+    observation = analyze(audio_f32_16k)
+    return observation.label, observation.confidence, observation.elapsed_ms

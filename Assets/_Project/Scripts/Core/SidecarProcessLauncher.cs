@@ -49,8 +49,9 @@ namespace FalsePositive.Core
 
             if (!config.autoLaunchSidecar)
             {
-                OnFailed?.Invoke(
-                    "Voice services are not running. Start Sidecar/run_sidecar.bat manually, then press Play again.");
+                OnFailed?.Invoke(string.IsNullOrWhiteSpace(config.backendBaseUrl)
+                    ? "Voice services are not running. Start the local backend, then press Play again."
+                    : "Could not reach the interrogation service. Check your connection and try again.");
                 yield break;
             }
 

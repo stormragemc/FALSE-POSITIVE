@@ -31,6 +31,7 @@ namespace FalsePositive.Net
             string url = $"{config.SidecarBaseUrl}/health";
             using UnityWebRequest req = UnityWebRequest.Get(url);
             req.timeout = 5;
+            ApplyClientKey(req);
             yield return req.SendWebRequest();
             onResult?.Invoke(req.result == UnityWebRequest.Result.Success);
         }
@@ -82,6 +83,7 @@ namespace FalsePositive.Net
             string url = $"{config.SidecarBaseUrl}/turn";
             using UnityWebRequest req = UnityWebRequest.Post(url, form);
             req.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
+            ApplyClientKey(req);
 
             yield return req.SendWebRequest();
 
@@ -89,7 +91,7 @@ namespace FalsePositive.Net
 
             if (req.result == UnityWebRequest.Result.ConnectionError)
             {
-                onError?.Invoke("Voice service unreachable. Is the sidecar running?");
+                onError?.Invoke("Could not reach the interrogation service. Check your connection and try again.");
                 yield break;
             }
 
@@ -128,6 +130,14 @@ namespace FalsePositive.Net
             }
 
             onSuccess?.Invoke(response);
+        }
+
+        private void ApplyClientKey(UnityWebRequest request)
+        {
+            if (!string.IsNullOrEmpty(config.backendClientKey))
+            {
+                request.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);
+            }
         }
 
         private static string TryExtractError(string bodyText)

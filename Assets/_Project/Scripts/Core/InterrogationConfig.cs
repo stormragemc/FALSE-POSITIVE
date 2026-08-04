@@ -3,22 +3,33 @@ using UnityEngine;
 namespace FalsePositive.Core
 {
     /// <summary>
-    /// All tunable numbers for the interrogation loop in one place. Contains
-    /// no secrets — safe to commit as normal asset YAML. See
+    /// All tunable numbers for the interrogation loop in one place. See
     /// Assets/_Project/Config/InterrogationConfig.asset for the instance
     /// used by the scene.
+    ///
+    /// The one credential here is <see cref="backendClientKey"/>, and it is
+    /// committed deliberately: a shipped build has to carry a copy to reach
+    /// the hosted backend at all, so it is extractable by anyone who cares to
+    /// look. It bounds drive-by traffic against a public URL; the backend's
+    /// own turn budget bounds cost. No vendor API key is ever in this asset.
     /// </summary>
     [CreateAssetMenu(fileName = "InterrogationConfig", menuName = "False Positive/Interrogation Config")]
     public sealed class InterrogationConfig : ScriptableObject
     {
-        [Header("Sidecar connection")]
+        [Header("Backend connection")]
+        [Tooltip("Full https:// URL of the hosted backend. Leave empty to fall back to the local host/port below.")]
+        public string backendBaseUrl = "";
+        [Tooltip("Shared secret sent as X-FP-Client-Key. Extractable from a shipped build by design — it stops drive-by traffic, it is not a security boundary.")]
+        public string backendClientKey = "";
+        [Tooltip("Used only when backendBaseUrl is empty — local container or local python process.")]
         public string sidecarHost = "127.0.0.1";
         public int sidecarPort = 8765;
-        [Tooltip("Per-request timeout. Generous because first-run model loading on the sidecar is slow.")]
+        [Tooltip("Per-request timeout. Generous because it now covers network latency as well as model work.")]
         public float requestTimeoutSeconds = 60f;
 
-        [Header("Sidecar launch")]
-        public bool autoLaunchSidecar = true;
+        [Header("Local sidecar launch (developers only)")]
+        [Tooltip("Off for shipped builds. Only starts a local python process when backendBaseUrl is empty.")]
+        public bool autoLaunchSidecar = false;
         [Tooltip("How long to poll /health before giving up (first run downloads models).")]
         public float sidecarLaunchTimeoutSeconds = 90f;
         public float sidecarHealthPollIntervalSeconds = 0.5f;
@@ -43,6 +54,9 @@ namespace FalsePositive.Core
         [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         public float ttsEchoGateTailSeconds = 0.25f;
 
-        public string SidecarBaseUrl => $"http://{sidecarHost}:{sidecarPort}";
+        public string SidecarBaseUrl =>
+            string.IsNullOrWhiteSpace(backendBaseUrl)
+                ? $"http://{sidecarHost}:{sidecarPort}"
+                : backendBaseUrl.TrimEnd('/');
     }
 }

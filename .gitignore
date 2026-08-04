@@ -154,3 +154,20 @@ recordings/
 .vscode/
 .idea/
 coverage/
+
+# =============================================================================
+# Imported Asset Store packages — reusable third-party content, not project
+# work. Re-download from the Asset Store instead of committing.
+# =============================================================================
+/Assets/Cabin/
+/Assets/Cabin.meta
+/Assets/IL3DN/
+/Assets/IL3DN.meta
+/Assets/Materials Collection/
+/Assets/Materials Collection.meta
+/Assets/TDG Storage Solutions/
+/Assets/TDG Storage Solutions.meta
+/Assets/TerrainSampleAssets/
+/Assets/TerrainSampleAssets.meta
+/Assets/o3n/
+/Assets/o3n.meta

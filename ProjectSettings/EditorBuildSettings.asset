@@ -11,6 +11,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/Interrogation.unity
     guid: 861bf2014995a674e9547129e5d368d2
+  - enabled: 1
+    path: Assets/_Project/Scenes/NobodyWentOut_CabinNight.unity
+    guid: f7abdad2838e57c40871b1d9c2265f46
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

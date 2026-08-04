@@ -1,9 +1,18 @@
 # FALSE POSITIVE — implementation plan (PoC)
 
-> **For agentic workers:** read [`AGENTS.md`](../AGENTS.md) first. There is an identity gate:
-> if the human driving you has not said **who they are** and **which workstream they are on**,
-> ask and do nothing else. Do not start cross-workstream integration until the gate in
-> [§9](#9-the-integration-gate) opens.
+> **⚠ This is the design document, not the status document.**
+>
+> **It describes what we decided to build. It does not tell you what exists.** Several sections
+> below were written on 1 Aug and have been overtaken by code. For *what is actually built right
+> now*, read **[`ROADMAP.md`](ROADMAP.md)** — that is the single source of truth for status, and
+> it is the file you update when you finish work.
+>
+> Design decisions still live here. If you change a §3 contract, tell all five owners.
+>
+> **For agentic workers:** if the human driving you has not said **who they are** and **which
+> workstream they are on**, ask and do nothing else. Do not start cross-workstream integration
+> until the gate in [§9](#9-the-integration-gate) opens. (The former `AGENTS.md` identity gate
+> was removed from the repo on 3 Aug; the rule survives here.)
 
 **Goal:** by **8 Aug 2026**, a proof-of-concept that a judge can play live — witness a crime in
 incomplete glimpses, be interrogated hands-free by voice, and reach an outcome shaped by what
@@ -239,16 +248,14 @@ handling is explicitly scored.
 one after Day 1 requires telling all five owners in the group chat. Everything below is version
 `v1`; every payload carries `"v": 1`.
 
-> **⚠ Status against the implementation, 1 Aug evening.** None of these four are implemented yet;
-> the working slice predates them and passes plain strings between stages. That is fine for a
-> vertical slice and **not** fine for five people building in parallel, so the contracts still
-> stand — but two need an owner's decision before they can be treated as frozen:
+> **⚠ Status against the implementation — updated 4 Aug 2026.** Live status lives in
+> [`ROADMAP.md`](ROADMAP.md); this table is a pointer, kept here because people read §3 directly.
 >
 > | | Status |
 > |---|---|
-> | **3.1 `ProsodySignal`** | ⚠ **Contested.** The affect model emits a 4-class label + confidence, not these 13 fields. **Marcel decides** by end of D2: enrich the model to fill the contract, or shrink the contract to the model. Bong is blocked on the answer. |
-> | **3.2 `DetectiveAction`** | ⚠ Not implemented — `llm.py` returns plain dialogue text. Structured output is what makes the tactic *visible* (G9, and the notebook panel). **Bong's** to build. |
-> | **3.3 `CaseState`** | ⚠ Not implemented — the case is a hardcoded premise string in `llm.py`. **Ado's** A5. |
+> | **3.1 `ProsodySignal`** | ☑ **Implemented and no longer contested.** `Sidecar/prosody.py` emits every field below except `longest_pause_ms` and `utterance_id`, plus reliability/calibration metadata the contract did not anticipate. Design: [`HUBERT_ORCHESTRATION_PLAN.md`](HUBERT_ORCHESTRATION_PLAN.md). **Marcel's decision is resolved; Bong is unblocked.** |
+> | **3.2 `DetectiveAction`** | ☐ Not implemented — `llm.py` returns plain dialogue text. Structured output is what makes the tactic *visible* (G9, and the notebook panel). **Bong's** to build, and it is on the critical path. |
+> | **3.3 `CaseState`** | ☐ Not implemented — the case is a hardcoded premise string at `llm.py:35`. **Ado's** A5, critical path. |
 > | **3.4 WebSocket protocol** | ❌ **Superseded.** Transport is HTTP `POST /turn`; see the amended §3.4. |
 
 ### 3.1 `ProsodySignal` — Marcel produces, Bong consumes
@@ -530,13 +537,18 @@ sidecar, one is superseded, and the paths moved per §1. Status key: ☑ done ·
 | ☐ A11 | Cost meter | `Sidecar/cost.py` | Running $ per session, exposed on `/health` and in the notebook; hard cap ends the session in-fiction. ⚠ Now spans **two** vendors |
 | ◐ A12 | README: setup + architecture + disclosure | `README.md` | **Rewritten in the merge** with the disclosure table filled in for the first time (G4). Remainder: the ⚠ rows — IEMOCAP, Avaturn, ffmpeg/soxr, Unity licence tier — need their licences confirmed, and it needs a clean-machine test by someone who did not write it |
 | ☐ A13 | CI: tests + secret scan | `.github/workflows/ci.yml` | `pytest` + `gitleaks` on every push; secret scan failing blocks the merge (G2) |
-| ☐ A14 | Classical prosody features (assisting Marcel) | `Sidecar/features_classical.py` | F0, energy, timing, pause detection per §3.1 — pure signal processing, no model, no HuBERT import. Unit-tested against synthetic tones with known pitch and known pause structure. **Marcel reviews and merges.** ⚠ This is now the obvious way to close the §3.1 gap without touching Marcel's HuBERT files |
+| ☑ A14 | Classical prosody features (assisting Marcel) | `Sidecar/features_classical.py` | **Done 3 Aug.** F0, energy, timing, pause detection per §3.1 — pure NumPy, no model, no HuBERT import. Unit-tested against synthetic tones with known pitch and pause structure. Consumed by `prosody.py`, which closed the §3.1 gap |
 | ☐ A15 | Prosody test rig + fixture generator (assisting Marcel) | `tests/prosody/`, `tests/fixtures/generate_audio.py` | Generates fixture audio **at test time** via ElevenLabs with contrasting delivery (flat/brisk vs hesitant/slow) — see the fixture rule below. Asserts the two produce measurably different signals. This is the D4 money shot as a test |
 
-**Dependency order, rebased:** A1 ☑ → A2 ☑ → **A6** → A5 → A3 → A7 → A8 → A9 → (A10–A13 parallel).
-A6 jumps the queue: it is the biggest gap, it is stack-independent, and it needs nothing from the
-contested contracts. A14 and A15 sit outside the chain and are the two prosody tasks Ado or Bong
-can take without waiting on Marcel.
+**Dependency order, rebased 4 Aug:** A1 ☑ → A2 ☑ → A14 ☑ → **A6** → A5 → A3 → A7 → A8 → A9 →
+(A10–A13 parallel). A6 jumps the queue: it is the biggest gap, it is stack-independent, and the
+contract it depended on is no longer contested. A15 sits outside the chain.
+
+> **⚠ The security workstream (S1–S8) is not in this table.** It was added on 4 Aug and lives in
+> [`ROADMAP.md` §5](ROADMAP.md#5-ai-security), owned by Vinay. Two of its items are on the
+> never-cut list: **S1** (nothing currently filters model output before it is spoken aloud to a
+> room) and **S2** (voice prompt injection is untested against an adversary). Several A-tasks
+> fold into it — A3 into S3, A13 into S5, A11 into S6.
 
 > **Fixture audio rule (G2).** No `.wav`/`.mp3` is ever committed, and no recording of a real
 > person goes near this repo — `.gitignore` already blocks the extensions, and A15 must not work

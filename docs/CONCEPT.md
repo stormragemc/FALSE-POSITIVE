@@ -116,20 +116,36 @@ it. Each still needs the owners' assent — Vinay in particular, since the vendo
 ## Open decisions
 
 These are **not decided yet**. Do not treat any of them as settled, and do not silently pick
-one — raise it.
+one — raise it. Engineering status for each lives in [`ROADMAP.md`](ROADMAP.md).
 
+- **⚠ Distribution: itch.io vs judge-only local build.** Raised 4 Aug. The sidecar is a *local*
+  Python process needing Python, multi-GB model downloads, and the player's own two API keys —
+  so today's build **cannot be published as a playable itch.io download**. Hosting it on GCP
+  fixes that but inverts the privacy claim and puts every player's API cost on us. Full analysis
+  and three options: [`ROADMAP.md` §9](ROADMAP.md#9-distribution-the-backend-is-local).
+- **Gemini billing: AI Studio key vs GCP/Vertex.** Nothing in the repo currently touches GCP;
+  `llm.py` builds an AI Studio client from a `GEMINI_API_KEY`. If the team's credits are GCP
+  credits, the current code does not bill against them. Names the budget owner the 1 Aug
+  amendment asked for.
 - **Pipeline (ASR → LLM → TTS) vs the Realtime API** for the voice loop. The plan proposes the
   pipeline and argues it in §2.2; it needs team sign-off, and `gpt-realtime-2.1-mini` stays as a
   labelled fallback if latency is unacceptable by D6.
-- How HuBERT features are consumed: raw representations vs a trained probe vs
-  hand-derived prosodic features, and what the detective actually receives. **Marcel's call, due
-  end of D1.**
+- **Voice activity detection vs push-to-talk.** VAD shipped, which reversed §10's mitigation for
+  a noisy demo room. Recommend adding push-to-talk as an override rather than replacing VAD.
 - Whether prosody arrives as a signal the LLM sees, or as a separate policy that steers it.
 - The case itself: crime, cast, ground truth, and what "the case unfolds" resolves into.
 - How consistency is tracked and scored across the interrogation.
 - Endings / outcome model.
 - Latency budget and the fallback when a response is slow or ASR fails.
 - **Team name** — required for the Drive folder before submission.
+
+### Resolved since this list was written
+
+- ~~**How HuBERT features are consumed**~~ — **decided and built, 3 Aug.** Hand-derived prosodic
+  features plus HuBERT hidden-state statistics, no training, session-relative rather than
+  absolute. This is the recommendation the plan made in §11. See
+  [`HUBERT_ORCHESTRATION_PLAN.md`](HUBERT_ORCHESTRATION_PLAN.md); the §3.1 `ProsodySignal`
+  contract is now implemented rather than contested.
 
 ## Honesty rule
 

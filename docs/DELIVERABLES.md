@@ -1,7 +1,13 @@
 # Deliverables tracker — due 9 Aug 2026
 
 Nine days from the case brief (31 Jul) to submission (9 Aug). Source of truth for *what* is
-required: [`CHALLENGE_BRIEF.md`](./CHALLENGE_BRIEF.md). This file tracks *where we are*.
+required: [`CHALLENGE_BRIEF.md`](./CHALLENGE_BRIEF.md). This file tracks the **three submitted
+artefacts**.
+
+> **For engineering status — what is built and what is not — read
+> [`ROADMAP.md`](./ROADMAP.md).** That is the live tracker and the file you update when you
+> finish work. This file covers only the deck, the video, and the repo's submission
+> requirements.
 
 Status key: ☐ not started · ◐ in progress · ☑ done
 

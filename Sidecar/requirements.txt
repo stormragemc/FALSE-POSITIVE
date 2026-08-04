@@ -3,8 +3,8 @@ fastapi>=0.115
 uvicorn[standard]>=0.32
 python-multipart>=0.0.9
 
-# STT (local, free)
-faster-whisper>=1.0.3
+# STT (Google Cloud Speech-to-Text v2, service-account auth)
+google-cloud-speech>=2.27
 
 # Speech emotion recognition (local, free)
 transformers>=4.44

@@ -83,9 +83,16 @@ _SAFETY_SETTINGS = [
 
 
 def _get_client() -> genai.Client:
+    """Vertex backend: billed to the project's GCP credits and authenticated
+    by the runtime service account, so no API key exists to leak. Locally, run
+    `gcloud auth application-default login` once."""
     global _client
     if _client is None:
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+        _client = genai.Client(
+            vertexai=True,
+            project=config.GCP_PROJECT,
+            location=config.GCP_LOCATION,
+        )
     return _client
 
 

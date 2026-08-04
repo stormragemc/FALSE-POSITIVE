@@ -34,7 +34,6 @@ import tts
 
 config.validate()
 
-_stt_pool = ThreadPoolExecutor(max_workers=1)
 _ser_pool = ThreadPoolExecutor(max_workers=1)
 
 # Conversation history per session, keyed by the GUID Unity mints at scene
@@ -59,8 +58,7 @@ class ClientInputError(ValueError):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _models_loaded, _prosody_model_available, _prosody_load_error
-    print("[Sidecar] Loading models (first run downloads them — this can take a while)...")
-    stt.load()
+    print("[Sidecar] Loading affect model (first run downloads it)...")
     if config.PROSODY_ENABLED:
         try:
             ser.load()
@@ -258,10 +256,14 @@ async def turn(
             full_duration_seconds = len(audio_f32) / 16000.0
 
             loop = asyncio.get_running_loop()
-            # STT and SER are independent reads of the same buffer — run them
-            # concurrently rather than serially (plan section 0).
+            # Re-encode from the resampled buffer rather than reusing raw_bytes:
+            # a client uploading at 48kHz would otherwise send 48kHz samples
+            # labelled 16kHz, which Google accepts and transcribes as garbage.
+            stt_bytes = audio_utils.float32_to_pcm16_bytes(audio_f32)
+            # STT is now a network call and SER is CPU-bound, so they overlap
+            # naturally — no thread pool needed on the STT side any more.
             stt_result, affect_result = await asyncio.gather(
-                loop.run_in_executor(_stt_pool, stt.transcribe, audio_f32),
+                stt.transcribe(stt_bytes),
                 loop.run_in_executor(
                     _ser_pool,
                     _analyze_affect,

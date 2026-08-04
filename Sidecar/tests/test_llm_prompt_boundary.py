@@ -37,7 +37,10 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         fake_genai = _module("google.genai", Client=FakeClient, types=fake_types)
         fake_google = _module("google", genai=fake_genai)
         fake_config = _module(
-            "config", GEMINI_API_KEY="test", PROSODY_MIN_CONFIDENCE=0.40
+            "config",
+            GCP_PROJECT="test-project",
+            GCP_LOCATION="global",
+            PROSODY_MIN_CONFIDENCE=0.40
         )
         stubs = {
             "config": fake_config,

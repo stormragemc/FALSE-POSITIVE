@@ -7,7 +7,6 @@ import importlib.util
 import io
 from pathlib import Path
 import sys
-import threading
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -72,6 +71,10 @@ class AppFailureIsolationTests(unittest.TestCase):
             SIDECAR_MAX_AUDIO_SECONDS=30.0,
             HOST="127.0.0.1",
             PORT=8765,
+            GCP_PROJECT="test-project",
+            GCP_LOCATION="global",
+            STT_MODEL="short",
+            STT_LANGUAGE="en-US",
         )
         cls.captured_signals = []
 
@@ -86,11 +89,10 @@ class AppFailureIsolationTests(unittest.TestCase):
             HISTORY_KIND_WITNESS="witness_transcript",
             generate_reply=generate_reply,
         )
-        stt = _module(
-            "stt",
-            load=lambda: None,
-            transcribe=lambda _audio: ("fixture transcript", 5),
-        )
+        async def fake_transcribe(_pcm_bytes):
+            return "fixture transcript", 5
+
+        stt = _module("stt", transcribe=fake_transcribe)
 
         def failing_hubert(_audio):
             raise RuntimeError("forced HuBERT failure")
@@ -112,6 +114,9 @@ class AppFailureIsolationTests(unittest.TestCase):
             ),
             resample_float32=lambda audio, _source, _target: audio,
             normalize_to_canonical=lambda pcm, rate, _channels: (pcm, rate),
+            float32_to_pcm16_bytes=lambda audio: (
+                (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+            ),
         )
         uvicorn = _module("uvicorn", run=lambda *_args, **_kwargs: None)
 
@@ -136,7 +141,6 @@ class AppFailureIsolationTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.app._stt_pool.shutdown(wait=True)
         cls.app._ser_pool.shutdown(wait=True)
 
     def setUp(self):
@@ -443,20 +447,23 @@ class AppFailureIsolationTests(unittest.TestCase):
             first = asyncio.run(
                 self.app.turn("session-a", 16000, 0, _FakeUpload(pcm))
             )
-            stt_started = threading.Event()
-            release_stt = threading.Event()
+            stt_started = asyncio.Event()
+            release_stt = asyncio.Event()
 
-            def blocking_stt(_audio):
+            async def blocking_stt(_pcm_bytes):
+                # Must yield the loop rather than block it: transcribe is now
+                # awaited directly instead of running in a thread pool, so a
+                # synchronous wait here would freeze the reset it races with
+                # and the test would pass without exercising the race at all.
                 stt_started.set()
-                release_stt.wait(timeout=2.0)
+                await asyncio.wait_for(release_stt.wait(), timeout=2.0)
                 return "fixture transcript", 5
 
             async def reset_while_turn_waits():
                 turn_task = asyncio.create_task(
                     self.app.turn("session-a", 16000, 0, _FakeUpload(pcm))
                 )
-                while not stt_started.is_set():
-                    await asyncio.sleep(0)
+                await stt_started.wait()
                 await self.app.session_reset("session-a")
                 release_stt.set()
                 return await turn_task

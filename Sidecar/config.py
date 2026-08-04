@@ -13,12 +13,18 @@ from dotenv import load_dotenv
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=_ENV_PATH)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
 
 HOST = os.environ.get("SIDECAR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SIDECAR_PORT", "8765"))
+
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "")
+GCP_LOCATION = os.environ.get("GCP_LOCATION", "global")
+# Pinned deliberately (roadmap S7). "short" is the sub-60s recognizer; do not
+# swap to a floating alias.
+STT_MODEL = os.environ.get("STT_MODEL", "short")
+STT_LANGUAGE = os.environ.get("STT_LANGUAGE", "en-US")
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -46,8 +52,8 @@ SIDECAR_MAX_SESSIONS = max(1, int(os.environ.get("SIDECAR_MAX_SESSIONS", "32")))
 def validate() -> None:
     """Fail fast at startup rather than three minutes into a playtest."""
     missing = []
-    if not GEMINI_API_KEY:
-        missing.append("GEMINI_API_KEY")
+    if not GCP_PROJECT:
+        missing.append("GCP_PROJECT")
     if not ELEVENLABS_API_KEY:
         missing.append("ELEVENLABS_API_KEY")
     if not ELEVENLABS_VOICE_ID:

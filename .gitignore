@@ -149,6 +149,7 @@ recordings/
 # =============================================================================
 .gstack/
 .worktrees/
+.context/
 .DS_Store
 .vscode/
 .idea/

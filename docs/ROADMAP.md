@@ -46,6 +46,7 @@ you saw it pass. Unity work that has never been opened in the Editor is ◐, not
 | Unity client shell | ◐ runs; never compiled on a clean machine |
 | **The game around the loop** | ☐ **does not exist** |
 | **Consistency tracking — the pitch's core claim** | ☐ **nothing tracks it** |
+| **Cloud backend migration** | ◐ **in flight** — three streams, target 6 Aug. [§9](#9-distribution-hosted-backend-migration-record) |
 | AI security | ◐ partial mitigations, nothing tested adversarially |
 | Deck / demo video | ☐ not started |
 
@@ -62,9 +63,10 @@ pitch is actually about — a detective that catches you contradicting yourself.
 | ☑ | Item | Evidence |
 |---|---|---|
 | ☑ | FastAPI sidecar, loopback only, one endpoint per turn | `Sidecar/app.py` |
-| ☑ | `GET /health`, `POST /turn`, `POST /session/reset`, `GET /debug/last_turn` | `app.py:183-363` |
+| ☑ | `GET /health`, `POST /turn`, `POST /session/reset` | `app.py:183-363` |
+| ❌ | ~~`GET /debug/last_turn`~~ | **Removed by the migration** — it returned the last player's transcript to any caller. See S4 and [§9](#9-distribution-hosted-backend-migration-record). |
 | ☑ | STT and affect run **concurrently** on the same buffer | `asyncio.gather`, `app.py:266` |
-| ☑ | STT: `faster-whisper small.en`, local, no key, audio never leaves the machine | `stt.py` |
+| ❌ | ~~STT: `faster-whisper small.en`, local, no key, audio never leaves the machine~~ | **Superseded 4 Aug** — STT is Google Cloud Speech-to-Text and player audio now leaves the machine. [§9](#9-distribution-hosted-backend-migration-record), [`PRIVACY.md`](PRIVACY.md). |
 | ☑ | TTS: ElevenLabs, PCM normalised to a canonical rate for Unity | `tts.py`, `audio_utils.py` |
 | ☑ | LLM: Gemini 3.6 Flash, thinking pinned `minimal`, thought parts stripped before TTS | `llm.py` |
 | ☑ | Fail-fast config validation naming the missing variable | `config.py:46` |
@@ -149,7 +151,7 @@ Ordered by score-per-hour. The top three are cheap and directly graded.
 |---|---|---|
 | ☐ | **Extract prompts to files** | `DELIVERABLES.md` flags this as **currently violated**. The persona and premise are string literals in `llm.py:35-64`. "Relevant prompts or agent configurations" is an explicit, graded repo requirement. Cheapest points available. |
 | ☐ | **A9 faults F1–F6** (`Sidecar/faults.py`) | Every failure today is one 500 with `str(e)`. The brief scores exception handling; the plan's rule is *no silent fallbacks*. Each fault needs a visible, in-fiction response. |
-| ☐ | **`docs/PRIVACY.md`** | Does not exist. We process voice; the brief makes this a licence-and-personal-information obligation. Also needs an in-game notice before the first recording. |
+| ◐ | **`docs/PRIVACY.md`** | **Written 4 Aug** — [`PRIVACY.md`](PRIVACY.md). Player-facing, states where audio goes now that it leaves the machine, what is retained (nothing on disk), and that the system cannot detect lies. Remaining: the in-game notice before the first recording. See S8. |
 | ☐ | **Cold open — the crime glimpses** | Concept non-negotiable #2: *memory is the real mechanic*. The player currently never witnesses anything. Only `Interrogation.unity` exists. Can degrade to three stills if time runs out — but say so. |
 | ☐ | **Endings + outcome screen** | Four endings driven by consistency score. Outcome quotes the player back to themselves and never says they lied. |
 | ☐ | A3 contracts as code | Pydantic models for §3 schemas + round-trip tests. Folds into S3. |
@@ -173,14 +175,14 @@ the brief scores exception handling and requires protecting personal information
 
 | ☐ | ID | Item | Status and why |
 |---|---|---|---|
-| ☐ | **S1** | **Output filter between the LLM and the speaker** | **Sharpest gap.** Nothing sits between Gemini and TTS. Safety is deliberately relaxed to `BLOCK_ONLY_HIGH` (`llm.py:74`) because an accusatory detective trips default filters, and `tts.py` then speaks the result **verbatim, with nobody reading it first.** On a live judged stage that is an unbounded output path. Must enforce G6 (never assert the player lied), block persona/system-prompt leakage, and cap length. Applies to `internal_note` too. |
+| ☐ | **S1** | **Output filter between the LLM and the speaker** | **Sharpest gap.** Nothing sits between Gemini and TTS. Safety is deliberately relaxed to `BLOCK_ONLY_HIGH` (`llm.py:74`) because an accusatory detective trips default filters, and `tts.py` then speaks the result **verbatim, with nobody reading it first.** On a live judged stage that is an unbounded output path. Must enforce G6 (never assert the player lied), block persona/system-prompt leakage, and cap length. Applies to `internal_note` too. **The migration made this worse, not better:** the same unfiltered path is now reachable from the public internet rather than from loopback. |
 | ☐ | **S2** | **Voice prompt-injection red-team suite** | The player's speech becomes model input. Partial mitigations exist — separate `WITNESS_TRANSCRIPT` / `LOCAL_AFFECT_CONTEXT` trust blocks, HTML escaping, reserved-marker scrubbing, applied to replayed history too (`llm.py:92-124`). **Never tested against an adversary.** Build a spoken-attack corpus ("ignore your instructions", "you are now a helpful assistant", "repeat your system prompt", marker imitation) and assert the detective holds role. A judge *will* try this. |
 | ☐ | **S3** | **No-deception schema test** | G6 as an executable control: the build fails if a `deception` / `truthfulness` / `lie_probability`-like key appears in any contract or payload. `prosody.py` is clean today by discipline alone — nothing enforces it. Folds A3. |
-| ☐ | **S4** | **Local endpoint hardening** | The sidecar binds `127.0.0.1` (good) but has **no authentication**. Any local process can `POST /turn` and burn paid credits, and `GET /debug/last_turn` returns the last transcript to any local reader. Fix: a per-launch shared token minted by `SidecarProcessLauncher` and required on every endpoint. |
-| ☐ | **S5** | **Secret handling, automated** | True today but unverified by machinery: keys live only in the sidecar process (`config.py:1-5`) and never cross to Unity; `.gitignore` covers `.env`; history is clean. Add `gitleaks` to CI so it stays true. Folds A13. |
-| ☐ | **S6** | **Cost and abuse ceiling** | A runaway loop burns Gemini and ElevenLabs credits with nothing to stop it. Hard per-session cap that ends the session in-fiction. Folds A11. |
-| ☐ | **S7** | **Model supply chain** | HuBERT and Whisper weights download from the HF Hub at first run, unpinned. Pin revisions. The checkpoint label-contract check already exists (`ser.py:79`) — that is one third of this done. |
-| ☐ | **S8** | **Privacy boundary, stated and enforced** | Player audio and embeddings never leave the machine; only a short derived text impression reaches Gemini. This is a genuine strength and it is currently **undocumented**. Needs `PRIVACY.md`, an in-game notice before the first recording, and telemetry that defaults to no transcripts. |
+| ◐ | **S4** | ~~Local~~ **Endpoint hardening** | **Scope changed and grew teeth: the endpoint is now public, not loopback.** Designed and assigned as Task 4 of the migration — a shared client key required on every path except `/health` (`Sidecar/auth.py`), failing closed when the key is unset, and `GET /debug/last_turn` deleted outright. Unity sends the key as `X-FP-Client-Key` (done, `InterrogationSidecarClient.cs`). **☑ when Stream B's `cloud/security` branch merges and the deployed service answers 401 to an unauthenticated `POST /turn`** — Task 7 step 8 is that check. Owner: Vinay. |
+| ☐ | **S5** | **Secret handling, automated** | Unverified by machinery: vendor keys live only in the backend process and never cross to Unity; `.gitignore` covers `.env`; history is clean. **One deliberate exception since 4 Aug** — the shared client key is committed in `InterrogationConfig.asset`, because a shipped build must carry a copy to authenticate at all. It is extractable from any download and is treated as a speed bump, not a secret; `limits.py` is what actually bounds cost. In production it comes from Secret Manager, not the repo. Add `gitleaks` to CI, with that one value allow-listed so it does not train everyone to ignore the alert. Folds A13. |
+| ◐ | **S6** | **Cost and abuse ceiling** | Now spans three paid vendors and a public URL, so a runaway loop drains the $300 rather than one person's key. Designed and assigned as Task 5 — `Sidecar/limits.py` counts turns **on admission, not on success** (a retry loop still pays the vendors) and refuses with 429 plus a reason slug. Backed by a billing budget alert at $50/$150/$250, which Task 7 sets **before** anything can spend. **☑ when Stream B's branch merges and a turn past the cap returns 429.** Still missing the in-fiction ending for a capped session. Owner: Vinay. Folds A11. |
+| ◐ | **S7** | **Model supply chain** | Whisper is gone; Google STT is pinned to the `short` recognizer and Gemini to `gemini-3.6-flash`, both by explicit config with no floating alias. HuBERT now **bakes into the container image at build time** rather than downloading at first run, which pins it by construction and removes a ~90 s cold-start download. The checkpoint label-contract check already exists (`ser.py:79`). Remaining: pin the HuBERT revision hash explicitly rather than relying on the image build date. |
+| ◐ | **S8** | **Privacy boundary, stated and enforced** | ~~Player audio and embeddings never leave the machine.~~ **That claim died with the migration** — audio now goes to Google Cloud, which is exactly why this row stopped being a bragging point and became an obligation. ☑ **`PRIVACY.md` is written** ([`PRIVACY.md`](PRIVACY.md)) and says so plainly: audio is discarded after each turn, never written to disk, no account, no training, and the system cannot detect lies. ☑ Telemetry still defaults to no transcripts, trivially — A10 does not exist. ☐ **Still missing: the in-game notice before the first recording.** A privacy doc a player never sees is not disclosure. |
 
 **Do first:** S1, then S2. S1 because an unfiltered path to a speaker in front of judges is the
 highest-consequence failure we have. S2 because it is the attack a curious judge performs
@@ -197,7 +199,7 @@ without being asked.
 | ☐ | Demo video — max 5 minutes, real playthrough | **Not started.** Separate from the 10 s trailer |
 | ☐ | Prompts / agent configurations committed | **Currently violated** — see §4 |
 | ☐ | Licence confirmations | IEMOCAP (restrictive academic licence), Avaturn, ffmpeg/soxr, Unity tier |
-| ☐ | `PRIVACY.md` | See S8 |
+| ◐ | `PRIVACY.md` | **Written** — [`PRIVACY.md`](PRIVACY.md). In-game notice still missing; see S8 |
 | ☐ | **Team name** | Required for the Drive folder. Nobody has picked one. |
 | ☐ | Repo link in the Drive submission | Repo stays public — see the 31 Jul decision in `DELIVERABLES.md` |
 
@@ -207,15 +209,19 @@ without being asked.
 
 | Decision | Why it is blocking |
 |---|---|
-| **⚠ Distribution: itch.io vs judge-only local build** | **The biggest unresolved question in the project. See [§9](#9-distribution-the-backend-is-local).** The sidecar is a *local* Python process. A stranger downloading from itch.io cannot run this build. Decide the target before writing the deck's technical slide. |
-| **Gemini billing: AI Studio key vs GCP/Vertex** | **Nothing in this repo touches GCP.** `config.py` reads a `GEMINI_API_KEY` and `llm.py:88` builds an AI Studio client. If the team's credits are GCP credits, *the current code does not bill against them.* The `google-genai` SDK already in `requirements.txt` supports both, so this is a client-construction change and no new dependency — but somebody has to say which account pays. Folds into the distribution decision: hosting the backend on GCP answers both at once. |
 | **VAD vs push-to-talk** | `IMPLEMENTATION_PLAN.md:577` marks this mitigation **currently broken**. A noisy judging room can trigger turns the player did not intend, and a demo that only survives a quiet room scores zero on Build Quality. Recommend adding push-to-talk as an override rather than replacing VAD. |
 | **ElevenLabs stays, or consolidate TTS** | Second vendor, second key, off team credits, and its free tier only grants API access to voices you created. It works today and the trailer depends on it. Only revisit if the demo machine hits the voice restriction. |
 | Who shoots the demo video, on which machine | Nobody assigned |
 
 **Not open any more:** §3.1 `ProsodySignal` is implemented (see §1). Transport is HTTP, not
-WebSocket (§3.4 superseded). STT stays local — moving it to the cloud would *weaken* the
-privacy claim, which is currently one of our stronger cards.
+WebSocket (§3.4 superseded). **Distribution and Gemini billing were both settled on 4 Aug by
+the same decision — host the backend on Cloud Run; see [§9](#9-distribution-hosted-backend-migration-record).**
+
+> ⚠ **This line used to read "STT stays local — moving it to the cloud would *weaken* the privacy
+> claim, which is currently one of our stronger cards."** That is exactly what we then chose to
+> do, with our eyes open. The privacy claim did weaken, and the trade was a build a stranger can
+> actually run. The card we play now is honesty about it, not locality — which is why
+> [`PRIVACY.md`](PRIVACY.md) is a submission blocker rather than cleanup.
 
 ---
 
@@ -239,58 +245,106 @@ A claim that dies on stage costs more than the feature was worth.
 
 ---
 
-## 9. Distribution: the backend is local
+## 9. Distribution: hosted backend migration record
 
-> ## ⚠ DECIDED 4 Aug 2026 — read this before the analysis below
->
-> **The team chose Option B: migrate the whole backend to Google Cloud Run.** The section
-> below is kept as the record of *why*, but its recommendation ("Option A, judge-only local
-> build") is **superseded** and must not be acted on.
->
-> - **Design:** [`superpowers/specs/2026-08-04-cloud-hosted-backend-design.md`](superpowers/specs/2026-08-04-cloud-hosted-backend-design.md)
-> - **Task-by-task plan:** [`superpowers/plans/2026-08-04-cloud-hosted-backend.md`](superpowers/plans/2026-08-04-cloud-hosted-backend.md)
-> - **Who does what (3 people):** [`superpowers/plans/2026-08-04-cloud-backend-work-split.md`](superpowers/plans/2026-08-04-cloud-backend-work-split.md)
->
-> Decided alongside it: STT moves to Google Cloud Speech-to-Text, Gemini moves to Vertex AI so
-> the $300 of credits actually pays, ElevenLabs stays, and **player audio now leaves the
-> machine** — an explicit team decision that makes the privacy rewrite a submission blocker.
->
-> This section gets rewritten as the migration record in Task 9 of the plan. Until then, treat
-> the banner as authoritative and the analysis below as history.
+**Decided 4 Aug 2026. In flight, target 6 Aug.** The backend moves off the player's machine
+onto Google Cloud Run, so the game ships as a plain binary that talks to a URL.
 
-**Added 4 Aug 2026, in response to the itch.io plan. ~~This is unresolved and it is architectural.~~ Resolved the same day — see the banner above.**
+- **Design:** [`superpowers/specs/2026-08-04-cloud-hosted-backend-design.md`](superpowers/specs/2026-08-04-cloud-hosted-backend-design.md)
+- **Task-by-task plan:** [`superpowers/plans/2026-08-04-cloud-hosted-backend.md`](superpowers/plans/2026-08-04-cloud-hosted-backend.md)
+- **Who does what:** [`superpowers/plans/2026-08-04-cloud-backend-work-split.md`](superpowers/plans/2026-08-04-cloud-backend-work-split.md)
 
-### What we built
+### What changed
 
-`Sidecar/` is **not a server we host**. It is a Python process that runs on the *player's own
-machine*, launched as a child process by Unity (`Core/SidecarProcessLauncher.cs`) and reached
-over `127.0.0.1:8765`. That was the right call for a judged local demo, and it is the source
-of our strongest privacy claim: **player audio never leaves the machine.**
+| | Before | After |
+|---|---|---|
+| Backend | Python process on the player's machine, `127.0.0.1:8765` | Cloud Run service, public HTTPS |
+| STT | `faster-whisper small.en`, local | Google Cloud Speech-to-Text v2, `short` recognizer |
+| LLM | Gemini 3.6 Flash via an AI Studio `GEMINI_API_KEY` | Same model via **Vertex AI**, service-account auth, billed to the team's GCP credits |
+| Affect | HuBERT, local | HuBERT, **baked into the container image** |
+| TTS | ElevenLabs | ElevenLabs — unchanged |
+| Player needs | Python, ~GBs of weights, **their own two API keys** | Nothing |
+| Auth | None | Shared client key on every path except `/health`; `/debug/last_turn` deleted |
+| Cost control | None | Per-session and per-day turn caps, plus a billing budget alert |
+| **Player audio** | **Never left the machine** | **Leaves the machine.** See [`PRIVACY.md`](PRIVACY.md) |
 
-### What that means for itch.io
+### Deployment facts
 
-To run today's build, a player needs all of this:
+**Service URL:** `<PENDING — Stream B fills this in at Task 7 step 8>`
+Region `us-central1`. Fill this in the moment the deploy lands; it is what the Unity
+`InterrogationConfig.asset` points at, and a URL that lives only in someone's terminal history
+is how a demo dies.
 
-| Requirement | Reality for a stranger on itch.io |
-|---|---|
-| Python 3.10–3.12 installed | Most players do not have it |
-| `pip install` of torch + transformers + faster-whisper | Multi-gigabyte install, compiler pain on some machines |
-| First-run download of Whisper `small.en` + HuBERT weights | Hundreds of MB before the game starts |
-| **Their own `GEMINI_API_KEY`** | Requires a Google account and billing setup |
-| **Their own `ELEVENLABS_API_KEY` + voice ID** | Requires a second signup, and the free tier only serves voices *you* created |
+**`--max-instances 1` is load-bearing. Do not remove it as a cost tweak.**
 
-**A public itch.io release does not work as currently architected.** Not "is awkward" — a
-player following the itch.io download button reaches a game that cannot start.
+Session history and the prosody baseline live in the service process's RAM. A second instance
+means two things break at once, both invisibly and both mid-scene:
 
-### The three honest options
+1. **The detective forgets the interrogation.** Turn 5 may land on an instance that never saw
+   turns 1–4, so consistency — *the pitch's central claim* — silently stops working.
+2. **The affect system resets to nothing.** It measures change *relative to how this player
+   sounded at the start of the session*. A fresh instance has no reference, so it has nothing to
+   compare against.
 
-**A. Judge-only local build.** Ship the repo + a setup guide; the judges run it, we demo it
-live. Zero architecture change. itch.io page exists but hosts a trailer and a "source + setup"
-link rather than a playable download. **Recommended for 9 Aug.**
+`--min-instances 1` pins the other direction: it keeps the instance warm so a cold start does
+not land in the middle of a judged demo. The pair costs money while idle, which is the trade.
+[`session_store.py`](../Sidecar/session_store.py) exists as the seam a shared store drops into
+if this assumption ever has to go.
 
-**B. Host the backend on GCP.** Cloud Run behind HTTPS; the Unity build ships with no Python
-and no keys. This is the version that scales to strangers, and it is where GCP genuinely earns
-its place in the architecture rather than just paying the Gemini bill. Costs:
+**A redeploy drops every live session.** Deploy between playtests, never during one.
+
+**Budget alert: thresholds at $50, $150 and $250 of the $300 credit.** Set *before* the first
+deploy, not after — an always-on pinned instance with no alert is the standard way to discover
+an empty balance a week later. Owner: Vinay, who owns the GCP project and its billing account.
+
+### Known limit on a public launch: ElevenLabs
+
+**ElevenLabs is not on the GCP credits.** The free tier is roughly 10k characters per month and
+a detective line is ~200 characters — about **50 lines per month across all players**.
+
+Fine for the 9 Aug demo. Not survivable for a public itch.io launch. `tts.synthesize()` is a
+single function with a stable contract, so swapping to Google Cloud TTS is a one-file change
+*if* we hit the wall. Nobody builds that now.
+
+**Turn the Cloud Run service off after judging.** Always-on costs money whether anyone is
+playing or not.
+
+### Streams
+
+| Stream | Owner | Scope | State |
+|---|---|---|---|
+| A — backend core | Marcel | Session store, STT swap, Vertex, container | ☐ |
+| B — security & cloud | Vinay | `auth.py`, `limits.py`, GCP project, deploy | ☐ |
+| C — client & docs | Ananda | Unity client, privacy and doc rewrite | ◐ code + docs done; asset values blocked on B's deploy |
+
+Split by **file ownership, not by task** — `app.py` and `config.py` are touched by four tasks
+each, so three people editing by task would spend the week on merge conflicts. Merge order is
+**B → A → C**.
+
+### How we got here
+
+The analysis that produced this decision, kept because the reasoning still matters.
+
+`Sidecar/` was never a server we hosted. It was a Python process on the *player's own machine*,
+launched by Unity and reached over loopback. That was right for a judged local demo, and it was
+the source of our strongest privacy claim.
+
+It was also unshippable. A stranger on itch.io needed Python 3.10–3.12, a multi-gigabyte
+`pip install` of torch and transformers, hundreds of MB of first-run model downloads, **their
+own `GEMINI_API_KEY`**, and **their own `ELEVENLABS_API_KEY`** — whose free tier only serves
+voices they created themselves. Not "awkward": a player who clicked download reached a game
+that could not start.
+
+### The three options that were on the table
+
+**A. Judge-only local build. — NOT TAKEN.** Ship the repo + a setup guide; the judges run it, we
+demo it live. Zero architecture change. itch.io hosts a trailer and a "source + setup" link
+rather than a playable download. *This was the written recommendation, and the team overrode it.*
+
+**B. Host the backend on GCP. — CHOSEN.** Cloud Run behind HTTPS; the Unity build ships with no
+Python and no keys. This is the version that scales to strangers, and it is where GCP genuinely
+earns its place in the architecture rather than just paying the Gemini bill. Costs, accepted
+with eyes open:
 
 - **We pay for every player's Gemini and ElevenLabs usage.** S4 (endpoint auth) and S6 (cost
   cap) stop being nice-to-haves and become prerequisites — an open, unauthenticated,
@@ -302,22 +356,21 @@ its place in the architecture rather than just paying the Gemini bill. Costs:
 - Whisper + HuBERT on Cloud Run CPU will be slow; swapping STT to Google Cloud Speech-to-Text
   is the obvious fix and consolidates vendors further.
 
-**C. Bundle a frozen runtime** (PyInstaller the sidecar, ship the weights). Removes the Python
-install, keeps processing local, keeps the privacy claim. Does **not** remove the two API keys,
-so the player still has to bring their own. Build weighs several GB. Half a solution.
+**C. Bundle a frozen runtime — NOT TAKEN.** (PyInstaller the sidecar, ship the weights.) Removes
+the Python install, keeps processing local, keeps the privacy claim. Does **not** remove the two
+API keys, so the player still has to bring their own. Build weighs several GB. Half a solution.
 
-### Two things to settle before anyone starts
+### Still unsettled
 
-1. **Is itch.io before or after 9 Aug?** If after, it does not compete with the deadline and
-   option A is obviously right for submission. If the team wants a playable itch.io link *in
-   the submission*, that is a different and much larger project than the four critical-path
-   items in §3, and something in §3 dies to pay for it.
-2. **Desktop download or browser/WebGL?** WebGL is a harder constraint than it looks: a WebGL
-   build **cannot launch a local process at all**, so option A and option C are both impossible
-   there — WebGL forces option B. It also cannot use Unity's `Microphone` class the way
-   `Audio/MicrophoneService.cs` does today and needs JS interop for capture.
+**Desktop download or browser/WebGL?** The migration removed the constraint that made this
+urgent — WebGL cannot launch a local process at all, so it used to force option B, and option B
+is now what we are building either way. What remains is a client-side problem: a WebGL build
+cannot use Unity's `Microphone` class the way `Audio/MicrophoneService.cs` does today and would
+need JS interop for capture. **Not scoped, not started, not required for 9 Aug.**
 
-**Recommendation:** option A for the 9 Aug submission, option B as a post-deadline project.
-The brief judges a prototype demonstrated *in a live setting* — it does not ask for public
-distribution, and five days is not enough to do both. If itch.io is the team's real goal,
-ship the submission first and treat hosting as week two.
+**Is itch.io before or after 9 Aug?** The migration is what makes a playable link *possible*;
+it does not by itself make it a submission item. The brief judges a prototype demonstrated in a
+live setting and does not ask for public distribution. Treat the itch.io page as a bonus that
+the hosted backend now permits, and **do not let it pull hours away from §3** — consistency
+tracking and `DetectiveAction` are still the difference between a voice demo and the pitched
+game. Migration slips past 6 Aug → cut scope in the migration, not in §3.

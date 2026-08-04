@@ -6,6 +6,15 @@
 > **Giorgi owns this content** — moved, not edited. If it should live somewhere else in `unity/`,
 > that is his call.
 
+> **⚠ Amended 4 Aug 2026 — the backend moved to Google Cloud Run.** Corrections below are marked
+> inline and kept as narrow as possible, because this is Giorgi's text. What changed for the
+> client: STT is Google Cloud Speech-to-Text, not local `faster-whisper`; Gemini is reached
+> through Vertex AI and there is no `GEMINI_API_KEY`; `autoLaunchSidecar` is off, so Unity no
+> longer starts a local process; and every request carries an `X-FP-Client-Key` header. The
+> per-turn Unity flow — VAD, `UtteranceRecorder`, `OnTurnError`, lip sync — is unchanged.
+> Setup for the backend is now [`Sidecar/README.md`](../Sidecar/README.md);
+> [`ROADMAP.md` §9](ROADMAP.md#9-distribution-hosted-backend-migration-record) has the why.
+
 ---
 
 
@@ -22,11 +31,15 @@ This file is the practical "how do I run this" summary.
 1. **Unity** (`Assets/_Project/`) — the game itself: player movement, the
    sit/stand camera system, microphone capture + voice activity detection,
    the cop's lip sync, and the HTTP client that talks to the sidecar.
-2. **`Sidecar/`** — a local Python process that does everything external to
-   Unity: speech-to-text, speech emotion recognition, the officer's LLM
-   reply (Gemini 3.6 Flash), and the officer's TTS voice (ElevenLabs). Unity
-   never holds an API key — both live only in `Sidecar/.env`. See
-   `Sidecar/README.md` for sidecar-specific setup and troubleshooting.
+2. **`Sidecar/`** — ~~a local Python process~~ **(4 Aug: a FastAPI service on Google
+   Cloud Run)** that does everything external to Unity: speech-to-text, speech
+   emotion recognition, the officer's LLM reply (Gemini 3.6 Flash), and the
+   officer's TTS voice (ElevenLabs). Unity never holds a *vendor* API key —
+   ~~both live only in `Sidecar/.env`~~ **they live in Secret Manager, injected
+   into the container; Google is reached as the runtime service account.** It
+   does ship one shared client key that gates the public URL, which is
+   extractable from a build by design. See `Sidecar/README.md` for backend
+   setup, deploy commands, and troubleshooting.
 
 ## Voice pipeline, precisely
 
@@ -36,15 +49,16 @@ One conversational turn, in order:
    always live while seated; `VoiceActivityDetector` decides speaking vs.
    silence off a calibrated RMS threshold and `UtteranceRecorder` buffers
    the utterance.
-2. **Speech-to-text**: `faster-whisper` (`small.en`), local, no API key —
-   turns the utterance into a transcript.
+2. **Speech-to-text**: ~~`faster-whisper` (`small.en`), local, no API key~~
+   **(4 Aug: Google Cloud Speech-to-Text v2, `short` recognizer, called from
+   the backend)** — turns the utterance into a transcript.
 3. **Speech emotion recognition**: **HuBERT** (`superb/hubert-base-superb-er`),
-   local, no API key — runs *in parallel* with STT on the same audio buffer
-   and returns one of 4 emotion labels + confidence, framed to the LLM as a
-   soft impression, not a fact.
+   in-process on the backend, no API key — runs *in parallel* with STT on the
+   same audio buffer and returns one of 4 emotion labels + confidence, framed
+   to the LLM as a soft impression, not a fact.
    **HuBERT is the emotion model here, not the speech-recognizer** — worth
    stating explicitly, since it's easy to assume "HuBERT" implies ASR. STT
-   is whisper's job; HuBERT's job is reading tone, not words.
+   is Google's job; HuBERT's job is reading tone, not words.
 4. **LLM reply**: Gemini 3.6 Flash, given the transcript + emotion reading,
    in character as the interrogating detective.
 5. **TTS**: ElevenLabs synthesizes the reply as PCM audio.
@@ -167,9 +181,10 @@ below.
   the sidecar. This is the one thing standing between the current state
   and turns actually succeeding — everything downstream of it (Unity's
   side of the pipeline) is already wired and waiting.
-- **`GEMINI_API_KEY` / `ELEVENLABS_API_KEY`** in `Sidecar/.env` — without
-  them the sidecar refuses to start (fails fast with a clear message naming
-  the missing variable).
+- ~~**`GEMINI_API_KEY` / `ELEVENLABS_API_KEY`** in `Sidecar/.env`~~ **(4 Aug:
+  `GCP_PROJECT`, `FP_CLIENT_KEY` and the two `ELEVENLABS_*` values; the Gemini
+  key is gone, replaced by Vertex + ADC)** — without them the backend refuses
+  to start (fails fast with a clear message naming the missing variable).
 - **Art assets**: the room/table/chairs are still primitive placeholder
   geometry. The cop character is done — see "Cop character" above for what
   that took and `Assets/_Project/ASSETS_TODO.md` for room/furniture
@@ -178,8 +193,9 @@ below.
 **What's proven vs. what's wired but not yet exercised.** Being precise
 about this matters more than it might seem, given how much of this got
 verified through workarounds:
-- **Proven**: the full sidecar chain (whisper transcript exact-match on a
-  real sample, HuBERT emotion label, Gemini in-character replies, ElevenLabs
+- **Proven**: the full backend chain (transcript exact-match on a real sample
+  — then via Whisper, now via Google STT — HuBERT emotion label, Gemini
+  in-character replies, ElevenLabs
   PCM audio) via the four `Sidecar/tools/probe_*.py` scripts; model import,
   Humanoid avatar validity, seated placement, and no stray geometry, via
   direct `Camera.Render()` captures in the Editor; one real Play-mode turn
@@ -212,14 +228,14 @@ verified through workarounds:
   own console window instead, or Ctrl+C in it. (Mostly harmless day to day
   — a still-running sidecar is transparently reused, not duplicated — but
   worth knowing so the menu item doesn't look broken.)
-- `Sidecar/README.md` §"Testing it in isolation" — curl the sidecar directly
-  before involving Unity at all; this is the fastest way to iterate on the
-  STT/emotion/LLM/TTS pipeline itself.
+- `Sidecar/README.md` §"Testing" — curl the backend directly before involving
+  Unity at all; this is the fastest way to iterate on the STT/emotion/LLM/TTS
+  pipeline itself. Remember the `x-fp-client-key` header, or you get a `401`.
 - `Sidecar/tools/` — standalone probes that bypass the HTTP layer to
   isolate failures: `probe_tts.py` (which voices actually work over the
-  API), `probe_llm.py` (is the Gemini model id still live, with the real
-  exception instead of the silent `FALLBACK_LINE` degrade), `probe_stt_ser.py`
-  (feed a `.pcm` file through whisper + HuBERT directly), `probe_full_turn.py`
+  API), `probe_llm.py` (is the Gemini model id still live on Vertex, with the
+  real exception instead of the silent `FALLBACK_LINE` degrade), `probe_stt_ser.py`
+  (feed a `.pcm` file through STT + HuBERT directly), `probe_full_turn.py`
   (exercise LLM→TTS→normalize end to end with a specific voice override,
   without needing `.env` changed first).
 

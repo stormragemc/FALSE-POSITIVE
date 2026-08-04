@@ -105,8 +105,9 @@ it. Each still needs the owners' assent — Vinay in particular, since the vendo
 
 | Decision | Notes |
 |---|---|
-| **LLM: Gemini 3.6 Flash**, replacing `gpt-5.6-terra` / `gpt-5.6-sol`. | ⚠ Reverses "all API calls go to OpenAI, on team credits." Needs a named budget owner. Detective dialogue only — there is no consistency analyst yet. |
-| **STT: `faster-whisper` (`small.en`), local**, replacing `gpt-4o-transcribe`. | Runs on the player's machine, no key, no cost. Player audio never leaves the machine — this is *stronger* than the original privacy position, not weaker. |
+| **LLM: Gemini 3.6 Flash**, replacing `gpt-5.6-terra` / `gpt-5.6-sol`. | ⚠ Reverses "all API calls go to OpenAI, on team credits." ~~Needs a named budget owner.~~ **Budget owner named 4 Aug: Vinay owns the GCP project and its billing account** ([work split](superpowers/plans/2026-08-04-cloud-backend-work-split.md)); billing moved to Vertex AI so the team's GCP credits pay. Detective dialogue only — there is no consistency analyst yet. |
+| ~~**STT: `faster-whisper` (`small.en`), local**, replacing `gpt-4o-transcribe`.~~ | ~~Runs on the player's machine, no key, no cost. Player audio never leaves the machine — this is *stronger* than the original privacy position, not weaker.~~ **Superseded 4 Aug — see the row below.** |
+| **STT: Google Cloud Speech-to-Text**, replacing local `faster-whisper`. Decided 4 Aug. | Player audio now leaves the machine. Deliberate — it is what makes an itch.io release possible. Disclosed in [`PRIVACY.md`](PRIVACY.md). |
 | **TTS: ElevenLabs**, replacing `gpt-4o-mini-tts`. | ⚠ Second vendor, second key, off team credits. Free tier only grants API access to voices you created — see `Sidecar/README.md`. |
 | **Affect: `superb/hubert-base-superb-er`, local** — a 4-class emotion classifier, replacing the 13-field `ProsodySignal` derived from `facebook/hubert-base-ls960`. | Still HuBERT, so the pitch's claim holds. But it is a much thinner signal than the contract specified. ⚠ **Marcel's call** whether to enrich it. ⚠ Trained on **IEMOCAP**, which carries a restrictive academic licence — disclosure obligation, see README. |
 | **Transport: HTTP `POST /turn`**, replacing the WebSocket protocol in the plan's §3.4. | Request/response per turn. Arrived at independently and it works; §3.4 is superseded. |
@@ -118,15 +119,6 @@ it. Each still needs the owners' assent — Vinay in particular, since the vendo
 These are **not decided yet**. Do not treat any of them as settled, and do not silently pick
 one — raise it. Engineering status for each lives in [`ROADMAP.md`](ROADMAP.md).
 
-- **⚠ Distribution: itch.io vs judge-only local build.** Raised 4 Aug. The sidecar is a *local*
-  Python process needing Python, multi-GB model downloads, and the player's own two API keys —
-  so today's build **cannot be published as a playable itch.io download**. Hosting it on GCP
-  fixes that but inverts the privacy claim and puts every player's API cost on us. Full analysis
-  and three options: [`ROADMAP.md` §9](ROADMAP.md#9-distribution-the-backend-is-local).
-- **Gemini billing: AI Studio key vs GCP/Vertex.** Nothing in the repo currently touches GCP;
-  `llm.py` builds an AI Studio client from a `GEMINI_API_KEY`. If the team's credits are GCP
-  credits, the current code does not bill against them. Names the budget owner the 1 Aug
-  amendment asked for.
 - **Pipeline (ASR → LLM → TTS) vs the Realtime API** for the voice loop. The plan proposes the
   pipeline and argues it in §2.2; it needs team sign-off, and `gpt-realtime-2.1-mini` stays as a
   labelled fallback if latency is unacceptable by D6.
@@ -141,6 +133,19 @@ one — raise it. Engineering status for each lives in [`ROADMAP.md`](ROADMAP.md
 
 ### Resolved since this list was written
 
+- ~~**Distribution: itch.io vs judge-only local build**~~ — **decided 4 Aug: host the backend.**
+  The whole Python sidecar moves to Google Cloud Run, so the shipped build is a plain binary
+  that talks to a URL and needs no Python, no model downloads, and no API keys of the player's
+  own. This is what makes an itch.io release possible at all. It also **inverts the privacy
+  claim** — player audio now leaves the machine, disclosed in [`PRIVACY.md`](PRIVACY.md).
+  Design: [`superpowers/specs/2026-08-04-cloud-hosted-backend-design.md`](superpowers/specs/2026-08-04-cloud-hosted-backend-design.md).
+  Record: [`ROADMAP.md` §9](ROADMAP.md#9-distribution-hosted-backend-migration-record).
+- ~~**Gemini billing: AI Studio key vs GCP/Vertex**~~ — **decided 4 Aug: Vertex AI.** Resolved by
+  the same migration, which was always the point of folding the two questions together. Gemini
+  is now reached through a Vertex client authenticated as the runtime service account, so the
+  team's $300 of GCP credits pays for it and the long-lived `GEMINI_API_KEY` is gone. **Vinay
+  owns the project, the billing account and the budget alert** — the named budget owner the
+  1 Aug evening amendment asked for.
 - ~~**How HuBERT features are consumed**~~ — **decided and built, 3 Aug.** Hand-derived prosodic
   features plus HuBERT hidden-state statistics, no training, session-relative rather than
   absolute. This is the recommendation the plan made in §11. See

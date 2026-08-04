@@ -17,17 +17,19 @@ goes into merge conflicts instead of the game.
 So the split is **by file, not by task**. Nobody edits a file another stream owns. If you need
 a change in someone else's file, message them — do not reach in.
 
-| Stream | Owns, exclusively | Never touches |
-|---|---|---|
-| **A — Backend core** | `Sidecar/app.py`, `config.py`, `stt.py`, `llm.py`, `session_store.py`, `requirements.txt`, `.env.example`, `Dockerfile`, `.dockerignore`, `tests/test_app_failure_isolation.py`, `tests/test_config.py`, `tests/test_stt_adapter.py`, `tests/test_session_store.py` | `Assets/`, `docs/`, `auth.py`, `limits.py` |
-| **B — Security & cloud** | `Sidecar/auth.py`, `Sidecar/limits.py`, `tests/test_auth.py`, `tests/test_limits.py`, **the GCP project itself** | Everything else in `Sidecar/` |
-| **C — Client & docs** | `Assets/**`, `docs/**`, `README.md`, `Sidecar/README.md` | All of `Sidecar/*.py` |
+| Stream | Owner | Owns, exclusively | Never touches |
+|---|---|---|---|
+| **A — Backend core** | **Marcel** | `Sidecar/app.py`, `config.py`, `stt.py`, `llm.py`, `session_store.py`, `requirements.txt`, `.env.example`, `Dockerfile`, `.dockerignore`, `tests/test_app_failure_isolation.py`, `tests/test_config.py`, `tests/test_stt_adapter.py`, `tests/test_session_store.py` | `Assets/`, `docs/`, `auth.py`, `limits.py` |
+| **B — Security & cloud** | **Vinay** | `Sidecar/auth.py`, `Sidecar/limits.py`, `tests/test_auth.py`, `tests/test_limits.py`, **the GCP project itself** | Everything else in `Sidecar/` |
+| **C — Client & docs** | **Ananda** | `Assets/**`, `docs/**`, `README.md`, `Sidecar/README.md` | All of `Sidecar/*.py` |
+
+Assigned 4 Aug 2026.
 
 There is **zero overlap**. That is the entire trick.
 
 ## Streams
 
-### A — Backend core
+### A — Backend core — Marcel
 
 **Tasks 1, 2, 3, 6.** The vendor swaps and the container. This is the critical path — the
 longest chain and the one everything else waits on.
@@ -48,10 +50,15 @@ out verbatim, so A does not need to have written `auth.py` to integrate it. This
 > break has its exact fix written into the plan step that causes it. When 47 tests explode for
 > no apparent reason, this file is why.
 
-### B — Security & cloud
+### B — Security & cloud — Vinay
 
 **Tasks 4 and 5 (module halves), then Task 7.** Thematically coherent: B owns the things that
 stop a public endpoint becoming a bill.
+
+> **This closes a documented gap.** `CONCEPT.md`'s 1 Aug evening amendment has carried
+> ⚠ *"Needs a named budget owner"* against the Gemini vendor change since it was written.
+> Vinay owning the GCP project, its billing account and the budget alert **is** that owner.
+> Worth ratifying explicitly rather than leaving it implied by this table.
 
 1. Task 4 steps 1–5 — write `auth.py` + `tests/test_auth.py`
 2. Task 5 steps 1–5 — write `limits.py` + `tests/test_limits.py`
@@ -68,7 +75,7 @@ Both of B's modules are pure, dependency-free and fully unit-tested. Neither imp
 > always-on pinned instance and no alert is the standard way to wake up to an empty balance.
 > Not last, first.
 
-### C — Client & docs
+### C — Client & docs — Ananda
 
 **Tasks 8 and 9.** Fully parallel from hour one; blocked only at the very end on two values.
 
@@ -79,7 +86,11 @@ Both of B's modules are pure, dependency-free and fully unit-tested. Neither imp
 4. Task 8 steps 5–6 — paste both into `InterrogationConfig.asset`, play-test
 5. Task 9 steps 4–7 — `ROADMAP.md` §9 rewrite, README restructure, the grep check
 
-Natural owner: whoever owns the Unity client already (Giorgi, per `CONCEPT.md`).
+> **Coordinate with Giorgi on the Unity half.** `CONCEPT.md` records him as the client owner,
+> and he is not on this migration — so Task 8 lands in a file he owns day to day. Two things
+> specifically: `InterrogationConfig.asset` must be edited through the Unity Inspector (hand
+> editing the YAML corrupts its type metadata), and the play-test in step 6 needs the project
+> actually running. A ten-minute handoff beats a corrupted asset.
 
 ---
 

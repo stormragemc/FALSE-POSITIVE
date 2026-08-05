@@ -10,7 +10,8 @@ open http://localhost:8000
 ```
 
 Hold the button (or hold space), talk, release. The page records at 16 kHz mono,
-posts a WAV to `/turn`, plays the reply, and shows the whole prosody block:
+posts headerless PCM16 to `/turn` — the same raw format Unity sends, since
+`app.py` does no container parsing — plays the reply, and shows the prosody block:
 class probabilities, arousal, tension, confidence, calibration state, and the
 HuBERT instability/baseline numbers.
 

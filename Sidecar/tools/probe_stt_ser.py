@@ -1,4 +1,4 @@
-"""Feed a real PCM16/16kHz utterance through faster-whisper (STT) and the
+"""Feed a real PCM16/16kHz utterance through Google Cloud Speech-to-Text and the
 HuBERT emotion classifier (SER) directly, proving both halves of the
 "HuBERT detects the player's voice" pipeline independently of the HTTP
 /turn endpoint (whose TTS stage currently 402s until .env is updated,
@@ -11,6 +11,7 @@ Usage:
 Sidecar/README.md's "Testing it in isolation" section for how to make one.
 """
 
+import asyncio
 import sys
 import time
 from pathlib import Path
@@ -33,9 +34,9 @@ import stt
 audio_f32 = audio_utils.pcm16_bytes_to_float32(raw_bytes)
 print(f"{len(audio_f32)} samples ({len(audio_f32) / 16000:.2f}s @ 16kHz)")
 
-print("\nLoading STT (faster-whisper small.en)...")
+print("\nCalling Google Cloud Speech-to-Text...")
 t0 = time.perf_counter()
-transcript, stt_ms = stt.transcribe(audio_f32)
+transcript, stt_ms = asyncio.run(stt.transcribe(raw_bytes))
 print(f"STT  ({stt_ms} ms, {int((time.perf_counter() - t0) * 1000)} ms incl. load): {transcript!r}")
 
 print(f"\nLoading SER ({ser.config.HUBERT_MODEL_ID})...")

@@ -13,6 +13,35 @@ namespace FalsePositive.Audio
     /// </summary>
     public static class PcmUtility
     {
+        /// <summary>
+        /// Resamples mono microphone audio before upload. Some devices reject
+        /// Unity's requested 16 kHz capture rate and fall back to 44.1/48 kHz;
+        /// normalizing here keeps request sizes and the backend contract stable.
+        /// </summary>
+        public static float[] ResampleMono(float[] samples, int sourceSampleRate, int targetSampleRate)
+        {
+            if (samples == null) return null;
+            if (sourceSampleRate <= 0)
+                throw new System.ArgumentOutOfRangeException(nameof(sourceSampleRate));
+            if (targetSampleRate <= 0)
+                throw new System.ArgumentOutOfRangeException(nameof(targetSampleRate));
+            if (samples.Length == 0 || sourceSampleRate == targetSampleRate) return samples;
+
+            int outputLength = Mathf.Max(
+                1,
+                Mathf.RoundToInt(samples.Length * (targetSampleRate / (float)sourceSampleRate))
+            );
+            float[] output = new float[outputLength];
+            for (int i = 0; i < outputLength; i++)
+            {
+                float sourcePosition = i * (sourceSampleRate / (float)targetSampleRate);
+                int left = Mathf.Min(Mathf.FloorToInt(sourcePosition), samples.Length - 1);
+                int right = Mathf.Min(left + 1, samples.Length - 1);
+                output[i] = Mathf.Lerp(samples[left], samples[right], sourcePosition - left);
+            }
+            return output;
+        }
+
         public static byte[] FloatsToPcm16Bytes(float[] samples)
         {
             byte[] bytes = new byte[samples.Length * 2];

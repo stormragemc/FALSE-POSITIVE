@@ -63,12 +63,28 @@ def load():
     if _model is None:
         target_device = _resolve_device(config.HUBERT_DEVICE)
         try:
+            source_note = (
+                "baked local snapshot"
+                if config.HUBERT_LOCAL_FILES_ONLY
+                else "pinned snapshot; downloads on first local run"
+            )
             print(
                 f"[Sidecar] Loading affect model '{config.HUBERT_MODEL_ID}' "
-                f"on {target_device} (downloads on first run)..."
+                f"on {target_device} ({source_note})..."
             )
-            extractor = AutoFeatureExtractor.from_pretrained(config.HUBERT_MODEL_ID)
-            model = AutoModelForAudioClassification.from_pretrained(config.HUBERT_MODEL_ID)
+            shared_load_options = {
+                "revision": config.HUBERT_MODEL_REVISION,
+                "local_files_only": config.HUBERT_LOCAL_FILES_ONLY,
+            }
+            extractor = AutoFeatureExtractor.from_pretrained(
+                config.HUBERT_MODEL_ID,
+                **shared_load_options,
+            )
+            model = AutoModelForAudioClassification.from_pretrained(
+                config.HUBERT_MODEL_ID,
+                **shared_load_options,
+                use_safetensors=True,
+            )
             model.to(target_device)
             model.eval()
             _feature_extractor = extractor

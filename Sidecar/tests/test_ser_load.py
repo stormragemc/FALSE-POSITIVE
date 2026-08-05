@@ -19,6 +19,60 @@ class _ReadyModel:
 
 
 class HubertLoadStateTests(unittest.TestCase):
+    def test_load_pins_revision_and_requires_safe_weights(self):
+        previous = (ser._feature_extractor, ser._model, ser._device)
+        ser._feature_extractor = None
+        ser._model = None
+        ser._device = "unavailable"
+        extractor_calls = []
+        model_calls = []
+
+        def capture_extractor(*args, **kwargs):
+            extractor_calls.append((args, kwargs))
+            return object()
+
+        def capture_model(*args, **kwargs):
+            model_calls.append((args, kwargs))
+            return _ReadyModel()
+
+        try:
+            with patch.object(ser.config, "HUBERT_DEVICE", "cpu"), patch.object(
+                ser.config, "HUBERT_MODEL_REVISION", "reviewed-sha"
+            ), patch.object(
+                ser.config, "HUBERT_LOCAL_FILES_ONLY", True
+            ), patch.object(
+                ser.AutoFeatureExtractor, "from_pretrained", side_effect=capture_extractor
+            ), patch.object(
+                ser.AutoModelForAudioClassification, "from_pretrained", side_effect=capture_model
+            ), patch.object(
+                ser,
+                "_analyze_impl",
+                return_value=SimpleNamespace(
+                    probabilities={"neutral": 0.7, "happy": 0.1, "angry": 0.1, "sad": 0.1}
+                ),
+            ):
+                ser.load()
+
+            self.assertEqual(
+                extractor_calls,
+                [((ser.config.HUBERT_MODEL_ID,), {"revision": "reviewed-sha", "local_files_only": True})],
+            )
+            self.assertEqual(
+                model_calls,
+                [
+                    (
+                        (ser.config.HUBERT_MODEL_ID,),
+                        {
+                            "revision": "reviewed-sha",
+                            "local_files_only": True,
+                            "use_safetensors": True,
+                        },
+                    )
+                ],
+            )
+        finally:
+            ser._feature_extractor, ser._model, ser._device = previous
+
     def test_failed_load_rolls_back_partial_model_state(self):
         previous = (ser._feature_extractor, ser._model, ser._device)
         ser._feature_extractor = None

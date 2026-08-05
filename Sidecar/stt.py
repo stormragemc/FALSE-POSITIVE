@@ -1,41 +1,70 @@
-"""Speech-to-text via faster-whisper — local, free, no API key.
+"""Speech-to-text via Google Cloud Speech-to-Text v2.
 
-Loaded once at process startup and warmed with a short silent buffer so the
-first real utterance of a playtest isn't several times slower than the rest.
+Authenticates as the runtime service account through Application Default
+Credentials — there is no API key for this vendor. Locally, run
+`gcloud auth application-default login` once.
+
+Audio arrives as the same LINEAR16 16kHz mono bytes Unity uploads, so no
+decode or resample happens here; app.py has already normalized the buffer.
 """
 
 import time
 
-import numpy as np
-from faster_whisper import WhisperModel
+from google.cloud import speech_v2
+from google.cloud.speech_v2.types import cloud_speech
 
-_MODEL_NAME = "small.en"  # English-only: faster and more accurate than
-                            # multilingual "small" for an English-only game.
+import config
 
-_model: WhisperModel | None = None
+# Utterances are bounded by SIDECAR_MAX_AUDIO_SECONDS (20s), comfortably under
+# the synchronous recognizer's 60s ceiling — streaming would complicate the
+# turn boundary for no latency win at this length.
+_SAMPLE_RATE = 16000
 
-
-def load() -> WhisperModel:
-    global _model
-    if _model is None:
-        print(f"[Sidecar] Loading STT model '{_MODEL_NAME}' (downloads on first run)...")
-        _model = WhisperModel(_MODEL_NAME, device="cpu", compute_type="int8")
-        # Warm up: the first inference call pays a one-time JIT/cache cost.
-        list(_model.transcribe(np.zeros(8000, dtype=np.float32), language="en")[0])
-        print("[Sidecar] STT model ready.")
-    return _model
+_client: speech_v2.SpeechAsyncClient | None = None
 
 
-def transcribe(audio_f32_16k: np.ndarray) -> tuple[str, int]:
-    """audio_f32_16k: mono float32 samples at 16kHz. Returns (text, elapsed_ms)."""
-    model = load()
+def _get_client() -> speech_v2.SpeechAsyncClient:
+    global _client
+    if _client is None:
+        _client = speech_v2.SpeechAsyncClient()
+    return _client
+
+
+def _recognizer_path() -> str:
+    # The trailing "_" means "no stored recognizer, use the inline config".
+    return f"projects/{config.GCP_PROJECT}/locations/{config.GCP_LOCATION}/recognizers/_"
+
+
+async def transcribe(pcm16_le_bytes: bytes) -> tuple[str, int]:
+    """pcm16_le_bytes: mono little-endian PCM16 at 16kHz. Returns (text, elapsed_ms).
+
+    Raises on API failure. app.py's /turn handler converts that into a failed
+    turn the client can retry, exactly as a local STT crash used to.
+    """
+    client = _get_client()
     t0 = time.perf_counter()
-    segments, _info = model.transcribe(
-        audio_f32_16k,
-        language="en",
-        beam_size=1,
-        vad_filter=False,  # Unity already segmented the utterance via its own VAD.
+
+    request = cloud_speech.RecognizeRequest(
+        recognizer=_recognizer_path(),
+        config=cloud_speech.RecognitionConfig(
+            explicit_decoding_config=cloud_speech.ExplicitDecodingConfig(
+                encoding=cloud_speech.ExplicitDecodingConfig.AudioEncoding.LINEAR16,
+                sample_rate_hertz=_SAMPLE_RATE,
+                audio_channel_count=1,
+            ),
+            language_codes=[config.STT_LANGUAGE],
+            model=config.STT_MODEL,
+        ),
+        content=pcm16_le_bytes,
     )
-    text = " ".join(seg.text.strip() for seg in segments).strip()
+
+    response = await client.recognize(request=request)
+
+    parts = [
+        result.alternatives[0].transcript.strip()
+        for result in response.results
+        if result.alternatives
+    ]
+    text = " ".join(part for part in parts if part).strip()
     ms = int((time.perf_counter() - t0) * 1000)
     return text, ms

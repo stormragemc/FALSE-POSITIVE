@@ -1,66 +1,83 @@
-"""Interrogation sidecar — the whole STT -> emotion -> LLM -> TTS pipeline
-behind one HTTP endpoint per conversational turn.
+"""Hosted STT -> affect -> LLM -> TTS backend for interrogation turns.
 
-Run manually with `run_sidecar.bat` (Windows) or `python app.py`, or let
-Unity's SidecarProcessLauncher start it automatically. Binds to 127.0.0.1
-only — this process holds two paid API keys and must not be LAN-reachable.
+Cloud Run must remain pinned to one instance because session history, affect
+baselines, and turn caps live in this process. Public requests are protected by
+the shared client key in auth.py and the paid-turn budget in limits.py.
 """
 
 import argparse
 import asyncio
 import base64
-from collections import OrderedDict
 from dataclasses import replace
+from functools import partial
 import os
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import audio_utils
+import auth
 import config
 import features_classical
+import limits
 import llm
 import prosody
 import ser
+import session_store
 import stt
 import tts
 
 config.validate()
 
-_stt_pool = ThreadPoolExecutor(max_workers=1)
 _ser_pool = ThreadPoolExecutor(max_workers=1)
+_vendor_pool = ThreadPoolExecutor(max_workers=2)
 
-# In-memory conversation history per session. Single-player, single machine —
-# no persistence needed for v1. Keyed by the GUID Unity mints at scene start.
-_sessions: OrderedDict[str, list[dict]] = OrderedDict()
+# Conversation history per session, keyed by the GUID Unity mints at scene
+# start. See session_store.py for why in-memory is correct here.
+_session_store = session_store.InMemorySessionStore(
+    config.SIDECAR_MAX_SESSIONS,
+    config.SESSION_IDLE_TTL_SECONDS,
+)
 _prosody_registry = prosody.ProsodyRegistry(
     max_sessions=config.SIDECAR_MAX_SESSIONS,
     reference_turns=config.PROSODY_BASELINE_TURNS,
     minimum_confidence=config.PROSODY_MIN_CONFIDENCE,
 )
-_last_turn_debug: dict = {}
+_turn_limiter = limits.TurnLimiter(
+    config.MAX_TURNS_PER_SESSION,
+    config.MAX_TURNS_PER_DAY,
+)
 _models_loaded = False
 _prosody_model_available = False
 _prosody_load_error = "loading" if config.PROSODY_ENABLED else "disabled"
-_session_reset_epoch = 0
+_session_reset_generations: dict[str, int] = {}
+_active_session_turns: dict[str, int] = {}
 
 
 class ClientInputError(ValueError):
     """A validated request problem that is safe to return to the local client."""
 
 
+async def _reap_idle_sessions() -> None:
+    interval_seconds = min(60.0, max(1.0, config.SESSION_IDLE_TTL_SECONDS / 2.0))
+    while True:
+        await asyncio.sleep(interval_seconds)
+        _expire_idle_sessions()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _models_loaded, _prosody_model_available, _prosody_load_error
-    print("[Sidecar] Loading models (first run downloads them — this can take a while)...")
-    stt.load()
+    print("[Sidecar] Loading affect model...")
     if config.PROSODY_ENABLED:
         try:
             ser.load()
@@ -78,10 +95,71 @@ async def lifespan(_app: FastAPI):
         _prosody_load_error = "disabled"
     _models_loaded = True
     print("[Sidecar] Models loaded. Ready.")
-    yield
+    reaper_task = asyncio.create_task(_reap_idle_sessions())
+    try:
+        yield
+    finally:
+        reaper_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await reaper_task
 
 
-app = FastAPI(title="Interrogation Sidecar", lifespan=lifespan)
+app = FastAPI(
+    title="Interrogation Sidecar",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+
+@app.middleware("http")
+async def require_client_key(request, call_next):
+    if request.url.path == "/health":
+        return await call_next(request)
+    provided_key = request.headers.get(auth.CLIENT_KEY_HEADER)
+    if not auth.is_authorized(provided_key, config.FP_CLIENT_KEY):
+        result = _empty_response()
+        result["error"] = "unauthorized"
+        return JSONResponse(status_code=401, content=result)
+    if request.url.path == "/turn":
+        if not await _cache_bounded_request_body(request):
+            result = _empty_response()
+            result["error"] = "request too large"
+            return JSONResponse(status_code=413, content=result)
+    return await call_next(request)
+
+
+async def _cache_bounded_request_body(request) -> bool:
+    """Read at most one turn body, then replay it to FastAPI's parser.
+
+    Checking ``request.body()`` after the fact still lets an attacker make the
+    process allocate an arbitrarily large body. Content-Length gives us a free
+    early rejection for normal requests; counting stream chunks covers clients
+    that use chunked transfer encoding or lie about the declared size.
+    """
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            if int(declared_length) > config.MAX_TURN_REQUEST_BYTES:
+                return False
+        except (TypeError, ValueError):
+            # Let the streaming counter and the multipart parser handle a
+            # malformed declaration without trusting it for allocation.
+            pass
+
+    chunks: list[bytes] = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        if len(chunk) > config.MAX_TURN_REQUEST_BYTES - total_bytes:
+            return False
+        chunks.append(chunk)
+        total_bytes += len(chunk)
+
+    # Starlette's middleware request replays this cached body to the route's
+    # multipart parser when call_next() runs.
+    request._body = b"".join(chunks)
+    return True
 
 
 def _empty_response() -> dict:
@@ -95,6 +173,27 @@ def _empty_response() -> dict:
     }
 
 
+def _invalid_request_response(path: str, status_code: int) -> JSONResponse:
+    if path == "/turn":
+        result = _empty_response()
+        result["error"] = "invalid request"
+    else:
+        result = {"ok": False, "error": "invalid request"}
+    return JSONResponse(status_code=status_code, content=result)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, _exc):
+    return _invalid_request_response(request.url.path, 422)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request, exc):
+    if request.url.path in {"/turn", "/session/reset"} and exc.status_code in {400, 422}:
+        return _invalid_request_response(request.url.path, exc.status_code)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 def _validate_session_id(session_id: str) -> str:
     normalized = (session_id or "").strip()
     if not normalized or len(normalized) > 128 or any(ord(char) < 32 for char in normalized):
@@ -103,7 +202,44 @@ def _validate_session_id(session_id: str) -> str:
 
 
 def _history_for(session_id: str) -> list[dict]:
-    return _sessions.get(session_id, [])
+    return _session_store.history(session_id)
+
+
+def _begin_session_turn(session_id: str) -> int:
+    _active_session_turns[session_id] = _active_session_turns.get(session_id, 0) + 1
+    return _session_reset_generations.get(session_id, 0)
+
+
+def _finish_session_turn(session_id: str) -> None:
+    remaining = _active_session_turns.get(session_id, 1) - 1
+    if remaining > 0:
+        _active_session_turns[session_id] = remaining
+        return
+    _active_session_turns.pop(session_id, None)
+    if not _session_store.history(session_id):
+        _session_reset_generations.pop(session_id, None)
+
+
+def _forget_reset_generation_if_inactive(session_id: str) -> None:
+    if not _active_session_turns.get(session_id):
+        _session_reset_generations.pop(session_id, None)
+
+
+def _expire_idle_sessions() -> None:
+    for expired_id in _session_store.expire_idle():
+        _prosody_registry.reset(expired_id)
+        _turn_limiter.forget(expired_id)
+        _forget_reset_generation_if_inactive(expired_id)
+
+
+async def _await_before_deadline(awaitable, deadline: float):
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        close = getattr(awaitable, "close", None)
+        if close is not None:
+            close()
+        raise TimeoutError
+    return await asyncio.wait_for(awaitable, timeout=remaining)
 
 
 def _commit_history(
@@ -116,11 +252,10 @@ def _commit_history(
     history_kind = llm.HISTORY_KIND_SCENE if is_opening else llm.HISTORY_KIND_WITNESS
     history.append({"role": "user", "content": user_text, "kind": history_kind})
     history.append({"role": "assistant", "content": reply_text})
-    _sessions.pop(session_id, None)
-    _sessions[session_id] = history
-    while len(_sessions) > config.SIDECAR_MAX_SESSIONS:
-        evicted_id, _evicted_history = _sessions.popitem(last=False)
+    for evicted_id in _session_store.commit(session_id, history):
         _prosody_registry.reset(evicted_id)
+        _turn_limiter.forget(evicted_id)
+        _forget_reset_generation_if_inactive(evicted_id)
 
 
 def _analyze_affect(audio_f32: object, full_duration_seconds: float | None = None):
@@ -188,7 +323,7 @@ def health():
     return {
         "status": "ok" if _models_loaded else "loading",
         "models_loaded": _models_loaded,
-        "version": "0.2.0",
+        "version": "0.3.0",
         "prosody": {
             "enabled": config.PROSODY_ENABLED,
             "available": _prosody_model_available,
@@ -202,17 +337,23 @@ def health():
 
 @app.post("/session/reset")
 async def session_reset(session_id: str = Form(...)):
-    global _session_reset_epoch
-    session_id = (session_id or "").strip()
-    _session_reset_epoch += 1
-    _sessions.pop(session_id, None)
+    try:
+        session_id = _validate_session_id(session_id)
+    except ClientInputError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc)},
+        )
+    _expire_idle_sessions()
+    if _active_session_turns.get(session_id):
+        _session_reset_generations[session_id] = (
+            _session_reset_generations.get(session_id, 0) + 1
+        )
+    else:
+        _session_reset_generations.pop(session_id, None)
+    _session_store.reset(session_id)
     _prosody_registry.reset(session_id)
     return {"ok": True}
-
-
-@app.get("/debug/last_turn")
-def debug_last_turn():
-    return _last_turn_debug or {"ok": False, "error": "no turns yet"}
 
 
 @app.post("/turn")
@@ -223,12 +364,16 @@ async def turn(
     audio: Optional[UploadFile] = File(None),
 ):
     t_total0 = time.perf_counter()
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + config.TURN_DEADLINE_SECONDS
     result = _empty_response()
     prosody_tracker = None
     pending_prosody_update = None
-    turn_reset_epoch = _session_reset_epoch
+    tracked_session_id = None
+    turn_reset_generation = 0
     try:
         session_id = _validate_session_id(session_id)
+        _expire_idle_sessions()
         if sample_rate < 8000 or sample_rate > 192000:
             raise ClientInputError("sample_rate must be between 8000 and 192000")
         onset_delay_ms = min(120000, max(0, int(onset_delay_ms)))
@@ -236,7 +381,10 @@ async def turn(
         raw_bytes = b""
         if audio is not None:
             maximum_bytes = int(config.SIDECAR_MAX_AUDIO_SECONDS * sample_rate * 2)
-            raw_bytes = await audio.read(maximum_bytes + 1)
+            raw_bytes = await _await_before_deadline(
+                audio.read(maximum_bytes + 1),
+                deadline,
+            )
             if len(raw_bytes) > maximum_bytes:
                 raise ClientInputError(
                     f"audio exceeds {config.SIDECAR_MAX_AUDIO_SECONDS:g} second limit"
@@ -244,6 +392,14 @@ async def turn(
         is_opening = len(raw_bytes) == 0
         if not is_opening and len(raw_bytes) % 2:
             raise ClientInputError("audio must be aligned little-endian PCM16")
+
+        admitted, limit_reason = _turn_limiter.admit(session_id)
+        if not admitted:
+            result["error"] = limit_reason
+            return JSONResponse(status_code=429, content=result)
+
+        tracked_session_id = session_id
+        turn_reset_generation = _begin_session_turn(session_id)
         history = _history_for(session_id)
 
         if is_opening:
@@ -260,18 +416,24 @@ async def turn(
             affect_audio_f32 = audio_f32[:affect_maximum_samples]
             full_duration_seconds = len(audio_f32) / 16000.0
 
-            loop = asyncio.get_running_loop()
-            # STT and SER are independent reads of the same buffer — run them
-            # concurrently rather than serially (plan section 0).
-            stt_result, affect_result = await asyncio.gather(
-                loop.run_in_executor(_stt_pool, stt.transcribe, audio_f32),
-                loop.run_in_executor(
-                    _ser_pool,
-                    _analyze_affect,
-                    affect_audio_f32,
-                    full_duration_seconds,
+            # Re-encode from the resampled buffer rather than reusing raw_bytes:
+            # a client uploading at 48kHz would otherwise send 48kHz samples
+            # labelled 16kHz, which Google accepts and transcribes as garbage.
+            stt_bytes = audio_utils.float32_to_pcm16_bytes(audio_f32)
+            # STT is now a network call and SER is CPU-bound, so they overlap
+            # naturally — no thread pool needed on the STT side any more.
+            stt_result, affect_result = await _await_before_deadline(
+                asyncio.gather(
+                    stt.transcribe(stt_bytes),
+                    loop.run_in_executor(
+                        _ser_pool,
+                        _analyze_affect,
+                        affect_audio_f32,
+                        full_duration_seconds,
+                    ),
+                    return_exceptions=True,
                 ),
-                return_exceptions=True,
+                deadline,
             )
             if isinstance(stt_result, BaseException):
                 raise RuntimeError("speech transcription failed") from stt_result
@@ -306,22 +468,36 @@ async def turn(
                 commit=False,
             )
 
-        reply_text, llm_ms = llm.generate_reply(
-            history=history,
-            transcript=transcript,
-            emotion=emotion,
-            confidence=emotion_conf,
-            is_opening=is_opening,
-            prosody_signal=prosody_signal,
+        reply_text, llm_ms = await _await_before_deadline(
+            loop.run_in_executor(
+                _vendor_pool,
+                partial(
+                    llm.generate_reply,
+                    history=history,
+                    transcript=transcript,
+                    emotion=emotion,
+                    confidence=emotion_conf,
+                    is_opening=is_opening,
+                    prosody_signal=prosody_signal,
+                ),
+            ),
+            deadline,
         )
 
-        pcm, rate, channels, tts_ms = tts.synthesize(reply_text)
+        pcm, rate, channels, tts_ms = await _await_before_deadline(
+            loop.run_in_executor(
+                _vendor_pool,
+                tts.synthesize,
+                reply_text,
+            ),
+            deadline,
+        )
         norm_pcm, norm_rate = audio_utils.normalize_to_canonical(pcm, rate, channels)
 
         # Only successful, playable turns become part of the session reference.
         # A failed TTS attempt may be retried with the same audio and must not be
         # counted twice in the baseline or temporal trend.
-        if turn_reset_epoch == _session_reset_epoch:
+        if turn_reset_generation == _session_reset_generations.get(session_id, 0):
             if prosody_tracker is not None and pending_prosody_update is not None:
                 prosody_signal = prosody_tracker.update(**pending_prosody_update, commit=True)
 
@@ -348,19 +524,21 @@ async def turn(
             "stt_ms": stt_ms, "ser_ms": ser_ms, "llm_ms": llm_ms, "tts_ms": tts_ms,
             "total_ms": total_ms,
         })
-        _last_turn_debug.clear()
-        _last_turn_debug.update(result)
         return result
 
+    except TimeoutError:
+        result["error"] = "turn timed out; retry the utterance"
+        return JSONResponse(status_code=504, content=result)
     except Exception as e:
         cause = e.__cause__
         cause_text = f"; cause={type(cause).__name__}: {cause}" if cause else ""
         print(f"[Sidecar] /turn failed ({type(e).__name__}): {e}{cause_text}")
         is_input_error = isinstance(e, ClientInputError)
         result["error"] = str(e) if is_input_error else "turn pipeline failed; retry the utterance"
-        _last_turn_debug.clear()
-        _last_turn_debug.update(result)
         return JSONResponse(status_code=400 if is_input_error else 500, content=result)
+    finally:
+        if tracked_session_id is not None:
+            _finish_session_turn(tracked_session_id)
 
 
 def _watch_parent(pid: int) -> None:

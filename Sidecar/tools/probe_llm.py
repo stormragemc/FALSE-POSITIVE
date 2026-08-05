@@ -23,15 +23,19 @@ import llm
 
 
 def main() -> None:
-    if not config.GEMINI_API_KEY:
-        print("FATAL: GEMINI_API_KEY not set in Sidecar/.env")
+    if not config.GCP_PROJECT:
+        print("FATAL: GCP_PROJECT not set in Sidecar/.env")
         sys.exit(1)
 
     print(f"Model under test: {llm.MODEL}")
 
     # First, call the raw client directly so a bad model id / auth error
     # surfaces instead of being swallowed by generate_reply's try/except.
-    client = genai.Client(api_key=config.GEMINI_API_KEY)
+    client = genai.Client(
+        vertexai=True,
+        project=config.GCP_PROJECT,
+        location=config.GCP_LOCATION,
+    )
     t0 = time.perf_counter()
     try:
         resp = client.models.generate_content(
@@ -48,7 +52,7 @@ def main() -> None:
         print(f"RAW CALL OK  ({ms} ms)  model responded: {text!r}")
     except Exception as e:
         print(f"RAW CALL FAILED: {type(e).__name__}: {e}")
-        print(f"\n'{llm.MODEL}' does not appear to be a usable model id on this API key/project.")
+        print(f"\n'{llm.MODEL}' does not appear usable through Vertex in this project/location.")
         sys.exit(1)
 
     # Now exercise the real code path (opening line + one witness turn).

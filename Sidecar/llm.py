@@ -16,6 +16,7 @@ to FALLBACK_LINE rather than failing the turn.
 import html
 import re
 import time
+import unicodedata
 from typing import TYPE_CHECKING
 
 from google import genai
@@ -64,12 +65,31 @@ OPENING_KICKOFF_TEXT = (
 )
 
 FALLBACK_LINE = "Let's come back to that."
+MAX_SPOKEN_REPLY_CHARS = 400
+MAX_SPOKEN_REPLY_SENTENCES = 3
 
 SILENT_WITNESS_TEXT = "[The witness says nothing.]"
 HISTORY_KIND_SCENE = "scene_instruction"
 HISTORY_KIND_WITNESS = "witness_transcript"
 
 _RESERVED_AFFECT_PHRASE = re.compile(r"local\s+affect\s+signal", re.IGNORECASE)
+_UNSAFE_SPOKEN_REPLY = re.compile(
+    r"(?:"
+    r"\b(?:lie|lies|lied|liar|lying|deceptive|deception|dishonest|dishonesty|"
+    r"truthful|truthfulness|untruthful|false|untrue|fabricat\w*|invent\w*|"
+    r"mislead\w*)\b|"
+    r"\b(?:make|makes|making|made)\s+(?:that|this|it)\s+up\b|"
+    r"local[-_\s]+affect(?:[-_\s]+(?:signal|context))?|"
+    r"affect[-_\s]+(?:context|signal|reading|score|label)|"
+    r"(?:system|developer|hidden|internal)\s+(?:prompt|message|instructions?)|"
+    r"my\s+(?:prompt|instructions?)|"
+    r"prosody|emotion\s+(?:confidence|score|label|reading)|"
+    r"sensor\s+(?:reading|signal|score|label|confidence)|"
+    r"you(?:'re|\s+are)\s+not\s+(?:telling|speaking)\s+the\s+truth|"
+    r"(?:deception|truthfulness|lie)\s+(?:score|probability|detector)"
+    r")",
+    re.IGNORECASE,
+)
 
 _SAFETY_SETTINGS = [
     types.SafetySetting(category=category, threshold="BLOCK_ONLY_HIGH")
@@ -83,9 +103,16 @@ _SAFETY_SETTINGS = [
 
 
 def _get_client() -> genai.Client:
+    """Vertex backend: billed to the project's GCP credits and authenticated
+    by the runtime service account, so no API key exists to leak. Locally, run
+    `gcloud auth application-default login` once."""
     global _client
     if _client is None:
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+        _client = genai.Client(
+            vertexai=True,
+            project=config.GCP_PROJECT,
+            location=config.GCP_LOCATION,
+        )
     return _client
 
 
@@ -138,6 +165,36 @@ def _spoken_text(resp) -> str:
     ).strip()
 
 
+def _bound_spoken_reply(text: str) -> str:
+    """Bound untrusted model output before it can become metered speech."""
+    normalized = " ".join((text or "").split())
+    if not normalized:
+        return ""
+    sentences = re.split(r"(?<=[.!?])\s+", normalized)
+    bounded = " ".join(sentences[:MAX_SPOKEN_REPLY_SENTENCES]).strip()
+    if len(bounded) <= MAX_SPOKEN_REPLY_CHARS:
+        return bounded
+
+    prefix = bounded[: MAX_SPOKEN_REPLY_CHARS - 1]
+    if " " in prefix:
+        prefix = prefix.rsplit(" ", 1)[0]
+    prefix = prefix.rstrip(" ,;:-")
+    if not prefix:
+        return FALLBACK_LINE
+    return prefix if prefix.endswith((".", "!", "?")) else f"{prefix}."
+
+
+def _filter_spoken_reply(text: str) -> str:
+    bounded = _bound_spoken_reply(text)
+    policy_text = unicodedata.normalize("NFKC", bounded).translate(
+        str.maketrans({"\u2018": "'", "\u2019": "'", "`": "'"})
+    )
+    if _UNSAFE_SPOKEN_REPLY.search(policy_text):
+        print("[Sidecar] LLM reply violated the spoken-output policy; using fallback line.")
+        return FALLBACK_LINE
+    return bounded
+
+
 def _call_llm(client: genai.Client, contents: list[dict]):
     return client.models.generate_content(
         model=MODEL,
@@ -145,7 +202,7 @@ def _call_llm(client: genai.Client, contents: list[dict]):
         config=types.GenerateContentConfig(
             system_instruction=COP_PERSONA,
             thinking_config=types.ThinkingConfig(thinking_level="minimal"),
-            max_output_tokens=1024,
+            max_output_tokens=256,
             safety_settings=_SAFETY_SETTINGS,
         ),
     )
@@ -198,7 +255,7 @@ def generate_reply(
         if block_reason:
             print(f"[Sidecar] LLM blocked the prompt ({block_reason}); using fallback line.")
         else:
-            text = _spoken_text(resp)
+            text = _filter_spoken_reply(_spoken_text(resp))
             if text:
                 reply_text = text
             else:

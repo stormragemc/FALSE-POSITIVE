@@ -214,7 +214,8 @@ Three reasons, in order of weight:
    through the runtime service account. (G2, and Vinay's first task.)
    ⚠ **Amended 4 Aug:** the build now ships *one* key, the client key that gates the public URL.
    It is extractable, that is understood, and it is a speed bump rather than a boundary — the
-   turn caps are what bound the bill.
+   in-process turn caps are only a checkpoint guard. Durable per-client limits
+   and provider-side hard quotas are still required to bound the public bill.
 3. **Five people can work in parallel** behind one frozen HTTP contract.
 
 This reasoning largely held. Reason 3 is untouched; reasons 1 and 2 survived the cloud migration
@@ -411,8 +412,8 @@ falling open.
 
 | Endpoint | Request | Response |
 |---|---|---|
-| `GET /health` | — (no key required) | `{"status": "ok" \| "loading", "models_loaded": bool, "version": "0.1.0"}` — Unity polls this before the first turn. ~~and auto-launches the sidecar if nothing answers~~ **`autoLaunchSidecar` is off since 4 Aug; a failed probe is now an error message, not a launch.** |
-| `POST /session/reset` | `session_id` | `{"ok": true}` — clears that session's turn history, prosody reference, and turn count |
+| `GET /health` | — (no key required) | `{"status": "ok" \| "loading", "models_loaded": bool, "version": "0.3.0"}` — Unity polls this before the first turn. ~~and auto-launches the sidecar if nothing answers~~ **`autoLaunchSidecar` is off since 4 Aug; a failed probe is now an error message, not a launch.** |
+| `POST /session/reset` | `session_id` | `{"ok": true}` — clears that session's turn history and prosody reference; paid-turn accounting is retained |
 | `POST /turn` | `session_id`, `sample_rate` (default 16000), `audio` (16-bit PCM mono; **omit to make the detective open the interrogation**) | the turn payload below. `429` when a turn cap is hit, with `error` set to `session_turn_limit_reached` or `daily_turn_budget_exhausted` (4 Aug) |
 | ~~`GET /debug/last_turn`~~ | — | ~~the last turn payload, success or failure. Feeds the F1 overlay~~ **Deleted 4 Aug** — it returned the last player's transcript to any caller, which is indefensible on a public URL. The F1 overlay reads the live `/turn` response instead. |
 

@@ -1,0 +1,10 @@
+.env
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+tests/
+tools/
+.DS_Store
+run_sidecar.bat

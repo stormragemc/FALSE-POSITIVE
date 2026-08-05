@@ -4,9 +4,9 @@ The FastAPI service that does everything the game's voice loop needs outside
 Unity: speech-to-text, speech emotion recognition, the officer's LLM reply, and
 the officer's TTS voice.
 
-As of 4 Aug 2026 this runs **on Google Cloud Run**, not on the player's machine.
-A shipped build talks to a URL; it needs no Python, no model downloads, and no
-keys of the player's own. See
+As of 5 Aug 2026 the Cloud Run migration is **implemented locally but not yet
+deployed or credentialed end to end**. A deployed build will talk to a URL and
+need no Python, model downloads, or player-supplied keys. See
 [`../docs/ROADMAP.md` §9](../docs/ROADMAP.md#9-distribution-hosted-backend-migration-record)
 for why, and [`../docs/PRIVACY.md`](../docs/PRIVACY.md) for what that means for
 player audio.
@@ -25,7 +25,7 @@ reliability policy. This file is the practical setup, run, and deploy steps.
 
 | | You want to | You need |
 |---|---|---|
-| **1** | **Play the game** | Nothing in this folder. The build points at the hosted service. |
+| **1** | **Play the hosted game** | Available after Task 7 deploys and the Unity asset receives its URL/key. |
 | **2** | **Run the backend locally in Docker** | Docker, `gcloud`, the ElevenLabs key. This is the demo fallback if Cloud Run is down or the room has no internet worth trusting. |
 | **3** | **Develop on the backend** | Python 3.10–3.12, a venv, `gcloud`, `.env`. |
 
@@ -34,11 +34,12 @@ enabled, because that is where STT and Gemini now live.
 
 ---
 
-## 1. Play the game
+## 1. Play the hosted game (after Task 7)
 
-Nothing to install. `Assets/_Project/Config/InterrogationConfig.asset` carries
-the service URL and the client key, and `autoLaunchSidecar` is off — the client
-will not try to start a local process.
+Nothing will need installing on a player's machine. At this checkpoint,
+`Assets/_Project/Config/InterrogationConfig.asset` serializes empty hosted URL
+and client-key fields, and `autoLaunchSidecar` is off. Task 7 must deploy the
+service; Task 8 then fills those two values and runs the Unity play-test.
 
 To point the game at a *local* backend instead, clear `backendBaseUrl` in that
 asset and it falls back to `sidecarHost`/`sidecarPort`.
@@ -98,10 +99,10 @@ curl -s -X POST localhost:8080/turn \
    `GEMINI_API_KEY` any more.**
 4. Copy `.env.example` to `.env` and fill it in (see the table below).
 5. `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`, then
-   `.venv/bin/python -m uvicorn app:app --port 8765`.
+   `.venv/bin/python -m uvicorn app:app --port 8080`.
 
 On Windows, `run_sidecar.bat` still does step 5 in one go — it creates/reuses a
-venv, installs `requirements.txt`, and serves on `127.0.0.1:8765`. Leave the
+venv, installs `requirements.txt`, and serves on port `8080`. Leave the
 console window open; Python tracebacks show up there. Unity no longer starts it
 for you: `autoLaunchSidecar` is off by default now that the real backend is
 hosted.
@@ -120,6 +121,9 @@ hosted.
 | `MAX_TURNS_PER_SESSION` | — | Defaults to 40. |
 | `MAX_TURNS_PER_DAY` | — | Defaults to 2000. The budget ceiling for the whole service. |
 | `SIDECAR_MAX_SESSIONS` | — | Bounds how many sessions the in-memory store holds. |
+| `MAX_TURN_REQUEST_BYTES` | — | Defaults to 700000 and is capped below 1 MB; enforced before multipart parsing. |
+| `SESSION_IDLE_TTL_SECONDS` | — | Defaults to 3600. Text and affect state expire after one idle hour. |
+| `TURN_DEADLINE_SECONDS` | — | Defaults to 50 and is capped at 55, below Unity's 60-second timeout. |
 
 Everything else is optional and documented in `.env.example`.
 
@@ -146,18 +150,28 @@ or wrong supplied key returns `401`.
 
 This key is shipped inside the Unity build, so **it is not a secret from anyone
 who downloads the game.** It is a bar against drive-by traffic hitting a public
-URL, not a security boundary. The turn caps below are what actually bound the
-bill. Do not paste the live value into chat logs or the deck.
+URL, not a security boundary. The turn caps below constrain only one
+uninterrupted process lifetime; they do not bound the public bill across
+restarts. Do not paste the live value into chat logs or the deck.
 
 ## Cost ceiling
 
 `limits.py` counts turns **on admission, not on success** — a client retrying a
 failing turn still pays Google, Vertex, and ElevenLabs on every attempt. Over
-either cap, `/turn` returns `429` with a reason of `session_turn_limit_reached`
-or `daily_turn_budget_exhausted`, and Unity shows the corresponding message.
+either cap, `/turn` returns `429` with a reason of
+`session_turn_limit_reached` or `daily_turn_budget_exhausted`, and Unity shows
+the corresponding message.
 
-The in-memory counters are correct **only because the service is pinned to one
-instance**. See the deploy note on `--max-instances 1`.
+These in-memory counters are a best-effort checkpoint guard, **not a durable
+billing ceiling**: a restart resets them, and a downloadable client can mint
+new session IDs. Before public deployment, Task 7 must add a provider-side hard
+quota plus a durable per-device/client limiter. Pinning to one instance is
+still required for conversation and prosody state; see the deploy note below.
+
+The application abandons a turn after 50 seconds and never commits late state,
+but a timed-out synchronous vendor call may continue in its worker thread. A
+public launch still needs client-generated turn IDs with response replay and
+provider SDK deadlines so a lost response cannot become a double-billed retry.
 
 ---
 
@@ -172,7 +186,8 @@ PROJECT="$(gcloud config get-value project)"
 IMAGE="us-central1-docker.pkg.dev/${PROJECT}/false-positive/backend:v1"
 
 cd Sidecar && docker build --platform linux/amd64 -t "$IMAGE" . && docker push "$IMAGE"
-gcloud run deploy false-positive-backend --image "$IMAGE" --region us-central1
+gcloud run deploy false-positive-backend \
+  --image "$IMAGE" --region us-central1 --max-instances 1 --concurrency 1
 ```
 
 `--platform linux/amd64` matters on an Apple Silicon laptop — Cloud Run will not
@@ -227,9 +242,10 @@ gcloud run deploy false-positive-backend \
   --allow-unauthenticated \
   --min-instances 1 \
   --max-instances 1 \
+  --concurrency 1 \
   --cpu 2 \
   --memory 4Gi \
-  --timeout 120 \
+  --timeout 60 \
   --set-env-vars "GCP_PROJECT=${PROJECT},GCP_LOCATION=global,SIDECAR_MAX_SESSIONS=200" \
   --set-secrets "ELEVENLABS_API_KEY=elevenlabs-api-key:latest,ELEVENLABS_VOICE_ID=elevenlabs-voice-id:latest,FP_CLIENT_KEY=fp-client-key:latest"
 ```
@@ -251,6 +267,11 @@ gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:${SA}
 >
 > `--allow-unauthenticated` is required because a game client cannot do IAM. The
 > app's own middleware is the gate.
+>
+> **`--concurrency 1` is also deliberate for this checkpoint.** HuBERT is
+> serialized through one CPU worker. Higher request concurrency would only
+> queue full audio buffers and increase memory pressure until measured capacity
+> supports a larger value.
 
 **Service URL:** `<PENDING — filled in when the first deploy lands>`
 
@@ -284,9 +305,10 @@ it on CPU. MPS is an explicit opt-in because tested Apple builds can terminate
 during model warm-up instead of raising a recoverable Python exception.
 `PROSODY_MIN_CONFIDENCE` is capped at `0.75`, matching the maximum confidence
 the conservative policy can emit.
-An overridden `HUBERT_MODEL_ID` must expose exactly the neutral, happy, angry,
-and sad labels; startup rejects incompatible classifiers instead of silently
-zeroing Unity's fixed four-label debug DTO.
+An overridden `HUBERT_MODEL_ID`/`HUBERT_MODEL_REVISION` pair must expose exactly
+the neutral, happy, angry, and sad labels; startup rejects incompatible
+classifiers instead of silently zeroing Unity's fixed four-label debug DTO.
+The container loads only its baked revision and requires safetensors weights.
 
 ---
 
@@ -326,7 +348,7 @@ start.
 |---|---|---|---|
 | `GET` | `/health` | no | Launch status plus nested HuBERT availability/model/device |
 | `POST` | `/turn` | yes | Main pipeline; accepts optional `onset_delay_ms`, returns additive `prosody` |
-| `POST` | `/session/reset` | yes | Clears conversation history, the prosody reference, and the session's turn count together |
+| `POST` | `/session/reset` | yes | Clears conversation history and the prosody reference; paid-turn accounting is intentionally retained |
 
 A reset also invalidates state commits from any turn that was already in flight,
 so an old history/reference cannot reappear after the reset completes.
@@ -337,9 +359,9 @@ so an old history/reference cannot reappear after the reset completes.
   `backendClientKey` in the Unity config against
   `gcloud secrets versions access latest --secret=fp-client-key`. A `401` with
   no key configured on the server is also correct behaviour: auth fails closed.
-- **`429` with `daily_turn_budget_exhausted`** — the service hit
-  `MAX_TURNS_PER_DAY`. That is the cost ceiling working. Raise it deliberately,
-  after looking at the budget.
+- **`429` with `daily_turn_budget_exhausted`** — this process hit
+  `MAX_TURNS_PER_DAY`. The checkpoint guard is working, but it resets with the
+  process; inspect provider quota and billing controls before raising it.
 - **"missing required environment variable" and the process exits immediately**
   — `.env` doesn't exist or is missing a key. Copy `.env.example` to `.env`.
   `GCP_PROJECT` is required now; `GEMINI_API_KEY` no longer exists.

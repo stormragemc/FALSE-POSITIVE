@@ -32,8 +32,8 @@ if errorlevel 1 (
 
 if not exist ".env" (
     echo [Sidecar] WARNING: Sidecar\.env not found.
-    echo [Sidecar]          Copy .env.example to .env and fill in GEMINI_API_KEY,
-    echo [Sidecar]          ELEVENLABS_API_KEY, and ELEVENLABS_VOICE_ID before playing.
+    echo [Sidecar]          Copy .env.example to .env and fill in GCP_PROJECT,
+    echo [Sidecar]          FP_CLIENT_KEY, ELEVENLABS_API_KEY, and ELEVENLABS_VOICE_ID.
 )
 
 echo [Sidecar] Starting server ...

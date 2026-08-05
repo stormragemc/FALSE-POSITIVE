@@ -43,14 +43,15 @@ they never receive your audio.
 | Thing | Kept | For how long |
 |---|---|---|
 | Your recorded audio | No | Discarded as soon as the turn is answered |
-| The text of what you said | Yes, in the server's memory | Until the interrogation ends, you reset it, or the server restarts |
+| The text of what you said | Yes, in the server's memory | Until reset/restart, or one hour after the last activity (cleanup may take up to one additional minute) |
 | Tone measurements | Yes, in the server's memory | Same as above |
 | Anything on disk | **No** | — |
 | Your name, email, or account | **Not collected at all** | — |
 
 The detective remembers your testimony for the length of one interrogation, because catching you
 contradicting yourself is the entire game. That memory lives in the server's working memory
-only. When the session ends or the server is restarted, it is gone, and there is no copy.
+only. It expires automatically after one hour without activity (with cleanup at least once per
+minute), or sooner when it is reset or the server restarts, and there is no copy.
 
 We do not know who you are. The game identifies your session with a random ID it generates when
 the scene loads, and that ID is not linked to anything.
@@ -81,8 +82,9 @@ no corpus of player audio because we keep no player audio at all.
 
 ## Changing your mind
 
-Stop speaking and the recording stops. Quit the game and the session memory is dropped. There is
-no account to delete and no archive to request, because nothing about you was stored.
+Stop speaking and the recording stops. Quitting does not send more audio. Session text and tone
+state then expire automatically after one hour without activity; a normal reset or server restart
+can remove them sooner. There is no account or long-term archive to request.
 
 ---
 
@@ -98,6 +100,8 @@ no account to delete and no archive to request, because nothing about you was st
   for one request), session text lives in `Sidecar/session_store.py` in memory, the affect
   pipeline and its confidence cap are in `Sidecar/prosody.py`, and the trust-block separation
   that keeps witness speech out of the model's instructions is in `Sidecar/llm.py`.
+- `SESSION_IDLE_TTL_SECONDS` defaults to one hour. The backend reaper runs at least once per
+  minute and clears matching conversation and affect state together.
 - **Not yet built:** the in-game notice shown before the first recording (roadmap S8). This
   document exists; the in-product disclosure does not. Do not describe S8 as finished until a
   player can read something like this without opening the repo.

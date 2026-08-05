@@ -25,6 +25,13 @@ a change in someone else's file, message them — do not reach in.
 
 Assigned 4 Aug 2026.
 
+**Checkpoint — 5 Aug 2026 (`cloud/client-docs`):** Marcel's pushed Tasks 1–3
+have been integrated. Auth, limits, their FastAPI wiring, Docker packaging, and
+the blank/disabled Unity asset handoff are implemented and offline-tested on
+this branch. The remaining blocking work is the credentialed container gate,
+GCP budget/project setup, Cloud Run deployment, and then inserting the deployed
+URL/client key plus a Unity play-test. No HuBERT work is waiting on Marcel.
+
 There is **zero overlap**. That is the entire trick.
 
 ## Streams

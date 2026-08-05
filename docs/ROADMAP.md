@@ -41,13 +41,13 @@ you saw it pass. Unity work that has never been opened in the Editor is ◐, not
 
 | Workstream | State |
 |---|---|
-| Voice loop (mic → STT → affect → LLM → TTS → playback) | ☑ works end to end |
-| HuBERT affect orchestration | ☑ built, 47 offline tests pass |
+| Voice loop (mic → STT → affect → LLM → TTS → playback) | ◐ local slice previously worked; hosted credentialed path is not yet verified |
+| HuBERT affect orchestration | ☑ built; 105 offline tests and container startup pass |
 | Unity client shell | ◐ runs; never compiled on a clean machine |
 | **The game around the loop** | ☐ **does not exist** |
 | **Consistency tracking — the pitch's core claim** | ☐ **nothing tracks it** |
-| **Cloud backend migration** | ◐ **in flight** — three streams, target 6 Aug. [§9](#9-distribution-hosted-backend-migration-record) |
-| AI security | ◐ partial mitigations, nothing tested adversarially |
+| **Cloud backend migration** | ◐ local image/auth/HuBERT smoke passed; credentialed deploy and Unity play-test remain. [§9](#9-distribution-hosted-backend-migration-record) |
+| AI security | ◐ local mitigations reviewed; public abuse controls remain incomplete |
 | Deck / demo video | ☐ not started |
 
 **The honest summary:** the plumbing is good and the game is missing. We can currently
@@ -62,7 +62,7 @@ pitch is actually about — a detective that catches you contradicting yourself.
 
 | ☑ | Item | Evidence |
 |---|---|---|
-| ☑ | FastAPI sidecar, loopback only, one endpoint per turn | `Sidecar/app.py` |
+| ☑ | Hosted-first FastAPI backend; loopback remains the local fallback | `Sidecar/app.py` |
 | ☑ | `GET /health`, `POST /turn`, `POST /session/reset` | `app.py:183-363` |
 | ❌ | ~~`GET /debug/last_turn`~~ | **Removed by the migration** — it returned the last player's transcript to any caller. See S4 and [§9](#9-distribution-hosted-backend-migration-record). |
 | ☑ | STT and affect run **concurrently** on the same buffer | `asyncio.gather`, `app.py:266` |
@@ -89,7 +89,7 @@ Full design and rationale: [`HUBERT_ORCHESTRATION_PLAN.md`](HUBERT_ORCHESTRATION
 | ☑ | Graceful degradation — HuBERT failure never fails the dialogue turn | `app.py:126-152` |
 | ☑ | Additive `prosody` payload; flat `emotion` fields kept for compatibility | `app.py:340` |
 | ☑ | Unity DTO parity, onset-delay measurement from VAD, F1 overlay fields | `SidecarDtos.cs`, `DialogueManager.cs` |
-| ☑ | **47 offline tests pass** — no network, no API keys, no model download | `cd Sidecar && python3 -m unittest discover -s tests` |
+| ☑ | **105 offline tests pass** — no network, no API keys, no model download | `cd Sidecar && python3 -m unittest discover -s tests` |
 
 > **This closes the contested §3.1 `ProsodySignal` contract.** It emits every field the frozen
 > contract specified except `longest_pause_ms` and `utterance_id`. Anyone who was blocked on
@@ -175,14 +175,14 @@ the brief scores exception handling and requires protecting personal information
 
 | ☐ | ID | Item | Status and why | Dependencies before implementation can be finished |
 |---|---|---|---|---|
-| ☐ | **S1** | **Output filter between the LLM and the speaker** | **Sharpest gap.** Nothing sits between Gemini and TTS. Safety is deliberately relaxed to `BLOCK_ONLY_HIGH` (`llm.py:74`) because an accusatory detective trips default filters, and `tts.py` then speaks the result **verbatim, with nobody reading it first.** On a live judged stage that is an unbounded output path. Must enforce G6 (never assert the player lied), block persona/system-prompt leakage, and cap length. Applies to `internal_note` too. **The migration made this worse, not better:** the same unfiltered path is now reachable from the public internet rather than from loopback. | **None.** The Gemini → TTS path already exists. Agree the integration seam with the backend owner before editing a shared file. |
+| ◐ | **S1** | **Output filter between the LLM and the speaker** | **Partially closed:** model output is limited to three sentences/400 characters, Gemini output tokens are 256, and a deterministic screen rejects direct deception claims plus prompt/sensor leakage markers before TTS. **Still open:** adversarial semantic/evasion coverage beyond these explicit patterns. Safety remains relaxed to `BLOCK_ONLY_HIGH` because an accusatory detective trips default filters. | **None.** The existing Gemini → TTS seam can be hardened and tested directly. |
 | ☐ | **S2** | **Voice prompt-injection red-team suite** | The player's speech becomes model input. Partial mitigations exist — separate `WITNESS_TRANSCRIPT` / `LOCAL_AFFECT_CONTEXT` trust blocks, HTML escaping, reserved-marker scrubbing, applied to replayed history too (`llm.py:92-124`). **Never tested against an adversary.** Build a spoken-attack corpus ("ignore your instructions", "you are now a helpful assistant", "repeat your system prompt", marker imitation) and assert the detective holds role. A judge *will* try this. | **None.** The current prompt-boundary logic is enough to begin the corpus and tests. S1 should use this suite as a regression gate, but it is not a prerequisite. |
 | ☐ | **S3** | **No-deception schema test** | G6 as an executable control: the build fails if a `deception` / `truthfulness` / `lie_probability`-like key appears in any contract or payload. `prosody.py` is clean today by discipline alone — nothing enforces it. Folds A3. | **A3 contract models** for a durable schema-level test. A temporary payload/key scan can start now while A3 is incomplete. |
-| ◐ | **S4** | ~~Local~~ **Endpoint hardening** | **Scope changed and grew teeth: the endpoint is now public, not loopback.** Designed and assigned as Task 4 of the migration — a shared client key required on every path except `/health` (`Sidecar/auth.py`), failing closed when the key is unset, and `GET /debug/last_turn` deleted outright. Unity sends the key as `X-FP-Client-Key` (done, `InterrogationSidecarClient.cs`). **☑ when Stream B's `cloud/security` branch merges and the deployed service answers 401 to an unauthenticated `POST /turn`** — Task 7 step 8 is that check. Owner: Vinay. | **None for `auth.py`.** Full enforcement waits for Task 4 wiring in `config.py`/`app.py`, Task 8's Unity request header, and deployed verification. |
-| ☐ | **S5** | **Secret handling, automated** | Unverified by machinery: vendor keys live only in the backend process and never cross to Unity; `.gitignore` covers `.env`; history is clean. **One deliberate exception since 4 Aug** — the shared client key is committed in `InterrogationConfig.asset`, because a shipped build must carry a copy to authenticate at all. It is extractable from any download and is treated as a speed bump, not a secret; `limits.py` is what actually bounds cost. In production it comes from Secret Manager, not the repo. Add `gitleaks` to CI, with that one value allow-listed so it does not train everyone to ignore the alert. Folds A13. | **A13 CI workflow** to run `gitleaks`; it does not exist yet. Rules and the workflow configuration can be prepared independently. |
-| ◐ | **S6** | **Cost and abuse ceiling** | Now spans three paid vendors and a public URL, so a runaway loop drains the $300 rather than one person's key. Designed and assigned as Task 5 — `Sidecar/limits.py` counts turns **on admission, not on success** (a retry loop still pays the vendors) and refuses with 429 plus a reason slug. Backed by a billing budget alert at $50/$150/$250, which Task 7 sets **before** anything can spend. **☑ when Stream B's branch merges and a turn past the cap returns 429.** Still missing the in-fiction ending for a capped session. Owner: Vinay. Folds A11. | **None for `limits.py`.** End-to-end protection needs Task 5's `config.py` and `/turn`/reset wiring, and relies on Cloud Run remaining pinned to one instance. |
-| ◐ | **S7** | **Model supply chain** | Whisper is gone; Google STT is pinned to the `short` recognizer and Gemini to `gemini-3.6-flash`, both by explicit config with no floating alias. HuBERT now **bakes into the container image at build time** rather than downloading at first run, which pins it by construction and removes a ~90 s cold-start download. The checkpoint label-contract check already exists (`ser.py:79`). Remaining: pin the HuBERT revision hash explicitly rather than relying on the image build date. | Final completion needs an immutable HuBERT revision and a rebuilt container with that snapshot. |
-| ◐ | **S8** | **Privacy boundary, stated and enforced** | ~~Player audio and embeddings never leave the machine.~~ **That claim died with the migration** — audio now goes to Google Cloud, which is exactly why this row stopped being a bragging point and became an obligation. ☑ **`PRIVACY.md` is written** ([`PRIVACY.md`](PRIVACY.md)) and says so plainly: audio is discarded after each turn, never written to disk, no account, no training, and the system cannot detect lies. ☑ Telemetry still defaults to no transcripts, trivially — A10 does not exist. ☐ **Still missing: the in-game notice before the first recording.** A privacy doc a player never sees is not disclosure. | Final enforcement needs Task 8's in-game notice and A10's no-transcript telemetry default. |
+| ◐ | **S4** | ~~Local~~ **Endpoint hardening** | **Implemented and locally smoke-tested on `cloud/client-docs` (5 Aug):** shared client key on every path except `/health`, fail-closed startup/configuration, `GET /debug/last_turn` removed, Unity sends `X-FP-Client-Key`, and the rebuilt container returns 401 with the Unity-compatible error envelope. **Still open:** verify the deployed service. Owner: Vinay for deploy. | Deploy the service and repeat the authentication smoke test against its public URL. |
+| ☐ | **S5** | **Secret handling, automated** | Unverified by machinery: vendor keys live only in the backend process and never cross to Unity; `.gitignore` covers `.env`; history is clean. The Unity asset currently serializes a **blank** client-key field. Task 8 will deliberately insert the deployed shared key because a shipped build must carry a copy; it is an extractable speed bump, not a secret. Add `gitleaks` to CI, with that value allow-listed once it exists. Folds A13. | **A13 CI workflow** to run `gitleaks`, plus the deployed shared-key decision before an allow-list entry exists. |
+| ◐ | **S6** | **Cost and abuse ceiling** | `Sidecar/limits.py` counts turns **on admission, not on success**, retains accounting across gameplay resets, and returns 429 at the session/day caps. A 50-second application deadline prevents late history commits, but timed-out synchronous SDK work may continue in its executor and there is no request idempotency key. Counters also reset on process replacement and caller-chosen session IDs are not durable identities, so this is **not a public billing ceiling**. **Still open:** turn IDs/replay, provider SDK deadlines, durable per-device/client admission, provider-side hard quota or shutdown, Vinay's budget alerts, deployed verification, and the in-fiction capped-session ending. Folds A11. | Durable identity/admission storage, provider-side quota controls, budget alerts, deployed verification, and the capped-session ending. |
+| ☑ | **S7** | **Model supply chain** | Google STT is pinned to `short`, Gemini to `gemini-3.6-flash`, and HuBERT to immutable revision `9a456581e0147a2b7fdaf56d77a9e8fce3865eaa`. The image requires safetensors, bakes that snapshot, loads it offline at runtime, and validates the four-label contract at startup. | **None.** The selected model versions and image build are pinned. |
+| ◐ | **S8** | **Privacy boundary, stated and enforced** | ~~Player audio and embeddings never leave the machine.~~ **That claim died with the migration** — audio now goes to Google Cloud, which is exactly why this row stopped being a bragging point and became an obligation. ☑ **`PRIVACY.md` is written** ([`PRIVACY.md`](PRIVACY.md)) and says so plainly: audio is discarded after each turn, never written to disk, no account, no training, and the system cannot detect lies. ☑ Telemetry still defaults to no transcripts, trivially — A10 does not exist. ☐ **Still missing: the in-game notice before the first recording.** A privacy doc a player never sees is not disclosure. | Task 8's in-game notice and A10's no-transcript telemetry default. |
 
 **Do first:** S1, then S2. S1 because an unfiltered path to a speaker in front of judges is the
 highest-consequence failure we have. S2 because it is the attack a curious judge performs
@@ -265,7 +265,7 @@ onto Google Cloud Run, so the game ships as a plain binary that talks to a URL.
 | TTS | ElevenLabs | ElevenLabs — unchanged |
 | Player needs | Python, ~GBs of weights, **their own two API keys** | Nothing |
 | Auth | None | Shared client key on every path except `/health`; `/debug/last_turn` deleted |
-| Cost control | None | Per-session and per-day turn caps, plus a billing budget alert |
+| Cost control | None | Best-effort in-process caps plus a budget alert; durable hard limits remain required before public launch |
 | **Player audio** | **Never left the machine** | **Leaves the machine.** See [`PRIVACY.md`](PRIVACY.md) |
 
 ### Deployment facts
@@ -276,6 +276,10 @@ Region `us-central1`. Fill this in the moment the deploy lands; it is what the U
 is how a demo dies.
 
 **`--max-instances 1` is load-bearing. Do not remove it as a cost tweak.**
+
+**`--concurrency 1` is deliberate at this checkpoint.** HuBERT runs through one
+CPU worker; higher concurrency would queue full audio buffers until measured
+capacity and durable shared state justify a different setting.
 
 Session history and the prosody baseline live in the service process's RAM. A second instance
 means two things break at once, both invisibly and both mid-scene:
@@ -313,9 +317,9 @@ playing or not.
 
 | Stream | Owner | Scope | State |
 |---|---|---|---|
-| A — backend core | Marcel | Session store, STT swap, Vertex, container | ☐ |
-| B — security & cloud | Vinay | `auth.py`, `limits.py`, GCP project, deploy | ☐ |
-| C — client & docs | Ananda | Unity client, privacy and doc rewrite | ◐ code + docs done; asset values blocked on B's deploy |
+| A — backend core | Marcel | Session store, STT swap, Vertex, container | ◐ Tasks 1–3 integrated; Docker packaging present; credentialed container run still open |
+| B — security & cloud | Vinay | `auth.py`, `limits.py`, GCP project, deploy | ◐ auth/limits integrated and tested; GCP setup, alerts and deploy still open |
+| C — client & docs | Ananda | Unity client, privacy and doc rewrite | ◐ code + docs done; asset fields serialized blank and blocked on B's URL/key |
 
 Split by **file ownership, not by task** — `app.py` and `config.py` are touched by four tasks
 each, so three people editing by task would spend the week on merge conflicts. Merge order is

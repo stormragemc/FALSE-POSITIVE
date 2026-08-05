@@ -16,14 +16,17 @@ Experiences*). Shortlisted; deliverables due **9 Aug 2026**.
 
 ---
 
-## Status — 4 Aug 2026
+## Status — 5 Aug 2026
 
-A **working vertical slice exists**: Unity client plus a Python backend running the full voice
-loop — microphone → speech-to-text → speech emotion recognition → LLM reply → text-to-speech →
-playback with lip sync.
+A **local vertical slice has previously run**: Unity microphone → speech-to-text → speech
+emotion recognition → LLM reply → text-to-speech → playback with lip sync. The cloud migration
+code now includes Google STT, Vertex Gemini, client-key auth, turn caps, and a Dockerfile. The
+105-test offline suite passes, and the container boots with HuBERT ready and rejects an
+unauthenticated turn. The credentialed vendor chain and hosted path have not run end to end.
 
-**In flight:** that backend is moving off the player's machine onto Google Cloud Run, so the
-game can ship as a plain download. Target 6 Aug. Status and constraints:
+**In flight:** Vinay/GCP ownership is still needed for credentials, budget alerts, the local
+credentialed container checkpoint, and Cloud Run deployment. The committed Unity asset keeps
+the hosted URL and client key blank until that deploy produces real values. Target 6 Aug. Status:
 [`docs/ROADMAP.md` §9](docs/ROADMAP.md#9-distribution-hosted-backend-migration-record).
 
 What is proven, and what is merely wired but not yet observed running, is tracked precisely in
@@ -85,10 +88,11 @@ framed as a lie detector. See the primary-source research and reviewed design in
 
 There are three ways to run this, depending on what you are trying to do.
 
-### 1. Play the game
+### 1. Play the hosted game (after deployment)
 
-**Nothing to install.** The build talks to the hosted backend over HTTPS. No Python, no model
-downloads, no API keys.
+Once Task 7 is complete, **nothing is installed on the player's machine**: the build talks to
+the hosted backend over HTTPS. At the current checkpoint the hosted URL/key are intentionally
+blank, so use the local Docker path below for backend testing.
 
 ### 2. Run the backend locally, in Docker
 
@@ -201,12 +205,12 @@ live in Google Secret Manager. `Sidecar/.env.example` documents the required var
 only. Google Speech-to-Text and Vertex AI have no API key at all — they authenticate as the
 runtime service account.
 
-**One deliberate exception:** the shared client key is committed, in
-`Assets/_Project/Config/InterrogationConfig.asset`. A shipped build has to carry a copy to reach
-the backend at all, so it is extractable from any download by anyone who cares to look. It is a
-speed bump against drive-by traffic on a public URL, **not a security boundary** — the backend's
-per-session and per-day turn caps are what actually bound cost. Rotating it is a redeploy plus
-an asset edit.
+**One deliberate deployment exception:** the shared client key will be committed in
+`Assets/_Project/Config/InterrogationConfig.asset` when Task 7 produces it. It is blank at this
+checkpoint. A shipped build must carry a copy, so it is extractable from any download: a speed
+bump against drive-by traffic, **not a security boundary**. The in-process turn caps are only a
+checkpoint guard; a public deployment still needs durable per-client limits and provider-side
+hard quotas to bound cost across restarts.
 
 ## Voice data
 

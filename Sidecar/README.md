@@ -4,9 +4,10 @@ The FastAPI service that does everything the game's voice loop needs outside
 Unity: speech-to-text, speech emotion recognition, the officer's LLM reply, and
 the officer's TTS voice.
 
-As of 5 Aug 2026 the Cloud Run migration is **implemented locally but not yet
-deployed or credentialed end to end**. A deployed build will talk to a URL and
-need no Python, model downloads, or player-supplied keys. See
+As of 6 Aug 2026 the Cloud Run migration is **deployed and verified end to end**
+at `https://false-positive-backend-465469192069.us-central1.run.app`. A build
+talks to that URL and needs no Python, model downloads, or player-supplied keys.
+Unity wiring is still outstanding — see Task 8. See
 [`../docs/ROADMAP.md` §9](../docs/ROADMAP.md#9-distribution-hosted-backend-migration-record)
 for why, and [`../docs/PRIVACY.md`](../docs/PRIVACY.md) for what that means for
 player audio.
@@ -204,6 +205,27 @@ curl -s -X POST "$URL/turn" -H "x-fp-client-key: $(gcloud secrets versions acces
 
 Expected: `status: ok` · `401` · `ok: true`.
 
+**Those three never touch STT.** The authenticated probe sends no audio, so
+`stt_ms` is `0` and prosody reports `opening_turn`. To exercise the whole chain,
+post a real 16 kHz mono WAV — on macOS you can make one without a mic:
+
+```bash
+say -o probe.aiff "I was at home all evening. I never went near the warehouse."
+afconvert -f WAVE -d LEI16@16000 -c 1 probe.aiff probe.wav
+
+curl -s -X POST "$URL/turn" \
+  -H "x-fp-client-key: $(gcloud secrets versions access latest --secret=fp-client-key)" \
+  -F session_id=sttprobe -F sample_rate=16000 -F audio=@probe.wav | python3 -m json.tool
+```
+
+Expected: `stt_ms > 0` with a transcript matching the spoken line, and
+`prosody.available: true`. Reference timings from 6 Aug — STT 544 ms, affect
+519 ms, LLM 1243 ms, TTS 559 ms, **2351 ms total**. Anything past ~4 s is a
+finding for the demo plan, not a curiosity.
+
+Synthesized speech is fine for proving the wiring, but do not read its affect
+output as a baseline — `say` audio classified as 79% `angry` on 6 Aug.
+
 ### First-time setup of a fresh project
 
 Recorded so this is not archaeology the next time someone needs it.
@@ -250,13 +272,30 @@ gcloud run deploy false-positive-backend \
   --set-secrets "ELEVENLABS_API_KEY=elevenlabs-api-key:latest,ELEVENLABS_VOICE_ID=elevenlabs-voice-id:latest,FP_CLIENT_KEY=fp-client-key:latest"
 ```
 
-Finally, grant the runtime service account what it needs:
+**Grant the runtime service account its roles _before_ that deploy, not after.**
+Derive it from the project number — the default compute service account exists
+before any Cloud Run service does, so `gcloud run services describe` has nothing
+to read on a first-time setup:
 
 ```bash
-SA="$(gcloud run services describe false-positive-backend --region us-central1 --format='value(spec.template.spec.serviceAccountName)')"
+SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+
+# Secret Manager — per secret, so the account can read these three and nothing else
+for s in elevenlabs-api-key elevenlabs-voice-id fp-client-key; do
+  gcloud secrets add-iam-policy-binding "$s" \
+    --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
+done
+
+# Google STT and Vertex authenticate as this account — there is no API key
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:${SA}" --role=roles/speech.client
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:${SA}" --role=roles/aiplatform.user
 ```
+
+> **Learned the hard way, 6 Aug.** Without `secretAccessor` the deploy fails with
+> `Permission denied on secret: .../elevenlabs-api-key/versions/latest` and the
+> revision never serves traffic. Granting it afterwards does **not** retry the
+> failed revision — force a new one with
+> `gcloud run services update false-positive-backend --region us-central1 --update-env-vars "GCP_LOCATION=global"`.
 
 > **`--max-instances 1` is load-bearing, not a cost tweak.** Session history and
 > each player's prosody baseline live in the process's memory. A second instance
@@ -273,7 +312,14 @@ gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:${SA}
 > queue full audio buffers and increase memory pressure until measured capacity
 > supports a larger value.
 
-**Service URL:** `<PENDING — filled in when the first deploy lands>`
+**Service URL:** `https://false-positive-backend-465469192069.us-central1.run.app`
+(project `false-positive-504516`, region `us-central1`, first deployed 6 Aug 2026)
+
+> **⚠ The live service is at `--concurrency 160`, not 1.** The deploy command used
+> on 6 Aug omitted the flag, so it took Cloud Run's default. `--min-instances` and
+> `--max-instances` are correctly 1. See
+> [`../docs/ROADMAP.md` §9](../docs/ROADMAP.md#9-distribution-hosted-backend-migration-record)
+> — it is an open decision, not an oversight to paper over.
 
 ---
 

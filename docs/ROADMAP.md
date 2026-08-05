@@ -41,7 +41,7 @@ you saw it pass. Unity work that has never been opened in the Editor is ◐, not
 
 | Workstream | State |
 |---|---|
-| Voice loop (mic → STT → affect → LLM → TTS → playback) | ◐ local slice previously worked; hosted credentialed path is not yet verified |
+| Voice loop (mic → STT → affect → LLM → TTS → playback) | ◐ hosted credentialed path verified end to end 6 Aug (2351 ms total); driven by a synthesized WAV, so mic capture and Unity playback remain unverified |
 | HuBERT affect orchestration | ☑ built; 105 offline tests and container startup pass |
 | Unity client shell | ◐ runs; never compiled on a clean machine |
 | **The game around the loop** | ☐ **does not exist** |
@@ -247,8 +247,8 @@ A claim that dies on stage costs more than the feature was worth.
 
 ## 9. Distribution: hosted backend migration record
 
-**Decided 4 Aug 2026. In flight, target 6 Aug.** The backend moves off the player's machine
-onto Google Cloud Run, so the game ships as a plain binary that talks to a URL.
+**Decided 4 Aug 2026. Deployed and verified 6 Aug 2026.** The backend moved off the player's
+machine onto Google Cloud Run, so the game ships as a plain binary that talks to a URL.
 
 - **Design:** [`superpowers/specs/2026-08-04-cloud-hosted-backend-design.md`](superpowers/specs/2026-08-04-cloud-hosted-backend-design.md)
 - **Task-by-task plan:** [`superpowers/plans/2026-08-04-cloud-hosted-backend.md`](superpowers/plans/2026-08-04-cloud-hosted-backend.md)
@@ -270,16 +270,40 @@ onto Google Cloud Run, so the game ships as a plain binary that talks to a URL.
 
 ### Deployment facts
 
-**Service URL:** `<PENDING — Stream B fills this in at Task 7 step 8>`
-Region `us-central1`. Fill this in the moment the deploy lands; it is what the Unity
-`InterrogationConfig.asset` points at, and a URL that lives only in someone's terminal history
-is how a demo dies.
+**Service URL:** `https://false-positive-backend-465469192069.us-central1.run.app`
+Region `us-central1`, project `false-positive-504516`, service `false-positive-backend`.
+This is what the Unity `InterrogationConfig.asset` points at.
+
+**Verified 6 Aug 2026**, revision `00002-rlj`, image `backend:v1` (amd64, 785 MB, HuBERT baked
+in). `/health` returns `models_loaded: true`; an unauthenticated `POST /turn` returns `401`; an
+authenticated turn with a 3.2 s 16 kHz mono WAV returns a full result:
+
+| Stage | Latency |
+|---|---|
+| STT (Google Speech v2) | 544 ms |
+| Affect (HuBERT) | 519 ms |
+| LLM (Vertex) | 1243 ms |
+| TTS (ElevenLabs) | 559 ms |
+| **Total** | **2351 ms** |
+
+Comfortably inside the ~4 s the plan set as a demo-blocking threshold. The affect channel
+reported `available: true, reliable: true` at the 0.75 confidence cap.
+
+**Not yet verified:** mic capture and playback from Unity. The probe above used a synthesized
+WAV posted with `curl`, not a live microphone, and nothing has run through the game client.
 
 **`--max-instances 1` is load-bearing. Do not remove it as a cost tweak.**
 
-**`--concurrency 1` is deliberate at this checkpoint.** HuBERT runs through one
-CPU worker; higher concurrency would queue full audio buffers until measured
-capacity and durable shared state justify a different setting.
+**⚠ `--concurrency 1` was intended but is NOT what deployed.** The reasoning stands — HuBERT
+runs through one CPU worker, and higher concurrency queues full audio buffers until measured
+capacity and durable shared state justify otherwise. But the Task 7 step 6 deploy command never
+passed `--concurrency`, so the live service took Cloud Run's default and sits at **160**.
+`minScale`/`maxScale` are correctly pinned to 1.
+
+**Open decision, 6 Aug.** Either set it to 1 and accept that a second simultaneous player waits
+behind the first (`maxScale` is 1, so there is no other instance to take them), or accept 160
+and delete this paragraph's premise. Not silently fixed, because the trade is real and it
+changes behaviour with more than one judge at the keyboard.
 
 Session history and the prosody baseline live in the service process's RAM. A second instance
 means two things break at once, both invisibly and both mid-scene:
@@ -297,9 +321,15 @@ if this assumption ever has to go.
 
 **A redeploy drops every live session.** Deploy between playtests, never during one.
 
-**Budget alert: thresholds at $50, $150 and $250 of the $300 credit.** Set *before* the first
-deploy, not after — an always-on pinned instance with no alert is the standard way to discover
-an empty balance a week later. Owner: Vinay, who owns the GCP project and its billing account.
+**Budget alerts, as actually configured 6 Aug:** two service-scoped budgets on project
+`FALSE-POSITIVE`, each **$100**, alerting at 50% / 80% / 100% — one for **Vertex AI**, one for
+**Cloud Run**. This replaces the single unscoped $300/$50/$150/$250 budget the plan called for;
+service scoping is tighter, and both were in place before the first deploy.
+
+**⚠ Two spend paths have no alert on them:** **Speech-to-Text** is a GCP service with no budget
+covering it, and **ElevenLabs** bills outside GCP entirely, so no Cloud Billing budget can ever
+see it. Neither is urgent at demo scale; both are real. Owner: Vinay, who owns the GCP project
+and its billing account.
 
 ### Known limit on a public launch: ElevenLabs
 
@@ -317,9 +347,9 @@ playing or not.
 
 | Stream | Owner | Scope | State |
 |---|---|---|---|
-| A — backend core | Marcel | Session store, STT swap, Vertex, container | ◐ Tasks 1–3 integrated; Docker packaging present; credentialed container run still open |
-| B — security & cloud | Vinay | `auth.py`, `limits.py`, GCP project, deploy | ◐ auth/limits integrated and tested; GCP setup, alerts and deploy still open |
-| C — client & docs | Ananda | Unity client, privacy and doc rewrite | ◐ code + docs done; asset fields serialized blank and blocked on B's URL/key |
+| A — backend core | Marcel | Session store, STT swap, Vertex, container | ☑ Tasks 1–3 integrated; image built and running on Cloud Run with the credentialed chain verified |
+| B — security & cloud | Vinay | `auth.py`, `limits.py`, GCP project, deploy | ☑ auth/limits integrated; APIs, budgets, secrets, deploy and runtime IAM all in place 6 Aug |
+| C — client & docs | Ananda | Unity client, privacy and doc rewrite | ◐ docs updated with the deploy record; `InterrogationConfig.asset` still needs the URL + client key via the Unity Inspector (Task 8, Giorgi handoff) |
 
 Split by **file ownership, not by task** — `app.py` and `config.py` are touched by four tasks
 each, so three people editing by task would spend the week on merge conflicts. Merge order is

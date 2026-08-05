@@ -16,17 +16,20 @@ Experiences*). Shortlisted; deliverables due **9 Aug 2026**.
 
 ---
 
-## Status — 5 Aug 2026
+## Status — 6 Aug 2026
 
 A **local vertical slice has previously run**: Unity microphone → speech-to-text → speech
 emotion recognition → LLM reply → text-to-speech → playback with lip sync. The cloud migration
 code now includes Google STT, Vertex Gemini, client-key auth, turn caps, and a Dockerfile. The
 105-test offline suite passes, and the container boots with HuBERT ready and rejects an
-unauthenticated turn. The credentialed vendor chain and hosted path have not run end to end.
+unauthenticated turn.
 
-**In flight:** Vinay/GCP ownership is still needed for credentials, budget alerts, the local
-credentialed container checkpoint, and Cloud Run deployment. The committed Unity asset keeps
-the hosted URL and client key blank until that deploy produces real values. Target 6 Aug. Status:
+**Deployed 6 Aug 2026.** The backend runs on Cloud Run at
+`https://false-positive-backend-465469192069.us-central1.run.app`, with budgets, secrets and
+runtime IAM in place. The credentialed chain is verified end to end — STT, affect, LLM and TTS
+in 2351 ms — but by `curl` with a synthesized WAV, not from the game. **Still in flight:** the
+committed Unity asset keeps the hosted URL and client key blank until Task 8 sets them through
+the Inspector, so nothing has run from the client yet. Status:
 [`docs/ROADMAP.md` §9](docs/ROADMAP.md#9-distribution-hosted-backend-migration-record).
 
 What is proven, and what is merely wired but not yet observed running, is tracked precisely in

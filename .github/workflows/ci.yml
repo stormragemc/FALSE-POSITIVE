@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same ref makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sidecar:
+    name: Sidecar tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Sidecar
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 3.12 matches the Dockerfile's python:3.12-slim. test_container_contract
+      # asserts that exact base image, so pinning it here keeps CI and the
+      # deployed container from drifting apart silently.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Sidecar/requirements.txt
+
+      # Same two-step install the Dockerfile uses: CPU torch from PyTorch's own
+      # index first, so resolving requirements.txt afterwards cannot pull the
+      # multi-gigabyte CUDA build that nothing here needs.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -r requirements.txt
+          pip install pytest
+
+      # No secrets and no credentials: the suite stubs every vendor client and
+      # never loads the HuBERT weights, so this also runs on forked PRs.
+      - name: Run tests
+        run: python -m pytest tests -q

@@ -45,6 +45,21 @@
   .note { color:var(--dim); font-size:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
   details pre { font-family:var(--mono); font-size:11px; overflow-x:auto; background:#0e1216; padding:10px; border-radius:6px; }
 
+  /* the affect text the LLM actually receives */
+  .ctx { font-family:var(--mono); font-size:12px; line-height:1.55; white-space:pre-wrap;
+         background:#0e1216; border:1px solid var(--line); border-left:2px solid var(--accent);
+         border-radius:6px; padding:10px 12px; margin:0; color:var(--ink); }
+  .ctx.muted { color:var(--dim); border-left-color:var(--line); }
+
+  /* threshold gates: did this value actually change the prompt? */
+  .trig { display:grid; grid-template-columns:14px auto 1fr; gap:3px 9px; align-items:baseline;
+          font-family:var(--mono); font-size:12px; }
+  .trig .dot { color:var(--line); }
+  .trig .on .dot, .trig .dot.on { color:var(--ok); }
+  .trig .k { color:var(--dim); }
+  .trig .v { color:var(--ink); }
+  .trig .v s { color:var(--dim); text-decoration:none; }
+
   /* input level */
   .level { margin-top:14px; }
   .level .head { display:flex; justify-content:space-between; align-items:baseline;
@@ -115,10 +130,25 @@
   </section>
 
   <section class="panel">
-    <h2>Affect channel — HuBERT</h2>
+    <h2>What the detective was told</h2>
+    <pre id="affectContext" class="ctx">—</pre>
+    <p class="note">
+      This is the <em>entire</em> affect payload the LLM receives — not the numbers below.
+      Everything else on this panel is upstream of these few sentences. If a reading looks
+      wrong but this text is unchanged, the reading never reached the detective.
+    </p>
+
+    <h2 style="margin-top:20px">Pacing triggers</h2>
+    <div id="triggers"></div>
+    <p class="note">
+      Hesitation reaches the detective through here, not through the emotion label.
+      These are threshold gates, so a value can move a lot without changing anything.
+    </p>
+
+    <h2 style="margin-top:20px">Affect channel — HuBERT</h2>
     <div class="row" id="prosodyFlags"></div>
     <div id="meters" style="margin-top:14px"></div>
-    <h2 style="margin-top:20px">Classes</h2>
+    <h2 style="margin-top:20px">Classes <span class="sub" style="text-transform:none;letter-spacing:0">— weakest signal here</span></h2>
     <div id="classes"></div>
     <h2 style="margin-top:20px">Signal</h2>
     <dl class="kv" id="detail"></dl>
@@ -375,6 +405,38 @@ function render(d, roundTrip) {
   ].filter(([, v]) => v != null).map(([k, v]) => `<span>${k} <b>${v}</b>ms</span>`).join("");
 
   const p = d.prosody || {};
+
+  // Echoed by app.py from the pre-commit signal, so this is literally the text
+  // llm.py embedded — not a client-side reconstruction that could drift from it.
+  // Absent unless the server runs with SIDECAR_DEBUG_AFFECT_CONTEXT=1 — it is
+  // prompt text, so it stays off the default wire format. Distinguish "not
+  // echoed" from "echoed as empty", which is a real state on opening turns.
+  const ctx = d.affect_prompt_context;
+  const ctxEl = $("affectContext");
+  ctxEl.textContent =
+    ctx === undefined ? "(server echo off — redeploy with SIDECAR_DEBUG_AFFECT_CONTEXT=1)"
+    : ctx === "" ? "(opening turn — no affect block is sent)"
+    : ctx;
+  ctxEl.className = "ctx" + (ctx ? "" : " muted");
+
+  // Every gate prosody.py applies before a number becomes a sentence. Showing the
+  // threshold next to the value is the point: it exposes the near-misses, where a
+  // reading moved a lot and changed nothing the detective heard.
+  const hasRef = !!p.reference_comparison_available;
+  const rateD = p.speech_rate_delta || 0;
+  const gates = [
+    ["long pauses",   p.long_pause_count ?? 0,            (p.long_pause_count ?? 0) >= 1,     "≥ 1"],
+    ["onset delay",   (p.onset_delay_ms ?? 0) + "ms",     (p.onset_delay_ms ?? 0) >= 2500,    "≥ 2500ms"],
+    ["speech rate Δ", rateD.toFixed(3),                   hasRef && Math.abs(rateD) >= 0.25,  hasRef ? "|Δ| ≥ 0.25" : "needs baseline"],
+    ["arousal",       (p.arousal || 0).toFixed(3),        (p.arousal || 0) >= 0.65,           "≥ 0.65"],
+    ["tension trend", p.trend || "unknown",               p.trend === "rising",               "rising"],
+    ["vs baseline",   (p.hubert_reference_change || 0).toFixed(2),
+                      hasRef && (p.hubert_reference_change || 0) >= 1.25,                     hasRef ? "≥ 1.25" : "needs baseline"],
+  ];
+  $("triggers").innerHTML = gates.map(([k, v, on, thr]) =>
+    `<span class="dot${on ? " on" : ""}">${on ? "●" : "○"}</span>` +
+    `<span class="k">${k}</span><span class="v">${v} <s>(${thr})</s></span>`).join("");
+
   const cls = p.available ? (p.reliable ? "ok" : "warn") : "bad";
   $("prosodyFlags").innerHTML =
     `<span class="pill ${cls}">${p.available ? (p.reliable ? "reliable" : "unreliable") : "unavailable"}</span>` +

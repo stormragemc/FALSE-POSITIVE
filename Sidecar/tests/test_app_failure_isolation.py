@@ -8,6 +8,7 @@ import io
 from pathlib import Path
 import sys
 import threading
+import time
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -18,14 +19,36 @@ from tests.test_unity_contract import DTO_PATH, _class_fields
 
 
 class _FakeFastAPI:
-    def __init__(self, **_kwargs):
-        pass
+    def __init__(self, **kwargs):
+        self.options = kwargs
+        self.get_paths = []
+        self.post_paths = []
+        self.middlewares = []
+        self.exception_handlers = {}
 
-    def get(self, _path):
-        return lambda function: function
+    def get(self, path):
+        def register(function):
+            self.get_paths.append(path)
+            return function
+        return register
 
-    def post(self, _path):
-        return lambda function: function
+    def post(self, path):
+        def register(function):
+            self.post_paths.append(path)
+            return function
+        return register
+
+    def middleware(self, kind):
+        def register(function):
+            self.middlewares.append((kind, function))
+            return function
+        return register
+
+    def exception_handler(self, exception_type):
+        def register(function):
+            self.exception_handlers[exception_type] = function
+            return function
+        return register
 
 
 class _FakeJSONResponse:
@@ -40,6 +63,19 @@ class _FakeUpload:
 
     async def read(self, size: int = -1) -> bytes:
         return self.data if size < 0 else self.data[:size]
+
+
+class _FakeRequest:
+    def __init__(self, path: str, headers=None, chunks=()):
+        self.url = SimpleNamespace(path=path)
+        self.headers = headers or {}
+        self._chunks = list(chunks)
+        self.streamed_chunks = 0
+
+    async def stream(self):
+        for chunk in self._chunks:
+            self.streamed_chunks += 1
+            yield chunk
 
 
 def _module(name: str, **attributes) -> ModuleType:
@@ -60,18 +96,33 @@ class AppFailureIsolationTests(unittest.TestCase):
             UploadFile=object,
         )
         fastapi_responses = _module("fastapi.responses", JSONResponse=_FakeJSONResponse)
+        request_validation_error = type("RequestValidationError", (Exception,), {})
+        fastapi_exceptions = _module(
+            "fastapi.exceptions",
+            RequestValidationError=request_validation_error,
+        )
         config = _module(
             "config",
             validate=lambda: None,
             SIDECAR_MAX_SESSIONS=4,
+            SESSION_IDLE_TTL_SECONDS=3600.0,
+            TURN_DEADLINE_SECONDS=50.0,
+            FP_CLIENT_KEY="test-client-key",
+            MAX_TURNS_PER_SESSION=40,
+            MAX_TURNS_PER_DAY=2000,
             PROSODY_BASELINE_TURNS=3,
             PROSODY_MIN_CONFIDENCE=0.4,
             PROSODY_ENABLED=True,
             HUBERT_MODEL_ID="test/hubert",
             HUBERT_MAX_SECONDS=20.0,
-            SIDECAR_MAX_AUDIO_SECONDS=30.0,
+            SIDECAR_MAX_AUDIO_SECONDS=20.0,
+            MAX_TURN_REQUEST_BYTES=700000,
             HOST="127.0.0.1",
             PORT=8765,
+            GCP_PROJECT="test-project",
+            GCP_LOCATION="global",
+            STT_MODEL="short",
+            STT_LANGUAGE="en-US",
         )
         cls.captured_signals = []
 
@@ -86,11 +137,10 @@ class AppFailureIsolationTests(unittest.TestCase):
             HISTORY_KIND_WITNESS="witness_transcript",
             generate_reply=generate_reply,
         )
-        stt = _module(
-            "stt",
-            load=lambda: None,
-            transcribe=lambda _audio: ("fixture transcript", 5),
-        )
+        async def fake_transcribe(_pcm_bytes):
+            return "fixture transcript", 5
+
+        stt = _module("stt", transcribe=fake_transcribe)
 
         def failing_hubert(_audio):
             raise RuntimeError("forced HuBERT failure")
@@ -112,6 +162,9 @@ class AppFailureIsolationTests(unittest.TestCase):
             ),
             resample_float32=lambda audio, _source, _target: audio,
             normalize_to_canonical=lambda pcm, rate, _channels: (pcm, rate),
+            float32_to_pcm16_bytes=lambda audio: (
+                (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+            ),
         )
         uvicorn = _module("uvicorn", run=lambda *_args, **_kwargs: None)
 
@@ -119,6 +172,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             "audio_utils": audio_utils,
             "config": config,
             "fastapi": fastapi,
+            "fastapi.exceptions": fastapi_exceptions,
             "fastapi.responses": fastapi_responses,
             "llm": llm,
             "ser": ser,
@@ -132,18 +186,209 @@ class AppFailureIsolationTests(unittest.TestCase):
         with patch.dict(sys.modules, stubs):
             spec.loader.exec_module(module)
         cls.app = module
+        cls.RequestValidationError = request_validation_error
         cls.app._prosody_model_available = True
 
     @classmethod
     def tearDownClass(cls):
-        cls.app._stt_pool.shutdown(wait=True)
         cls.app._ser_pool.shutdown(wait=True)
+        cls.app._vendor_pool.shutdown(wait=True)
 
     def setUp(self):
-        self.app._sessions.clear()
+        self.app._session_store.clear()
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(4, 3, 0.4)
-        self.app._session_reset_epoch = 0
+        self.app._session_reset_generations.clear()
+        self.app._active_session_turns.clear()
+        if hasattr(self.app, "limits"):
+            self.app._turn_limiter = self.app.limits.TurnLimiter(40, 2000)
         self.captured_signals.clear()
+
+    def test_health_is_public_and_other_routes_require_the_client_key(self):
+        self.assertTrue(hasattr(self.app, "require_client_key"))
+
+        async def accepted(_request):
+            return "accepted"
+
+        public_request = _FakeRequest("/health")
+        missing_key_request = _FakeRequest("/turn")
+        valid_key_request = _FakeRequest(
+            "/turn",
+            headers={
+                "x-fp-client-key": "test-client-key",
+                "content-length": "0",
+            },
+        )
+
+        self.assertEqual(
+            asyncio.run(self.app.require_client_key(public_request, accepted)),
+            "accepted",
+        )
+        rejected = asyncio.run(
+            self.app.require_client_key(missing_key_request, accepted)
+        )
+        self.assertEqual(rejected.status_code, 401)
+        self.assertEqual(rejected.content["error"], "unauthorized")
+        self.assertEqual(set(rejected.content), set(self.app._empty_response()))
+        self.assertEqual(
+            asyncio.run(self.app.require_client_key(valid_key_request, accepted)),
+            "accepted",
+        )
+        self.assertEqual(valid_key_request._body, b"")
+
+    def test_declared_oversized_body_is_rejected_without_streaming(self):
+        called_next = False
+
+        async def accepted(_request):
+            nonlocal called_next
+            called_next = True
+            return "accepted"
+
+        request = _FakeRequest(
+            "/turn",
+            headers={
+                "x-fp-client-key": "test-client-key",
+                "content-length": str(self.app.config.MAX_TURN_REQUEST_BYTES + 1),
+            },
+            chunks=(b"must not be consumed",),
+        )
+
+        response = asyncio.run(self.app.require_client_key(request, accepted))
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.content["error"], "request too large")
+        self.assertFalse(called_next)
+        self.assertEqual(request.streamed_chunks, 0)
+
+    def test_chunked_oversized_body_stops_streaming_at_the_limit(self):
+        called_next = False
+
+        async def accepted(_request):
+            nonlocal called_next
+            called_next = True
+            return "accepted"
+
+        request = _FakeRequest(
+            "/turn",
+            headers={"x-fp-client-key": "test-client-key"},
+            chunks=(b"x" * 400000, b"y" * 400000, b"must not be consumed"),
+        )
+
+        response = asyncio.run(self.app.require_client_key(request, accepted))
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.content["error"], "request too large")
+        self.assertFalse(called_next)
+        self.assertEqual(request.streamed_chunks, 2)
+
+    def test_slow_vendor_call_does_not_block_the_event_loop(self):
+        release_llm = threading.Event()
+        timer = threading.Timer(0.2, release_llm.set)
+
+        def blocking_llm(**_kwargs):
+            release_llm.wait(timeout=1.0)
+            return "Next question.", 200
+
+        async def run_turn_with_health_probe():
+            started_at = time.perf_counter()
+
+            async def health_after_event_loop_tick():
+                await asyncio.sleep(0.01)
+                self.app.health()
+                return time.perf_counter() - started_at
+
+            turn_task = asyncio.create_task(self.app.turn("session-a", 16000, 0, None))
+            health_delay = await health_after_event_loop_tick()
+            result = await turn_task
+            return health_delay, result
+
+        timer.start()
+        try:
+            with patch.object(self.app.llm, "generate_reply", side_effect=blocking_llm):
+                health_delay, result = asyncio.run(run_turn_with_health_probe())
+        finally:
+            timer.cancel()
+
+        self.assertTrue(result["ok"])
+        self.assertLess(health_delay, 0.1)
+
+    def test_turn_deadline_prevents_late_history_commit(self):
+        release_llm = threading.Event()
+        timer = threading.Timer(0.2, release_llm.set)
+
+        def blocking_llm(**_kwargs):
+            release_llm.wait(timeout=1.0)
+            return "Late question.", 200
+
+        timer.start()
+        started_at = time.perf_counter()
+        try:
+            with patch.object(self.app.config, "TURN_DEADLINE_SECONDS", 0.05), patch.object(
+                self.app.llm, "generate_reply", side_effect=blocking_llm
+            ):
+                response = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+        finally:
+            release_llm.set()
+            timer.cancel()
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(response.content["error"], "turn timed out; retry the utterance")
+        self.assertEqual(self.app._session_store.history("session-a"), [])
+        self.assertLess(time.perf_counter() - started_at, 0.15)
+
+    def test_debug_route_is_not_exposed(self):
+        self.assertNotIn("/debug/last_turn", self.app.app.get_paths)
+
+    def test_interactive_api_schema_is_disabled(self):
+        for option in ("docs_url", "redoc_url", "openapi_url"):
+            with self.subTest(option=option):
+                self.assertIn(option, self.app.app.options)
+                self.assertIsNone(self.app.app.options[option])
+
+    def test_framework_validation_errors_keep_the_public_error_contract(self):
+        handler = self.app.app.exception_handlers[self.RequestValidationError]
+
+        turn_response = asyncio.run(
+            handler(
+                SimpleNamespace(url=SimpleNamespace(path="/turn")),
+                self.RequestValidationError(),
+            )
+        )
+        reset_response = asyncio.run(
+            handler(
+                SimpleNamespace(url=SimpleNamespace(path="/session/reset")),
+                self.RequestValidationError(),
+            )
+        )
+
+        self.assertEqual(turn_response.status_code, 422)
+        self.assertEqual(turn_response.content["error"], "invalid request")
+        self.assertEqual(set(turn_response.content), set(self.app._empty_response()))
+        self.assertEqual(reset_response.status_code, 422)
+        self.assertEqual(reset_response.content, {"ok": False, "error": "invalid request"})
+
+    def test_turn_limit_rejects_before_vendor_calls(self):
+        self.assertTrue(hasattr(self.app, "limits"))
+        self.app._turn_limiter = self.app.limits.TurnLimiter(1, 10)
+
+        first = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+        second = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+
+        self.assertTrue(first["ok"])
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(second.content["error"], "session_turn_limit_reached")
+        self.assertEqual(len(self.captured_signals), 1)
+
+    def test_reset_does_not_restore_paid_turn_budget(self):
+        self.assertTrue(hasattr(self.app, "limits"))
+        self.app._turn_limiter = self.app.limits.TurnLimiter(1, 2)
+
+        first = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+        asyncio.run(self.app.session_reset("session-a"))
+        second = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+
+        self.assertTrue(first["ok"])
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(second.content["error"], "session_turn_limit_reached")
 
     def test_hubert_exception_degrades_to_transcript_only_turn(self):
         sample_count = 16000 * 2
@@ -199,6 +444,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertTrue(result["prosody"]["enabled"])
         self.assertFalse(result["prosody"]["available"])
         self.assertEqual(result["prosody"]["error"], "loading")
+        self.assertEqual(result["version"], "0.3.0")
 
     def test_unity_turn_and_health_dtos_match_live_python_response_keys(self):
         source = DTO_PATH.read_text(encoding="utf-8")
@@ -212,14 +458,22 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(set(prosody_health_fields), set(health_payload["prosody"]))
 
     def test_reset_clears_dialogue_and_prosody_state(self):
-        self.app._sessions["session-a"] = [{"role": "user", "content": "hello"}]
+        self.app._session_store.commit("session-a", [{"role": "user", "content": "hello"}])
         original_tracker = self.app._prosody_registry.get("session-a")
 
         result = asyncio.run(self.app.session_reset("session-a"))
 
         self.assertEqual(result, {"ok": True})
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
         self.assertIsNot(self.app._prosody_registry.get("session-a"), original_tracker)
+
+    def test_reset_rejects_invalid_session_id_with_structured_400(self):
+        for session_id in ("", "x" * 129, "bad\nvalue"):
+            with self.subTest(session_id=repr(session_id)):
+                response = asyncio.run(self.app.session_reset(session_id))
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(response.content["ok"])
+                self.assertIn("session_id", response.content["error"])
 
     def test_invalid_pcm_does_not_create_session_state(self):
         response = asyncio.run(
@@ -227,7 +481,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
 
     def test_internal_value_error_is_not_exposed_as_client_input_error(self):
         with patch.object(
@@ -254,7 +508,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.content["error"], "turn pipeline failed; retry the utterance")
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
         self.assertIn("forced STT failure", output.getvalue())
 
     def test_classical_feature_failure_degrades_to_transcript_only_turn(self):
@@ -275,12 +529,21 @@ class AppFailureIsolationTests(unittest.TestCase):
 
     def test_history_eviction_resets_matching_prosody_tracker(self):
         original_tracker = self.app._prosody_registry.get("session-a")
-        with patch.object(self.app.config, "SIDECAR_MAX_SESSIONS", 2):
+        # The cap is fixed when the store is constructed, so express it by
+        # building a store rather than by patching config after the fact.
+        store = self.app.session_store.InMemorySessionStore(2)
+        self.app._turn_limiter = self.app.limits.TurnLimiter(1, 10)
+        with patch.object(self.app, "_session_store", store):
             asyncio.run(self.app.turn("session-a", 16000, 0, None))
             asyncio.run(self.app.turn("session-b", 16000, 0, None))
             asyncio.run(self.app.turn("session-c", 16000, 0, None))
+            retried = asyncio.run(self.app.turn("session-a", 16000, 0, None))
 
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertFalse(
+            hasattr(retried, "status_code"),
+            "evicting a session must also release its per-session turn cap",
+        )
+        self.assertTrue(retried["ok"])
         self.assertIsNot(self.app._prosody_registry.get("session-a"), original_tracker)
 
     def test_opening_history_uses_shared_scene_kind(self):
@@ -288,7 +551,7 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(
-            self.app._sessions["session-a"][0]["kind"],
+            self.app._session_store.history("session-a")[0]["kind"],
             self.app.llm.HISTORY_KIND_SCENE,
         )
 
@@ -316,15 +579,18 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
 
     def test_failed_new_session_does_not_evict_live_session_state(self):
-        self.app._sessions["live-session"] = [{"role": "user", "content": "hello"}]
+        # A single-slot store, already full: a failing turn must not evict the
+        # live session to make room for one that never completes.
+        store = self.app.session_store.InMemorySessionStore(1)
+        store.commit("live-session", [{"role": "user", "content": "hello"}])
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(1, 3, 0.4)
         live_tracker = self.app._prosody_registry.get("live-session")
         pcm = (np.sin(np.arange(16000 * 2) * 0.1) * 8000).astype("<i2").tobytes()
 
-        with patch.object(self.app.config, "SIDECAR_MAX_SESSIONS", 1), patch.object(
+        with patch.object(self.app, "_session_store", store), patch.object(
             self.app.tts, "synthesize", side_effect=RuntimeError("forced TTS failure")
         ):
             response = asyncio.run(
@@ -332,8 +598,8 @@ class AppFailureIsolationTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 500)
-        self.assertIn("live-session", self.app._sessions)
-        self.assertNotIn("failed-session", self.app._sessions)
+        self.assertNotEqual(store.history("live-session"), [])
+        self.assertEqual(store.history("failed-session"), [])
         self.assertIs(self.app._prosody_registry.get("live-session"), live_tracker)
 
     def test_successful_turn_commits_prosody_reference_once(self):
@@ -359,7 +625,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
         self.assertEqual(result["prosody"]["reference_turns"], 1)
-        self.assertEqual(len(self.app._sessions["session-a"]), 2)
+        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
         source = DTO_PATH.read_text(encoding="utf-8")
         self.assertEqual(set(result), set(_class_fields(source, "SidecarTurnResponse")))
 
@@ -391,7 +657,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertTrue(first["ok"])
         self.assertEqual(second.status_code, 500)
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
-        self.assertEqual(len(self.app._sessions["session-a"]), 2)
+        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
 
     def test_affect_and_classical_features_use_same_bounded_audio_window(self):
         sample_count = 16000 * 2
@@ -437,20 +703,23 @@ class AppFailureIsolationTests(unittest.TestCase):
             first = asyncio.run(
                 self.app.turn("session-a", 16000, 0, _FakeUpload(pcm))
             )
-            stt_started = threading.Event()
-            release_stt = threading.Event()
+            stt_started = asyncio.Event()
+            release_stt = asyncio.Event()
 
-            def blocking_stt(_audio):
+            async def blocking_stt(_pcm_bytes):
+                # Must yield the loop rather than block it: transcribe is now
+                # awaited directly instead of running in a thread pool, so a
+                # synchronous wait here would freeze the reset it races with
+                # and the test would pass without exercising the race at all.
                 stt_started.set()
-                release_stt.wait(timeout=2.0)
+                await asyncio.wait_for(release_stt.wait(), timeout=2.0)
                 return "fixture transcript", 5
 
             async def reset_while_turn_waits():
                 turn_task = asyncio.create_task(
                     self.app.turn("session-a", 16000, 0, _FakeUpload(pcm))
                 )
-                while not stt_started.is_set():
-                    await asyncio.sleep(0)
+                await stt_started.wait()
                 await self.app.session_reset("session-a")
                 release_stt.set()
                 return await turn_task
@@ -460,8 +729,34 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertTrue(first["ok"])
         self.assertTrue(second["ok"])
-        self.assertNotIn("session-a", self.app._sessions)
+        self.assertEqual(self.app._session_store.history("session-a"), [])
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
+
+    def test_reset_of_another_session_does_not_discard_in_flight_turn(self):
+        pcm = (np.sin(np.arange(16000 * 2) * 0.1) * 8000).astype("<i2").tobytes()
+        stt_started = asyncio.Event()
+        release_stt = asyncio.Event()
+
+        async def blocking_stt(_pcm_bytes):
+            stt_started.set()
+            await asyncio.wait_for(release_stt.wait(), timeout=2.0)
+            return "fixture transcript", 5
+
+        async def reset_other_session_while_turn_waits():
+            turn_task = asyncio.create_task(
+                self.app.turn("session-a", 16000, 0, _FakeUpload(pcm))
+            )
+            await stt_started.wait()
+            await self.app.session_reset("session-b")
+            release_stt.set()
+            return await turn_task
+
+        with patch.object(self.app.stt, "transcribe", side_effect=blocking_stt):
+            result = asyncio.run(reset_other_session_while_turn_waits())
+
+        self.assertTrue(result["ok"])
+        self.assertNotIn("session_reset_during_turn", result["prosody"]["flags"])
+        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
 
 
 if __name__ == "__main__":

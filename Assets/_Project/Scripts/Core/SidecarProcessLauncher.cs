@@ -9,13 +9,10 @@ using Debug = UnityEngine.Debug;
 namespace FalsePositive.Core
 {
     /// <summary>
-    /// Checks whether the sidecar is already running (the normal workflow
-    /// while iterating on the Python side — a manually-started sidecar is
-    /// transparently reused) and auto-launches Sidecar/run_sidecar.bat if
-    /// not. Kills the child process on quit/disable and passes --parent-pid
-    /// so the sidecar self-exits if Unity disappears without a clean
-    /// shutdown (e.g. an Editor crash), rather than orphaning a process
-    /// holding the port.
+    /// Health-checks the configured hosted or local backend before gameplay.
+    /// Developers may opt into launching Sidecar/run_sidecar.bat for the local
+    /// fallback. Any launched child is killed on quit/disable and receives
+    /// --parent-pid so an Editor crash cannot orphan a process holding the port.
     /// </summary>
     public sealed class SidecarProcessLauncher : MonoBehaviour
     {
@@ -49,8 +46,9 @@ namespace FalsePositive.Core
 
             if (!config.autoLaunchSidecar)
             {
-                OnFailed?.Invoke(
-                    "Voice services are not running. Start Sidecar/run_sidecar.bat manually, then press Play again.");
+                OnFailed?.Invoke(string.IsNullOrWhiteSpace(config.backendBaseUrl)
+                    ? "Voice services are not running. Start the local backend, then press Play again."
+                    : "Could not reach the interrogation service. Check your connection and try again.");
                 yield break;
             }
 

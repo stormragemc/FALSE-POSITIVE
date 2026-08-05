@@ -12,10 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 302db38f17ee87341a96eb7a08823296, type: 3}
   m_Name: InterrogationConfig
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Core.InterrogationConfig
+  backendBaseUrl:
+  backendClientKey:
   sidecarHost: 127.0.0.1
-  sidecarPort: 8765
+  sidecarPort: 8080
   requestTimeoutSeconds: 60
-  autoLaunchSidecar: 1
+  autoLaunchSidecar: 0
   sidecarLaunchTimeoutSeconds: 90
   sidecarHealthPollIntervalSeconds: 0.5
   lookSensitivity: 0.08

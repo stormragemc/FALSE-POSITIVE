@@ -5,6 +5,15 @@
 **Date:** 3 Aug 2026  
 **Scope:** `Sidecar/` affect inference and session orchestration, plus the Unity HTTP/debug contract
 
+> **⚠ Amended 4 Aug 2026.** The backend moved to Google Cloud Run and STT became a Google Cloud
+> Speech-to-Text call, so **every "Whisper" below now means that hosted STT**. The property this
+> document actually depends on — STT and HuBERT as parallel reads of the same 16 kHz buffer, with
+> STT seeing the whole bounded utterance and HuBERT only the `HUBERT_MAX_SECONDS` prefix — is
+> unchanged. HuBERT itself still runs in-process; it is now baked into the container image rather
+> than downloaded on first run. The affect reasoning, the reliability policy, and the session
+> reference all carry over untouched. See
+> [`ROADMAP.md` §9](ROADMAP.md#9-distribution-hosted-backend-migration-record).
+
 ## Problem
 
 The vertical slice already runs `superb/hubert-base-superb-er` beside Whisper and sends one

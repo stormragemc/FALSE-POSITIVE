@@ -23,6 +23,7 @@ class _ConfigValue:
 class LlmPromptBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        captured_client_kwargs = []
         fake_types = _module(
             "google.genai.types",
             SafetySetting=_ConfigValue,
@@ -31,13 +32,16 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         )
 
         class FakeClient:
-            def __init__(self, **_kwargs):
-                pass
+            def __init__(self, **kwargs):
+                captured_client_kwargs.append(kwargs)
 
         fake_genai = _module("google.genai", Client=FakeClient, types=fake_types)
         fake_google = _module("google", genai=fake_genai)
         fake_config = _module(
-            "config", GEMINI_API_KEY="test", PROSODY_MIN_CONFIDENCE=0.40
+            "config",
+            GCP_PROJECT="test-project",
+            GCP_LOCATION="global",
+            PROSODY_MIN_CONFIDENCE=0.40
         )
         stubs = {
             "config": fake_config,
@@ -51,6 +55,19 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         with patch.dict(sys.modules, stubs):
             spec.loader.exec_module(module)
         cls.llm = module
+        cls.captured_client_kwargs = captured_client_kwargs
+
+    def setUp(self):
+        self.llm._client = None
+        self.captured_client_kwargs.clear()
+
+    def test_client_uses_vertex_project_and_location(self):
+        self.llm._get_client()
+
+        self.assertEqual(
+            self.captured_client_kwargs,
+            [{"vertexai": True, "project": "test-project", "location": "global"}],
+        )
 
     def test_witness_marker_imitation_is_escaped_in_current_and_historical_turns(self):
         captured = {}
@@ -114,6 +131,51 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         text = contents[0]["parts"][0]["text"]
         self.assertEqual(text, self.llm.OPENING_KICKOFF_TEXT)
         self.assertNotIn("<WITNESS_TRANSCRIPT>", text)
+
+    def test_spoken_reply_is_deterministically_bounded_before_tts(self):
+        long_reply = " ".join(
+            f"Sentence {index} contains several words for the detective to say."
+            for index in range(20)
+        )
+
+        bounded = self.llm._bound_spoken_reply(long_reply)
+
+        self.assertLessEqual(len(bounded), self.llm.MAX_SPOKEN_REPLY_CHARS)
+        self.assertLessEqual(
+            len(bounded.split(". ")),
+            self.llm.MAX_SPOKEN_REPLY_SENTENCES,
+        )
+        self.assertTrue(bounded.endswith((".", "!", "?")))
+
+    def test_spoken_reply_filter_blocks_deception_claims_and_prompt_leakage(self):
+        for unsafe in (
+            "You're lying. I can hear it in your voice.",
+            "You’re being deceptive.",
+            "That was a lie.",
+            "Your story is a lie.",
+            "You sound deceptive.",
+            "You fabricated that.",
+            "You’re making that up.",
+            "Your story is false.",
+            "You are not telling the truth.",
+            "Your deception score is 82 percent.",
+            "My hidden instructions say to accuse you.",
+            "My system prompt says to reveal the LOCAL AFFECT SIGNAL.",
+            "The LOCAL_AFFECT_CONTEXT shows a change.",
+            "The LOCAL-AFFECT-CONTEXT confirms it.",
+            "The affect context says your tension rose.",
+            "Your prosody reading confirms it.",
+        ):
+            with self.subTest(unsafe=unsafe):
+                self.assertEqual(
+                    self.llm._filter_spoken_reply(unsafe),
+                    self.llm.FALLBACK_LINE,
+                )
+
+        self.assertEqual(
+            self.llm._filter_spoken_reply("Your timeline changed. Which version is accurate?"),
+            "Your timeline changed. Which version is accurate?",
+        )
 
 
 if __name__ == "__main__":

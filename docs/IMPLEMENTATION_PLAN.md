@@ -19,13 +19,15 @@ incomplete glimpses, be interrogated hands-free by voice, and reach an outcome s
 they said and how they said it.
 
 **Architecture:** a Unity client owns the experience (crime, mic, detective's voice, outcome). A
-local Python sidecar owns every model call. Speech-to-text and HuBERT run locally inside the
-sidecar; the LLM and TTS are hosted APIs. The two channels of the pitch — *meaning* and *affect*
-— are separate services inside the sidecar that meet only at the detective's turn, so the split
-is visible in the architecture, not just the deck.
+Python backend owns every model call. ~~Speech-to-text and HuBERT run locally inside the
+sidecar; the LLM and TTS are hosted APIs.~~ **Amended 4 Aug** — the backend runs on Google Cloud
+Run and STT is a hosted API too; HuBERT still runs in-process, now on Cloud Run's CPU. The two
+channels of the pitch — *meaning* and *affect* — are separate services inside the backend that
+meet only at the detective's turn, so the split is visible in the architecture, not just the deck.
 
 **Tech stack:** Unity 6 (`6000.5.6f1`, C#) · Python 3.10–3.12 + FastAPI, HTTP · PyTorch +
-HuggingFace `transformers` (HuBERT) · `faster-whisper` (local STT) · Gemini API · ElevenLabs API.
+HuggingFace `transformers` (HuBERT) · Google Cloud Speech-to-Text v2 · Gemini 3.6 Flash via
+Vertex AI · ElevenLabs API · Docker + Google Cloud Run.
 
 ---
 
@@ -51,6 +53,27 @@ HuggingFace `transformers` (HuBERT) · `faster-whisper` (local STT) · Gemini AP
 > 2. **`superb/hubert-base-superb-er` (4 classes + confidence) replaced the 13-field
 >    `ProsodySignal`** in §3.1. The pitch's HuBERT claim survives; the *richness* the detective
 >    was designed around does not. **Marcel's call.**
+
+---
+
+> ### ⚠ Stack amendment — 4 Aug 2026. **The backend moved to the cloud.**
+>
+> The whole Python sidecar now runs on **Google Cloud Run**, so the shipped build is a plain
+> binary that talks to a URL and needs no Python, no model downloads, and no keys of the player's
+> own. This is what makes an itch.io release possible at all.
+>
+> What it changes in this document:
+> - **STT is Google Cloud Speech-to-Text v2**, not local `faster-whisper`. §2's "no audio egress"
+>   argument and the §2.3 transcription row are struck through below.
+> - **Gemini is reached through Vertex AI**, authenticated as the runtime service account. The
+>   long-lived `GEMINI_API_KEY` is gone; Vinay owns the project and its billing.
+> - **The build now ships one key** — a shared client key gating the public URL. §2.1's "ships no
+>   key" argument is amended, not abandoned: no *vendor* key ships, and the client key is
+>   extractable by design.
+> - **The privacy position inverted.** Player audio leaves the machine. Disclosed to players in
+>   [`PRIVACY.md`](PRIVACY.md) and recorded in [`ROADMAP.md` §9](ROADMAP.md#9-distribution-hosted-backend-migration-record).
+>
+> Design: [`superpowers/specs/2026-08-04-cloud-hosted-backend-design.md`](superpowers/specs/2026-08-04-cloud-hosted-backend-design.md).
 
 ---
 
@@ -133,26 +156,29 @@ If two of you are about to edit the same file, that is the moment to talk rather
 
 ## 2. Architecture
 
-**As built, 1 Aug 2026.** Solid boxes exist and run. `┄` marks what is planned and not yet written.
+**As built, amended 4 Aug 2026.** Solid boxes exist and run. `┄` marks what is planned and not
+yet written. The backend box moved from the player's machine to Cloud Run on 4 Aug; everything
+inside it is otherwise the same code.
 
 ```
 ┌─────────────────────────────────┐         ┌──────────────────────────────────────────┐
-│  UNITY CLIENT  (Giorgi)         │         │  SIDECAR  Sidecar/  (Ado)                │
-│  Assets/_Project/               │         │  FastAPI · 127.0.0.1:8765                │
-│                                 │  HTTP   │                                          │
+│  UNITY CLIENT  (Giorgi)         │         │  BACKEND  Sidecar/  (Ado)                │
+│  Assets/_Project/               │         │  FastAPI on Google Cloud Run             │
+│                                 │  HTTPS  │  pinned --min/--max-instances 1          │
 │  • mic capture 16 kHz mono      │  POST   │  ┌────────────────────────────────────┐  │
-│  • voice activity detection     │  /turn  │  │ turn handler                       │  │
-│    ⚠ was push-to-talk           │────────►│  └───┬──────────┬──────────┬──────────┘  │
-│  • detective audio playback     │  wav    │      │          │          │             │
-│  • cop lip sync + idle anim     │         │      ▼          ▼          ▼             │
-│  • debug overlay (F1)           │◄────────│  ┌────────┐ ┌────────┐ ┌──────────────┐  │
-│  ┄ crime sequence (3 glimpses)  │  mp3 +  │  │AFFECT  │ │  STT   │ │ DETECTIVE    │  │
-│  ┄ detective's notebook panel   │  text   │  │Marcel  │ │  Ado   │ │ Bong         │  │
-│  ┄ outcome screen               │         │  │hubert- │ │faster- │ │Gemini 3.6    │  │
-│  ┄ visible failure states       │         │  │superb  │ │whisper │ │Flash ───►API │  │
-└─────────────────────────────────┘         │  │-er     │ │small.en│ │              │  │
-                                            │  │ LOCAL  │ │ LOCAL  │ │┄ analyst     │  │
-   ships NO api key ────────────────────►   │  └────────┘ └────────┘ └──────┬───────┘  │
+│  • voice activity detection     │  /turn  │  │ client-key gate → turn limiter     │  │
+│    ⚠ was push-to-talk           │────────►│  │ → turn handler                     │  │
+│  • detective audio playback     │  wav +  │  └───┬──────────┬──────────┬──────────┘  │
+│  • cop lip sync + idle anim     │  key    │      │          │          │             │
+│  • debug overlay (F1)           │◄────────│      ▼          ▼          ▼             │
+│  ┄ crime sequence (3 glimpses)  │  mp3 +  │  ┌────────┐ ┌────────┐ ┌──────────────┐  │
+│  ┄ detective's notebook panel   │  text   │  │AFFECT  │ │  STT   │ │ DETECTIVE    │  │
+│  ┄ outcome screen               │         │  │Marcel  │ │  Ado   │ │ Bong         │  │
+│  ┄ visible failure states       │         │  │hubert- │ │Google  │ │Gemini 3.6    │  │
+└─────────────────────────────────┘         │  │superb  │ │STT v2  │ │Flash         │  │
+                                            │  │-er     │ │ short  │ │ ──►Vertex AI │  │
+   ships NO vendor key ─────────────────►   │  │IN-PROC │ │ ──►API │ │┄ analyst     │  │
+   ⚠ ships the client key, extractable      │  └────────┘ └────────┘ └──────┬───────┘  │
                                             │       │                       │          │
                                             │       └── label + conf ───────┘          │
                                             │       ⚠ not ProsodySignal     ▼          │
@@ -162,26 +188,38 @@ If two of you are about to edit the same file, that is the moment to talk rather
                                             │  ┄ egress + output     │   ───►API  │    │
                                             └────────────────────────┴────────────┘────┘
                                                             │
-                                                            ▼  Gemini API · ElevenLabs API
+                        Secret Manager ──► env              ▼  Google STT · Vertex · ElevenLabs
 ```
 
-**Player audio never leaves the machine.** Both local models consume the waveform; only the
+~~**Player audio never leaves the machine.** Both local models consume the waveform; only the
 *transcript* and the *emotion label* go to Gemini, and only the reply *text* goes to ElevenLabs.
-That is a stronger privacy position than this plan originally had — say it plainly in the deck.
+That is a stronger privacy position than this plan originally had — say it plainly in the deck.~~
+
+**Superseded 4 Aug.** Player audio is uploaded to the hosted backend over HTTPS, where Google
+STT transcribes it and HuBERT reads it for tone in-process. It is held for the length of one turn
+and never written to disk. Gemini and ElevenLabs still see only *text*. **The deck must not claim
+on-device privacy.** What it may claim is the true and narrower version, which is in
+[`PRIVACY.md`](PRIVACY.md): nothing is stored, nothing trains a model, and there is no account.
 
 ### 2.1 Why a sidecar and not "all in Unity"
 
 Three reasons, in order of weight:
 
-1. **HuBERT and Whisper are PyTorch.** There is no honest way to run them inside Unity in eight
-   days. The pitch names HuBERT; the sidecar is what makes that claim true rather than
-   aspirational.
-2. **The API keys must never ship in the game build.** A key embedded in a Unity binary is
-   extractable in minutes. Keys live in `Sidecar/.env` only — two of them now, Gemini and
-   ElevenLabs. (G2, and Vinay's first task.)
+1. **HuBERT is PyTorch.** There is no honest way to run it inside Unity in eight days. The pitch
+   names HuBERT; the backend is what makes that claim true rather than aspirational. (Whisper was
+   the second half of this argument until 4 Aug; STT is now a network call.)
+2. **The *vendor* API keys must never ship in the game build.** A key embedded in a Unity binary
+   is extractable in minutes. Since 4 Aug they live in Secret Manager and are injected into the
+   Cloud Run container; the ElevenLabs key is the only one left, because Google is reached
+   through the runtime service account. (G2, and Vinay's first task.)
+   ⚠ **Amended 4 Aug:** the build now ships *one* key, the client key that gates the public URL.
+   It is extractable, that is understood, and it is a speed bump rather than a boundary — the
+   in-process turn caps are only a checkpoint guard. Durable per-client limits
+   and provider-side hard quotas are still required to bound the public bill.
 3. **Five people can work in parallel** behind one frozen HTTP contract.
 
-This reasoning held. It is the one part of §2 the implementation confirmed rather than changed.
+This reasoning largely held. Reason 3 is untouched; reasons 1 and 2 survived the cloud migration
+in amended form rather than being overturned.
 
 ### 2.2 Why a pipeline and not a speech-to-speech model — **settled by the implementation**
 
@@ -212,17 +250,20 @@ still on the pipeline. Do not start this before Day 6.
 ### 2.3 Model choices — ⚠ amended, pending sign-off
 
 **This table describes what the code calls.** The morning-of-D1 version — all-OpenAI on team
-credits — is preserved in [`CONCEPT.md`](CONCEPT.md#decisions-made) as superseded. Two models are
-**local**, so the player's audio never leaves the machine; two are **hosted APIs**, and they are
-what the keys are for.
+credits — is preserved in [`CONCEPT.md`](CONCEPT.md#decisions-made) as superseded. ~~Two models
+are **local**, so the player's audio never leaves the machine; two are **hosted APIs**, and they
+are what the keys are for.~~ **Amended 4 Aug:** three of the four are hosted calls made from the
+Cloud Run container. Only HuBERT runs in-process, and that process is now a server, not the
+player's machine.
 
 | Role | Model | Where | Why this one |
 |---|---|---|---|
-| Detective turn (in the loop, latency-critical) | `gemini-3.6-flash` | API | Fast enough to sit on the critical path of every turn, cheap enough to iterate on all week, and long-context enough to carry the whole interrogation transcript as the consistency substrate. ⚠ **Reverses the all-OpenAI decision — needs a named budget owner.** |
+| Detective turn (in the loop, latency-critical) | `gemini-3.6-flash` | API, **via Vertex AI since 4 Aug** | Fast enough to sit on the critical path of every turn, cheap enough to iterate on all week, and long-context enough to carry the whole interrogation transcript as the consistency substrate. ⚠ **Reverses the all-OpenAI decision** — ~~needs a named budget owner~~ **Vinay, named 4 Aug**, who owns the GCP project the Vertex calls now bill to. |
 | Consistency analyst (async, latency-tolerant) | *not yet implemented* | — | Consistency is *the* determining factor of the outcome (CONCEPT §4) and there is currently **nothing tracking it**. This is the single biggest gap in the build, and it is Ado's A6. |
-| Transcription | `faster-whisper`, `small.en` | **LOCAL** | Runs on the player's machine: no key, no per-minute cost, no audio egress. `small.en` is the accuracy/latency knee on CPU. ⚠ The original argument for a hosted ASR was *accented speech in a noisy room* — that risk is now real again, so bench `small.en` against the team's actual voices before D6 and be ready to step up to `medium.en`. |
+| ~~Transcription~~ | ~~`faster-whisper`, `small.en`~~ | ~~**LOCAL**~~ | ~~Runs on the player's machine: no key, no per-minute cost, no audio egress.~~ **Superseded 4 Aug — see the row below.** |
+| Transcription | Google Cloud Speech-to-Text v2, `short` recognizer | API | Removes multi-GB weights from the container and the single-worker CPU bottleneck from the turn loop, and bills to the GCP credits. It also answers the noisy-room and accented-speech risk the local model reopened — that was the original argument for a hosted ASR, and it wins again. Model id pinned deliberately (roadmap S7). |
 | Detective's voice | ElevenLabs TTS | API | Best-in-class delivery for an interrogator, which is a character whose *voice* is most of the performance. ⚠ Second vendor, second key, and **not** on team credits. Free tier only grants API access to voices you created yourself — see `Sidecar/README.md`. |
-| Affect | `superb/hubert-base-superb-er` | **LOCAL** | The pitch names HuBERT, and this is HuBERT — fine-tuned on IEMOCAP for 4-class emotion recognition (neutral / happy / angry / sad) plus a confidence. Runs on CPU. ⚠ Far thinner than the 13-field `ProsodySignal` in §3.1: **Marcel's call** whether to enrich it with classical prosodic features or move the contract. ⚠ IEMOCAP carries a restrictive academic licence — the lineage is disclosed in the README and the terms still need checking (G4). |
+| Affect | `superb/hubert-base-superb-er` | **IN-PROCESS** — baked into the Cloud Run image | The pitch names HuBERT, and this is HuBERT — fine-tuned on IEMOCAP for 4-class emotion recognition (neutral / happy / angry / sad) plus a confidence. Runs on CPU. ⚠ Far thinner than the 13-field `ProsodySignal` in §3.1: **Marcel's call** whether to enrich it with classical prosodic features or move the contract. ⚠ IEMOCAP carries a restrictive academic licence — the lineage is disclosed in the README and the terms still need checking (G4). |
 
 **On the affect model's weakness — this is a feature, and the deck should say so.** The checkpoint
 is roughly 0.68 accurate on its own benchmark, and the sidecar's own docstring calls it "a soft
@@ -361,14 +402,20 @@ The WebSocket event protocol previously specified here was never built. Giorgi i
 request/response over HTTP instead, and it works, so **HTTP is the contract**. Recorded here as
 built, from `Sidecar/app.py`.
 
-`http://127.0.0.1:8765`. One request per turn, `multipart/form-data` in, JSON out.
+~~`http://127.0.0.1:8765`~~ **The Cloud Run HTTPS URL, from `InterrogationConfig.backendBaseUrl`**
+(4 Aug; the loopback address remains the fallback for local development). One request per turn,
+`multipart/form-data` in, JSON out.
+
+**Every endpoint except `GET /health` requires the header `x-fp-client-key`** (4 Aug). A missing
+or wrong key returns `401`; a server with no key configured rejects everything rather than
+falling open.
 
 | Endpoint | Request | Response |
 |---|---|---|
-| `GET /health` | — | `{"status": "ok" \| "loading", "models_loaded": bool, "version": "0.1.0"}` — Unity polls this and auto-launches the sidecar if nothing answers |
-| `POST /session/reset` | `session_id` | `{"ok": true}` — clears that session's turn history |
-| `POST /turn` | `session_id`, `sample_rate` (default 16000), `audio` (16-bit PCM mono; **omit to make the detective open the interrogation**) | the turn payload below |
-| `GET /debug/last_turn` | — | the last turn payload, success or failure. Feeds the F1 overlay |
+| `GET /health` | — (no key required) | `{"status": "ok" \| "loading", "models_loaded": bool, "version": "0.3.0"}` — Unity polls this before the first turn. ~~and auto-launches the sidecar if nothing answers~~ **`autoLaunchSidecar` is off since 4 Aug; a failed probe is now an error message, not a launch.** |
+| `POST /session/reset` | `session_id` | `{"ok": true}` — clears that session's turn history and prosody reference; paid-turn accounting is retained |
+| `POST /turn` | `session_id`, `sample_rate` (default 16000), `audio` (16-bit PCM mono; **omit to make the detective open the interrogation**) | the turn payload below. `429` when a turn cap is hit, with `error` set to `session_turn_limit_reached` or `daily_turn_budget_exhausted` (4 Aug) |
+| ~~`GET /debug/last_turn`~~ | — | ~~the last turn payload, success or failure. Feeds the F1 overlay~~ **Deleted 4 Aug** — it returned the last player's transcript to any caller, which is indefensible on a public URL. The F1 overlay reads the live `/turn` response instead. |
 
 **Turn payload** — the same keys on success and failure, so the client has one shape to parse:
 
@@ -376,7 +423,7 @@ built, from `Sidecar/app.py`.
 {
   "ok": true,
   "error": "",                  // populated, and HTTP 500, on any stage failure
-  "transcript": "...",          // faster-whisper
+  "transcript": "...",          // Google Cloud Speech-to-Text v2
   "emotion": "neutral",         // 4-class: neutral | happy | angry | sad
   "emotion_confidence": 0.61,
   "reply_text": "...",          // Gemini

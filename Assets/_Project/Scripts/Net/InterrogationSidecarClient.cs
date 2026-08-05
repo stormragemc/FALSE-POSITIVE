@@ -17,6 +17,8 @@ namespace FalsePositive.Net
     /// </summary>
     public sealed class InterrogationSidecarClient : MonoBehaviour
     {
+        private const int BackendSampleRate = 16000;
+
         [SerializeField] private InterrogationConfig config;
 
         public bool IsBusy { get; private set; }
@@ -28,9 +30,16 @@ namespace FalsePositive.Net
 
         private IEnumerator HealthRoutine(Action<bool> onResult)
         {
+            if (!config.IsBackendUrlAllowed)
+            {
+                onResult?.Invoke(false);
+                yield break;
+            }
+
             string url = $"{config.SidecarBaseUrl}/health";
             using UnityWebRequest req = UnityWebRequest.Get(url);
             req.timeout = 5;
+            ApplyClientKey(req);
             yield return req.SendWebRequest();
             onResult?.Invoke(req.result == UnityWebRequest.Result.Success);
         }
@@ -66,22 +75,46 @@ namespace FalsePositive.Net
         {
             IsBusy = true;
 
+            if (!config.IsBackendUrlAllowed)
+            {
+                IsBusy = false;
+                onError?.Invoke("The interrogation service URL must use HTTPS (localhost may use HTTP).");
+                yield break;
+            }
+
+            int uploadSampleRate = BackendSampleRate;
+            float[] uploadSamples = pcmSamples;
+            if (pcmSamples != null && pcmSamples.Length > 0)
+            {
+                try
+                {
+                    uploadSamples = PcmUtility.ResampleMono(pcmSamples, sampleRate, uploadSampleRate);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    IsBusy = false;
+                    onError?.Invoke("Microphone audio has an invalid sample rate.");
+                    yield break;
+                }
+            }
+
             var form = new List<IMultipartFormSection>
             {
                 new MultipartFormDataSection("session_id", sessionId),
-                new MultipartFormDataSection("sample_rate", sampleRate.ToString()),
+                new MultipartFormDataSection("sample_rate", uploadSampleRate.ToString()),
                 new MultipartFormDataSection("onset_delay_ms", Mathf.Max(0, onsetDelayMs).ToString()),
             };
 
-            if (pcmSamples != null && pcmSamples.Length > 0)
+            if (uploadSamples != null && uploadSamples.Length > 0)
             {
-                byte[] pcmBytes = PcmUtility.FloatsToPcm16Bytes(pcmSamples);
+                byte[] pcmBytes = PcmUtility.FloatsToPcm16Bytes(uploadSamples);
                 form.Add(new MultipartFormFileSection("audio", pcmBytes, "utterance.pcm", "application/octet-stream"));
             }
 
             string url = $"{config.SidecarBaseUrl}/turn";
             using UnityWebRequest req = UnityWebRequest.Post(url, form);
             req.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
+            ApplyClientKey(req);
 
             yield return req.SendWebRequest();
 
@@ -89,7 +122,7 @@ namespace FalsePositive.Net
 
             if (req.result == UnityWebRequest.Result.ConnectionError)
             {
-                onError?.Invoke("Voice service unreachable. Is the sidecar running?");
+                onError?.Invoke("Could not reach the interrogation service. Check your connection and try again.");
                 yield break;
             }
 
@@ -128,6 +161,14 @@ namespace FalsePositive.Net
             }
 
             onSuccess?.Invoke(response);
+        }
+
+        private void ApplyClientKey(UnityWebRequest request)
+        {
+            if (!string.IsNullOrEmpty(config.backendClientKey))
+            {
+                request.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);
+            }
         }
 
         private static string TryExtractError(string bodyText)

@@ -47,6 +47,11 @@ PROSODY_BASELINE_TURNS = max(1, int(os.environ.get("PROSODY_BASELINE_TURNS", "3"
 PROSODY_MIN_CONFIDENCE = min(
     0.75, max(0.0, float(os.environ.get("PROSODY_MIN_CONFIDENCE", "0.40")))
 )
+# Echoes the affect block llm.py embeds back in the /turn response, for the
+# test bench. Off by default and deliberately not part of the Unity DTO: this is
+# prompt text, and the client key is documented as a speed bump rather than a
+# security boundary, so it should not ride the production wire format.
+DEBUG_AFFECT_CONTEXT = _env_bool("SIDECAR_DEBUG_AFFECT_CONTEXT", False)
 SIDECAR_MAX_AUDIO_SECONDS = max(
     1.0, float(os.environ.get("SIDECAR_MAX_AUDIO_SECONDS", "20"))
 )

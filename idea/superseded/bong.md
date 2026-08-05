@@ -1,3 +1,7 @@
+> **⚠ Superseded 6 Aug 2026.** Replaced in full by
+> [`docs/STORY_SCRIPT.md`](../../docs/STORY_SCRIPT.md) (new cast, new ground truth, new scene
+> flow, new endings). Kept here for history only — do not build against this file.
+
 # Case idea — *Nobody Went Out*
 
 **By:** Bong · **Date:** 1 Aug 2026

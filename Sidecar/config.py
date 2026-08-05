@@ -25,13 +25,6 @@ GCP_LOCATION = os.environ.get("GCP_LOCATION", "global")
 STT_MODEL = os.environ.get("STT_MODEL", "short")
 STT_LANGUAGE = os.environ.get("STT_LANGUAGE", "en-US")
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "")
-GCP_LOCATION = os.environ.get("GCP_LOCATION", "global")
-# Pinned deliberately (roadmap S7). "short" is the sub-60s recognizer; do not
-# swap to a floating alias.
-STT_MODEL = os.environ.get("STT_MODEL", "short")
-STT_LANGUAGE = os.environ.get("STT_LANGUAGE", "en-US")
-
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)

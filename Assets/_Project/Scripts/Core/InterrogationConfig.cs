@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace FalsePositive.Core
@@ -7,11 +8,10 @@ namespace FalsePositive.Core
     /// Assets/_Project/Config/InterrogationConfig.asset for the instance
     /// used by the scene.
     ///
-    /// The one credential here is <see cref="backendClientKey"/>, and it is
-    /// committed deliberately: a shipped build has to carry a copy to reach
-    /// the hosted backend at all, so it is extractable by anyone who cares to
-    /// look. It bounds drive-by traffic against a public URL; the backend's
-    /// own turn budget bounds cost. No vendor API key is ever in this asset.
+    /// The deployed build must carry <see cref="backendClientKey"/> to reach
+    /// the hosted backend, so that value is extractable by design. It bounds
+    /// drive-by traffic but is not a security boundary; server-side turn caps
+    /// bound cost. No vendor API key is ever stored in this asset.
     /// </summary>
     [CreateAssetMenu(fileName = "InterrogationConfig", menuName = "False Positive/Interrogation Config")]
     public sealed class InterrogationConfig : ScriptableObject
@@ -23,7 +23,7 @@ namespace FalsePositive.Core
         public string backendClientKey = "";
         [Tooltip("Used only when backendBaseUrl is empty — local container or local python process.")]
         public string sidecarHost = "127.0.0.1";
-        public int sidecarPort = 8765;
+        public int sidecarPort = 8080;
         [Tooltip("Per-request timeout. Generous because it now covers network latency as well as model work.")]
         public float requestTimeoutSeconds = 60f;
 
@@ -58,5 +58,19 @@ namespace FalsePositive.Core
             string.IsNullOrWhiteSpace(backendBaseUrl)
                 ? $"http://{sidecarHost}:{sidecarPort}"
                 : backendBaseUrl.TrimEnd('/');
+
+        public bool IsBackendUrlAllowed
+        {
+            get
+            {
+                if (!Uri.TryCreate(SidecarBaseUrl, UriKind.Absolute, out Uri uri))
+                {
+                    return false;
+                }
+
+                return uri.Scheme == Uri.UriSchemeHttps
+                    || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
+            }
+        }
     }
 }

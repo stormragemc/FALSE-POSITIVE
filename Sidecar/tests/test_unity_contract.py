@@ -11,6 +11,22 @@ DTO_PATH = (
     Path(__file__).resolve().parents[2]
     / "Assets/_Project/Scripts/Net/SidecarDtos.cs"
 )
+UNITY_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Scripts/Core/InterrogationConfig.cs"
+)
+UNITY_CONFIG_ASSET_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Config/InterrogationConfig.asset"
+)
+UNITY_CLIENT_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Scripts/Net/InterrogationSidecarClient.cs"
+)
+PCM_UTILITY_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Scripts/Audio/PcmUtility.cs"
+)
 
 
 def _class_fields(source: str, class_name: str) -> dict[str, str]:
@@ -80,6 +96,51 @@ class UnityContractTests(unittest.TestCase):
             _class_fields(self.source, "SidecarClassProbabilities"),
             {label: "float" for label in ser.SUPPORTED_EMOTION_LABELS},
         )
+
+    def test_committed_unity_asset_serializes_hosted_fields_without_live_values(self):
+        asset = UNITY_CONFIG_ASSET_PATH.read_text(encoding="utf-8")
+
+        self.assertRegex(asset, r"(?m)^  backendBaseUrl:\s*$")
+        self.assertRegex(asset, r"(?m)^  backendClientKey:\s*$")
+        self.assertRegex(asset, r"(?m)^  autoLaunchSidecar: 0$")
+
+    def test_local_fallback_defaults_to_the_docker_port(self):
+        source = UNITY_CONFIG_PATH.read_text(encoding="utf-8")
+        asset = UNITY_CONFIG_ASSET_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("public int sidecarPort = 8080;", source)
+        self.assertRegex(asset, r"(?m)^  sidecarPort: 8080$")
+
+    def test_unity_client_attaches_the_configured_key(self):
+        source = UNITY_CLIENT_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('request.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);', source)
+        self.assertIn("if (!string.IsNullOrEmpty(config.backendClientKey))", source)
+
+    def test_remote_backend_requires_https_but_loopback_http_is_allowed(self):
+        config_source = UNITY_CONFIG_PATH.read_text(encoding="utf-8")
+        client_source = UNITY_CLIENT_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("IsBackendUrlAllowed", config_source)
+        self.assertIn("Uri.UriSchemeHttps", config_source)
+        self.assertIn("uri.IsLoopback", config_source)
+        self.assertIn("if (!config.IsBackendUrlAllowed)", client_source)
+
+    def test_unity_resamples_microphone_audio_to_the_canonical_upload_rate(self):
+        client_source = UNITY_CLIENT_PATH.read_text(encoding="utf-8")
+        pcm_source = PCM_UTILITY_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("private const int BackendSampleRate = 16000;", client_source)
+        self.assertIn("int uploadSampleRate = BackendSampleRate;", client_source)
+        self.assertIn(
+            "PcmUtility.ResampleMono(pcmSamples, sampleRate, uploadSampleRate)",
+            client_source,
+        )
+        self.assertIn(
+            'new MultipartFormDataSection("sample_rate", uploadSampleRate.ToString())',
+            client_source,
+        )
+        self.assertIn("public static float[] ResampleMono(", pcm_source)
 
 
 if __name__ == "__main__":

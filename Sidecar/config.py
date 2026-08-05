@@ -20,9 +20,15 @@ PORT = int(os.environ.get("PORT", os.environ.get("SIDECAR_PORT", "8080")))
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "")
 GCP_LOCATION = os.environ.get("GCP_LOCATION", "global")
-# Pinned deliberately (roadmap S7). "short" is the sub-60s recognizer; do not
-# swap to a floating alias.
-STT_MODEL = os.environ.get("STT_MODEL", "short")
+# Pinned deliberately (roadmap S7); do not swap to a floating alias. "long" over
+# "short" because "short" cleans disfluencies for readability, and this pipeline
+# needs them: the four IEMOCAP classes have no nervous bucket, so a verbal "uh"
+# reaches the interrogator only through the transcript. It is also voiced, so the
+# pacing gates in features_classical.py cannot see it either. Measured 6 Aug,
+# "short" dropped the filler from "Um, I was at the store" and returned an empty
+# transcript for a halting 8.5s clip on three consecutive attempts; "long" kept
+# the fillers, at the same latency.
+STT_MODEL = os.environ.get("STT_MODEL", "long")
 STT_LANGUAGE = os.environ.get("STT_LANGUAGE", "en-US")
 
 

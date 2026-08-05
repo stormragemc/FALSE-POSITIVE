@@ -44,6 +44,29 @@
   .times b { color:var(--ink); font-weight:500; }
   .note { color:var(--dim); font-size:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
   details pre { font-family:var(--mono); font-size:11px; overflow-x:auto; background:#0e1216; padding:10px; border-radius:6px; }
+
+  /* input level */
+  .level { margin-top:14px; }
+  .level .head { display:flex; justify-content:space-between; align-items:baseline;
+                 font-family:var(--mono); font-size:12px; color:var(--dim); }
+  .level .head b { color:var(--ink); font-weight:500; font-size:13px; }
+  .track { position:relative; height:14px; background:#0e1216; border:1px solid var(--line);
+           border-radius:4px; overflow:hidden; margin-top:5px; }
+  /* the band HuBERT is happiest in: roughly -30..-12 dBFS RMS */
+  .track .band { position:absolute; top:0; bottom:0; left:50%; width:30%;
+                 background:rgba(76,175,125,.16); border-left:1px solid rgba(76,175,125,.45);
+                 border-right:1px solid rgba(76,175,125,.45); }
+  .track .fill { position:absolute; top:0; bottom:0; left:0; width:0%; background:var(--ok); transition:width .05s linear; }
+  .track .fill.low { background:#4a5666; } .track .fill.hot { background:var(--warn); }
+  .track .fill.clip { background:var(--bad); }
+  .track .peak { position:absolute; top:0; bottom:0; width:2px; background:var(--ink); opacity:.7; }
+  .ticks { display:flex; justify-content:space-between; font-family:var(--mono);
+           font-size:10px; color:#5c6674; margin-top:3px; }
+  .verdict { font-family:var(--mono); font-size:12px; margin-top:6px; min-height:1.3em; color:var(--dim); }
+  .verdict.good { color:var(--ok); } .verdict.warn { color:var(--warn); } .verdict.bad { color:var(--bad); }
+  .toggles { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;
+             font-family:var(--mono); font-size:11px; color:var(--dim); }
+  .toggles label { display:flex; gap:5px; align-items:center; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -56,6 +79,26 @@
   <section class="panel">
     <h2>Interrogate</h2>
     <button id="talk" disabled>hold to speak</button>
+
+    <div class="level">
+      <div class="head">
+        <span>input level <span id="lvlMode">(live)</span></span>
+        <b><span id="lvlNum">—</span> dBFS</b>
+      </div>
+      <div class="track">
+        <div class="band"></div>
+        <div class="fill" id="lvlFill"></div>
+        <div class="peak" id="lvlPeak" style="display:none"></div>
+      </div>
+      <div class="ticks"><span>-60</span><span>-45</span><span>-30</span><span>-15</span><span>0</span></div>
+      <div class="verdict" id="lvlVerdict">speak to check your level</div>
+      <div class="toggles">
+        <label title="Dynamically rescales your voice between turns. The affect model does not normalise its input, so this actively corrupts the reading."><input type="checkbox" id="agc"> auto gain</label>
+        <label title="Spectral processing that alters the waveform the affect model sees."><input type="checkbox" id="ns"> noise suppression</label>
+        <label title="Keeps the detective's reply out of your microphone."><input type="checkbox" id="aec" checked> echo cancel</label>
+      </div>
+    </div>
+
     <div class="row" style="margin-top:12px">
       <label class="sub">session</label>
       <input id="sid" value="bench-1" size="12">
@@ -80,9 +123,17 @@
     <h2 style="margin-top:20px">Signal</h2>
     <dl class="kv" id="detail"></dl>
     <p class="note">
-      Confidence is hard-capped at 0.75 — the checkpoint is ~64% accurate out of domain.
-      Calibration needs a few turns before comparisons mean anything, so
-      <em>reference_comparison_available</em> stays false early on. That is by design, not a fault.
+      Confidence is hard-capped at 0.75 — the checkpoint is ~64% accurate in domain, on acted
+      IEMOCAP speech, and this is neither. Treat the label as a weak hint, not a measurement.
+      Calibration also needs a few turns before comparisons mean anything, so
+      <em>reference_comparison_available</em> stays false early on. That part is by design.
+    </p>
+    <p class="note">
+      <b>Level matters more than it should.</b> The checkpoint sets
+      <em>do_normalize=false</em>, so amplitude reaches the encoder unscaled. Measured 6 Aug:
+      one identical clip replayed from −34 to −10 dBFS moved <em>angry</em> from 0.672 to 0.871
+      and arousal from 0.558 to 0.645. A swing that size can decide a close call between two
+      classes, so keep the meter in the green band and keep it there consistently between turns.
     </p>
     <details style="margin-top:12px"><summary class="sub">raw response</summary><pre id="raw">—</pre></details>
   </section>
@@ -94,6 +145,13 @@ const $ = id => document.getElementById(id);
 const statusEl = $("status");
 let ctx, srcNode, procNode, stream, chunks = [], recording = false, busy = false;
 
+// Live level, and per-clip stats accumulated while recording.
+let liveRms = 0, clipPeak = 0, clipSum = 0, clipCount = 0, clipped = 0;
+
+const DB_FLOOR = -60;
+const dbfs = x => 20 * Math.log10(Math.max(x, 1e-7));
+const dbToPct = db => Math.max(0, Math.min(100, ((db - DB_FLOOR) / -DB_FLOOR) * 100));
+
 function say(msg, isErr) { statusEl.textContent = msg; statusEl.classList.toggle("err", !!isErr); }
 
 fetch("/api/health").then(r => r.json()).then(h => {
@@ -102,24 +160,96 @@ fetch("/api/health").then(r => r.json()).then(h => {
 }).catch(() => { $("backend").textContent = "backend unreachable"; });
 
 // ---- mic ----------------------------------------------------------------
+// Auto gain and noise suppression default OFF, deliberately. The affect
+// checkpoint ships preprocessor_config.json with do_normalize=false, so the raw
+// waveform amplitude reaches the encoder unscaled — measured 6 Aug, the same
+// clip replayed 24 dB louder moved `angry` by 0.199 and arousal by 0.09. Auto
+// gain rescales every turn independently, which injects exactly that swing and
+// also breaks the cross-turn baseline prosody.py calibrates against. Echo
+// cancellation stays on: the detective's own voice in the mic is worse.
 async function initMic() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (procNode) { procNode.disconnect(); procNode.onaudioprocess = null; }
+  if (srcNode) srcNode.disconnect();
+
+  const constraints = {
+    channelCount: 1,
+    echoCancellation: $("aec").checked,
+    noiseSuppression: $("ns").checked,
+    autoGainControl: $("agc").checked,
+  };
+
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount:1, echoCancellation:true, noiseSuppression:true, autoGainControl:true }
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
   } catch (e) { say("microphone denied — allow it and reload: " + e.message, true); return; }
 
   // Ask for 16 kHz directly so no resampling is needed. Browsers that refuse
   // give us their own rate, which we then downsample by hand below.
-  ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
   srcNode = ctx.createMediaStreamSource(stream);
   procNode = ctx.createScriptProcessor(4096, 1, 1);
-  procNode.onaudioprocess = e => { if (recording) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  procNode.onaudioprocess = e => {
+    const buf = e.inputBuffer.getChannelData(0);
+    let sum = 0, peak = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const a = Math.abs(buf[i]);
+      sum += buf[i] * buf[i];
+      if (a > peak) peak = a;
+      if (recording && a >= 0.995) clipped++;
+    }
+    liveRms = Math.sqrt(sum / buf.length);
+    if (recording) {
+      chunks.push(new Float32Array(buf));
+      clipSum += sum; clipCount += buf.length;
+      if (peak > clipPeak) clipPeak = peak;
+    }
+  };
   srcNode.connect(procNode); procNode.connect(ctx.destination);
+
+  const applied = stream.getAudioTracks()[0].getSettings();
   $("talk").disabled = false;
-  say(`ready · capturing at ${ctx.sampleRate} Hz`);
+  say(`ready · ${ctx.sampleRate} Hz · agc ${applied.autoGainControl ?? "n/a"} · ns ${applied.noiseSuppression ?? "n/a"}`);
+}
+
+for (const id of ["agc", "ns", "aec"]) {
+  $(id).addEventListener("change", () => { if (!busy && !recording) initMic(); });
 }
 initMic();
+
+// ---- level meter --------------------------------------------------------
+function paintLevel(db, peakDb, mode) {
+  $("lvlNum").textContent = db <= DB_FLOOR ? "—" : db.toFixed(1);
+  $("lvlMode").textContent = mode;
+  const fill = $("lvlFill");
+  fill.style.width = dbToPct(db) + "%";
+  fill.className = "fill" + (db < -40 ? " low" : db > -6 ? " clip" : db > -12 ? " hot" : "");
+  const pk = $("lvlPeak");
+  if (peakDb == null) pk.style.display = "none";
+  else { pk.style.display = "block"; pk.style.left = dbToPct(peakDb) + "%"; }
+}
+
+function verdict(db, peakDb, clippedSamples) {
+  if (clippedSamples > 0 || (peakDb != null && peakDb >= -0.5))
+    return ["bad", `clipping — ${clippedSamples} samples at full scale. Back off the mic.`];
+  // Thresholds line up with the green band drawn on the track: -30..-12 dBFS.
+  if (db < -45) return ["bad", "far too quiet — the backend will flag near_silence"];
+  if (db < -30) return ["warn", "quiet — move closer, this shifts the affect reading"];
+  if (db > -8) return ["bad", "too hot — reduce input gain"];
+  if (db > -12) return ["warn", "hot — a little loud for a stable reading"];
+  return ["good", "good level for a stable affect reading"];
+}
+
+(function tick() {
+  if (!busy) {
+    const db = dbfs(liveRms);
+    paintLevel(db, null, recording ? "(recording)" : "(live)");
+    if (!recording && db > -50) {
+      const [cls, msg] = verdict(db, null, 0);
+      const v = $("lvlVerdict"); v.textContent = msg; v.className = "verdict " + cls;
+    }
+  }
+  requestAnimationFrame(tick);
+})();
 
 function downsample(buf, from, to) {
   if (from === to) return buf;
@@ -153,7 +283,8 @@ const talk = $("talk");
 const start = () => {
   if (busy || recording) return;
   if (ctx.state === "suspended") ctx.resume();
-  chunks = []; recording = true;
+  chunks = []; clipPeak = 0; clipSum = 0; clipCount = 0; clipped = 0;
+  recording = true;
   talk.classList.add("rec"); talk.textContent = "recording — release to send";
   say("recording…");
 };
@@ -167,6 +298,17 @@ const stop = async () => {
   let off = 0; for (const c of chunks) { flat.set(c, off); off += c.length; }
   const pcm = downsample(flat, ctx.sampleRate, SR);
   const secs = pcm.length / SR;
+
+  // Freeze the clip's level so it stays on screen next to the reading it produced.
+  const rmsDb = dbfs(Math.sqrt(clipSum / Math.max(1, clipCount)));
+  const peakDb = dbfs(clipPeak);
+  lastLevel = { rmsDb, peakDb, clipped };
+  paintLevel(rmsDb, peakDb, "(last clip)");
+  const [vcls, vmsg] = verdict(rmsDb, peakDb, clipped);
+  const v = $("lvlVerdict");
+  v.textContent = `${rmsDb.toFixed(1)} dBFS RMS · peak ${peakDb.toFixed(1)} — ${vmsg}`;
+  v.className = "verdict " + vcls;
+
   if (secs < 0.4) { say("too short — hold for at least half a second", true); return; }
 
   const fd = new FormData();
@@ -214,6 +356,7 @@ function play(b64, rate) {
 }
 
 // ---- render -------------------------------------------------------------
+let lastLevel = null;
 const pct = v => (v * 100).toFixed(0) + "%";
 function meter(label, v, colour) {
   return `<div class="meter"><label>${label}<b>${v.toFixed(3)}</b></label>
@@ -256,6 +399,10 @@ function render(d, roundTrip) {
 
   const fields = [
     ["emotion", `${d.emotion || "—"} (${(d.emotion_confidence || 0).toFixed(2)})`],
+    ["input level", lastLevel
+      ? `${lastLevel.rmsDb.toFixed(1)} dBFS RMS · peak ${lastLevel.peakDb.toFixed(1)}`
+        + (lastLevel.clipped ? ` · ${lastLevel.clipped} clipped` : "")
+      : "—"],
     ["duration", (p.duration_seconds || 0).toFixed(2) + "s"],
     ["speech ratio", (p.speech_ratio || 0).toFixed(3)],
     ["long pauses", p.long_pause_count ?? 0],

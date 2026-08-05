@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FALSE POSITIVE — affect test bench</title>
+<style>
+  :root {
+    --bg:#0e1013; --panel:#161a20; --line:#252b34; --ink:#e6e9ee; --dim:#8b95a3;
+    --accent:#e0b341; --ok:#4caf7d; --warn:#d9803f; --bad:#d95f5f; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui,-apple-system,sans-serif; }
+  header { padding:18px 22px; border-bottom:1px solid var(--line); display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  h1 { font-size:15px; margin:0; letter-spacing:.14em; text-transform:uppercase; }
+  .sub { color:var(--dim); font-size:12px; font-family:var(--mono); }
+  main { display:grid; grid-template-columns:minmax(320px,1fr) minmax(320px,1fr); gap:18px; padding:18px 22px; align-items:start; }
+  @media (max-width:860px){ main { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+  .panel h2 { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin:0 0 12px; }
+  button { font:inherit; color:var(--ink); background:#222831; border:1px solid var(--line); border-radius:6px; padding:8px 14px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #talk { width:100%; padding:26px; font-size:15px; letter-spacing:.1em; text-transform:uppercase; background:#1b2028; }
+  #talk.rec { background:#3a2020; border-color:var(--bad); color:#ffb4b4; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row + .row { margin-top:10px; }
+  input { font:inherit; font-family:var(--mono); background:#0e1216; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:7px 10px; }
+  .status { font-family:var(--mono); font-size:12px; color:var(--dim); margin-top:10px; min-height:1.4em; }
+  .status.err { color:var(--bad); }
+  .transcript { font-family:var(--mono); background:#0e1216; border:1px solid var(--line); border-radius:6px; padding:10px; min-height:44px; white-space:pre-wrap; }
+  .reply { border-left:2px solid var(--accent); padding:6px 0 6px 12px; margin-top:12px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-family:var(--mono); font-size:12px; }
+  .kv dt { color:var(--dim); } .kv dd { margin:0; }
+  .bar { height:6px; background:#0e1216; border-radius:3px; overflow:hidden; margin-top:3px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .meter + .meter { margin-top:9px; }
+  .meter label { display:flex; justify-content:space-between; font-family:var(--mono); font-size:12px; color:var(--dim); }
+  .meter label b { color:var(--ink); font-weight:500; }
+  .pill { font-family:var(--mono); font-size:11px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); }
+  .pill.ok{ color:var(--ok); border-color:#24503c; } .pill.warn{ color:var(--warn); border-color:#5a3c22; } .pill.bad{ color:var(--bad); border-color:#5a2a2a; }
+  .times { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  .times span { font-family:var(--mono); font-size:11px; padding:3px 8px; border:1px solid var(--line); border-radius:4px; color:var(--dim); }
+  .times b { color:var(--ink); font-weight:500; }
+  .note { color:var(--dim); font-size:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+  details pre { font-family:var(--mono); font-size:11px; overflow-x:auto; background:#0e1216; padding:10px; border-radius:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>False Positive — affect test bench</h1>
+  <span class="sub" id="backend">checking backend…</span>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Interrogate</h2>
+    <button id="talk" disabled>hold to speak</button>
+    <div class="row" style="margin-top:12px">
+      <label class="sub">session</label>
+      <input id="sid" value="bench-1" size="12">
+      <button id="reset">reset session</button>
+    </div>
+    <div class="status" id="status">requesting microphone…</div>
+
+    <h2 style="margin-top:20px">You said</h2>
+    <div class="transcript" id="transcript">—</div>
+
+    <h2 style="margin-top:20px">Detective</h2>
+    <div class="transcript" id="reply">—</div>
+    <div class="times" id="times"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Affect channel — HuBERT</h2>
+    <div class="row" id="prosodyFlags"></div>
+    <div id="meters" style="margin-top:14px"></div>
+    <h2 style="margin-top:20px">Classes</h2>
+    <div id="classes"></div>
+    <h2 style="margin-top:20px">Signal</h2>
+    <dl class="kv" id="detail"></dl>
+    <p class="note">
+      Confidence is hard-capped at 0.75 — the checkpoint is ~64% accurate out of domain.
+      Calibration needs a few turns before comparisons mean anything, so
+      <em>reference_comparison_available</em> stays false early on. That is by design, not a fault.
+    </p>
+    <details style="margin-top:12px"><summary class="sub">raw response</summary><pre id="raw">—</pre></details>
+  </section>
+</main>
+
+<script>
+const SR = 16000;               // what the backend expects
+const $ = id => document.getElementById(id);
+const statusEl = $("status");
+let ctx, srcNode, procNode, stream, chunks = [], recording = false, busy = false;
+
+function say(msg, isErr) { statusEl.textContent = msg; statusEl.classList.toggle("err", !!isErr); }
+
+fetch("/api/health").then(r => r.json()).then(h => {
+  const p = h.prosody || {};
+  $("backend").textContent = `backend ${h.status} · v${h.version} · hubert ${p.available ? p.device : "unavailable"}`;
+}).catch(() => { $("backend").textContent = "backend unreachable"; });
+
+// ---- mic ----------------------------------------------------------------
+async function initMic() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount:1, echoCancellation:true, noiseSuppression:true, autoGainControl:true }
+    });
+  } catch (e) { say("microphone denied — allow it and reload: " + e.message, true); return; }
+
+  // Ask for 16 kHz directly so no resampling is needed. Browsers that refuse
+  // give us their own rate, which we then downsample by hand below.
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
+  srcNode = ctx.createMediaStreamSource(stream);
+  procNode = ctx.createScriptProcessor(4096, 1, 1);
+  procNode.onaudioprocess = e => { if (recording) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  srcNode.connect(procNode); procNode.connect(ctx.destination);
+  $("talk").disabled = false;
+  say(`ready · capturing at ${ctx.sampleRate} Hz`);
+}
+initMic();
+
+function downsample(buf, from, to) {
+  if (from === to) return buf;
+  const ratio = from / to, out = new Float32Array(Math.round(buf.length / ratio));
+  for (let i = 0; i < out.length; i++) {
+    const start = Math.floor(i * ratio), end = Math.min(Math.floor((i + 1) * ratio), buf.length);
+    let sum = 0, n = 0;
+    for (let j = start; j < end; j++) { sum += buf[j]; n++; }
+    out[i] = n ? sum / n : 0;
+  }
+  return out;
+}
+
+function encodeWav(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), view = new DataView(buf);
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  str(36, "data"); view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([view], { type: "audio/wav" });
+}
+
+// ---- turn ---------------------------------------------------------------
+const talk = $("talk");
+const start = () => {
+  if (busy || recording) return;
+  if (ctx.state === "suspended") ctx.resume();
+  chunks = []; recording = true;
+  talk.classList.add("rec"); talk.textContent = "recording — release to send";
+  say("recording…");
+};
+const stop = async () => {
+  if (!recording) return;
+  recording = false;
+  talk.classList.remove("rec"); talk.textContent = "hold to speak";
+
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const flat = new Float32Array(total);
+  let off = 0; for (const c of chunks) { flat.set(c, off); off += c.length; }
+  const pcm = downsample(flat, ctx.sampleRate, SR);
+  const secs = pcm.length / SR;
+  if (secs < 0.4) { say("too short — hold for at least half a second", true); return; }
+
+  const fd = new FormData();
+  fd.append("session_id", $("sid").value.trim() || "bench-1");
+  fd.append("sample_rate", String(SR));
+  fd.append("onset_delay_ms", "0");
+  fd.append("audio", encodeWav(pcm, SR), "turn.wav");
+
+  busy = true; talk.disabled = true;
+  say(`sent ${secs.toFixed(1)}s — waiting on the backend…`);
+  const t0 = performance.now();
+  try {
+    const res = await fetch("/api/turn", { method: "POST", body: fd });
+    const data = await res.json();
+    render(data, Math.round(performance.now() - t0));
+    if (!res.ok || data.ok === false) say("backend error: " + (data.error || res.status), true);
+    else say(`turn complete in ${Math.round(performance.now() - t0)} ms round trip`);
+  } catch (e) { say("request failed: " + e.message, true); }
+  finally { busy = false; talk.disabled = false; }
+};
+talk.addEventListener("mousedown", start);
+talk.addEventListener("mouseup", stop);
+talk.addEventListener("mouseleave", () => recording && stop());
+talk.addEventListener("touchstart", e => { e.preventDefault(); start(); });
+talk.addEventListener("touchend", e => { e.preventDefault(); stop(); });
+addEventListener("keydown", e => { if (e.code === "Space" && !e.repeat && !busy) { e.preventDefault(); start(); } });
+addEventListener("keyup", e => { if (e.code === "Space") { e.preventDefault(); stop(); } });
+
+$("reset").onclick = async () => {
+  const fd = new FormData(); fd.append("session_id", $("sid").value.trim() || "bench-1");
+  await fetch("/api/session/reset", { method: "POST", body: fd });
+  say("session reset — calibration starts over");
+};
+
+// ---- playback: audio_b64 is headerless PCM, not a container -------------
+function play(b64, rate) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const pcm = new Int16Array(bytes.buffer);
+  const out = new (window.AudioContext || window.webkitAudioContext)();
+  const bufr = out.createBuffer(1, pcm.length, rate);
+  const ch = bufr.getChannelData(0);
+  for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+  const s = out.createBufferSource(); s.buffer = bufr; s.connect(out.destination); s.start();
+}
+
+// ---- render -------------------------------------------------------------
+const pct = v => (v * 100).toFixed(0) + "%";
+function meter(label, v, colour) {
+  return `<div class="meter"><label>${label}<b>${v.toFixed(3)}</b></label>
+          <div class="bar"><i style="width:${Math.max(0, Math.min(1, v)) * 100}%;background:${colour}"></i></div></div>`;
+}
+
+function render(d, roundTrip) {
+  $("raw").textContent = JSON.stringify(d, null, 2);
+  $("transcript").textContent = d.transcript || "(nothing recognised)";
+  $("reply").textContent = d.reply_text || "—";
+  if (d.audio_b64) play(d.audio_b64, d.audio_sample_rate || 24000);
+
+  $("times").innerHTML = [
+    ["stt", d.stt_ms], ["affect", d.ser_ms], ["llm", d.llm_ms], ["tts", d.tts_ms],
+    ["total", d.total_ms], ["round trip", roundTrip]
+  ].filter(([, v]) => v != null).map(([k, v]) => `<span>${k} <b>${v}</b>ms</span>`).join("");
+
+  const p = d.prosody || {};
+  const cls = p.available ? (p.reliable ? "ok" : "warn") : "bad";
+  $("prosodyFlags").innerHTML =
+    `<span class="pill ${cls}">${p.available ? (p.reliable ? "reliable" : "unreliable") : "unavailable"}</span>` +
+    `<span class="pill">${p.reliability_reason || "—"}</span>` +
+    `<span class="pill">${p.calibration_state || "—"}</span>` +
+    `<span class="pill">ref turns ${p.reference_turns ?? 0}</span>` +
+    `<span class="pill">${p.reference_comparison_available ? "comparing to baseline" : "no baseline yet"}</span>` +
+    (p.flags || []).map(f => `<span class="pill warn">${f}</span>`).join("");
+
+  $("meters").innerHTML =
+    meter("arousal", p.arousal || 0, "var(--warn)") +
+    meter("tension", p.tension || 0, "var(--bad)") +
+    meter("confidence in signal", p.confidence_in_signal || 0, "var(--ok)");
+
+  const probs = p.class_probabilities || {};
+  const keys = Object.keys(probs);
+  $("classes").innerHTML = keys.length
+    ? keys.sort((a, b) => probs[b] - probs[a])
+        .map(k => `<div class="meter"><label>${k}<b>${pct(probs[k])}</b></label>
+                   <div class="bar"><i style="width:${probs[k] * 100}%"></i></div></div>`).join("")
+    : `<span class="sub">no class output this turn</span>`;
+
+  const fields = [
+    ["emotion", `${d.emotion || "—"} (${(d.emotion_confidence || 0).toFixed(2)})`],
+    ["duration", (p.duration_seconds || 0).toFixed(2) + "s"],
+    ["speech ratio", (p.speech_ratio || 0).toFixed(3)],
+    ["long pauses", p.long_pause_count ?? 0],
+    ["speech rate Δ", (p.speech_rate_delta || 0).toFixed(3)],
+    ["pitch variability", (p.pitch_variability || 0).toFixed(3)],
+    ["energy variability", (p.energy_variability || 0).toFixed(3)],
+    ["hubert instability", (p.hubert_instability || 0).toFixed(3)],
+    ["baseline distance", (p.hubert_baseline_distance || 0).toFixed(3)],
+    ["reference change", (p.hubert_reference_change || 0).toFixed(3)],
+    ["trend", p.trend || "—"],
+  ];
+  $("detail").innerHTML = fields.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+}
+</script>
+</body>
+</html>

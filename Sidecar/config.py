@@ -15,6 +15,7 @@ load_dotenv(dotenv_path=_ENV_PATH)
 
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
+FP_CLIENT_KEY = os.environ.get("FP_CLIENT_KEY", "")
 
 HOST = os.environ.get("SIDECAR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SIDECAR_PORT", "8765"))
@@ -47,6 +48,8 @@ SIDECAR_MAX_AUDIO_SECONDS = max(
     1.0, float(os.environ.get("SIDECAR_MAX_AUDIO_SECONDS", "30"))
 )
 SIDECAR_MAX_SESSIONS = max(1, int(os.environ.get("SIDECAR_MAX_SESSIONS", "32")))
+MAX_TURNS_PER_SESSION = max(1, int(os.environ.get("MAX_TURNS_PER_SESSION", "40")))
+MAX_TURNS_PER_DAY = max(1, int(os.environ.get("MAX_TURNS_PER_DAY", "2000")))
 
 
 def validate() -> None:
@@ -58,6 +61,8 @@ def validate() -> None:
         missing.append("ELEVENLABS_API_KEY")
     if not ELEVENLABS_VOICE_ID:
         missing.append("ELEVENLABS_VOICE_ID")
+    if not FP_CLIENT_KEY:
+        missing.append("FP_CLIENT_KEY")
 
     if missing:
         print(

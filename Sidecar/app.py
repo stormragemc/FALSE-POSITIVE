@@ -23,9 +23,11 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 import audio_utils
+import auth
 import config
 import features_classical
 import llm
+import limits
 import prosody
 import ser
 import session_store
@@ -39,12 +41,15 @@ _ser_pool = ThreadPoolExecutor(max_workers=1)
 # Conversation history per session, keyed by the GUID Unity mints at scene
 # start. See session_store.py for why in-memory is correct here.
 _session_store = session_store.InMemorySessionStore(config.SIDECAR_MAX_SESSIONS)
+_turn_limiter = limits.TurnLimiter(
+    max_per_session=config.MAX_TURNS_PER_SESSION,
+    max_per_day=config.MAX_TURNS_PER_DAY,
+)
 _prosody_registry = prosody.ProsodyRegistry(
     max_sessions=config.SIDECAR_MAX_SESSIONS,
     reference_turns=config.PROSODY_BASELINE_TURNS,
     minimum_confidence=config.PROSODY_MIN_CONFIDENCE,
 )
-_last_turn_debug: dict = {}
 _models_loaded = False
 _prosody_model_available = False
 _prosody_load_error = "loading" if config.PROSODY_ENABLED else "disabled"
@@ -53,6 +58,11 @@ _session_reset_epoch = 0
 
 class ClientInputError(ValueError):
     """A validated request problem that is safe to return to the local client."""
+
+
+class TurnBudgetError(RuntimeError):
+    """The turn was refused to protect the project budget, not because the
+    request was malformed. Distinct from ClientInputError so it can answer 429."""
 
 
 @asynccontextmanager
@@ -80,6 +90,22 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Interrogation Sidecar", lifespan=lifespan)
+
+# /health stays open so uptime checks and the client's pre-flight probe work
+# without shipping the key to anything that merely wants liveness.
+_OPEN_PATHS = frozenset({"/health"})
+
+
+@app.middleware("http")
+async def require_client_key(request, call_next):
+    if request.url.path not in _OPEN_PATHS:
+        supplied = request.headers.get(auth.CLIENT_KEY_HEADER)
+        if not auth.is_authorized(supplied, config.FP_CLIENT_KEY):
+            return JSONResponse(
+                status_code=401,
+                content={"ok": False, "error": "unauthorized"},
+            )
+    return await call_next(request)
 
 
 def _empty_response() -> dict:
@@ -116,6 +142,7 @@ def _commit_history(
     history.append({"role": "assistant", "content": reply_text})
     for evicted_id in _session_store.commit(session_id, history):
         _prosody_registry.reset(evicted_id)
+        _turn_limiter.forget(evicted_id)
 
 
 def _analyze_affect(audio_f32: object, full_duration_seconds: float | None = None):
@@ -201,13 +228,9 @@ async def session_reset(session_id: str = Form(...)):
     session_id = (session_id or "").strip()
     _session_reset_epoch += 1
     _session_store.reset(session_id)
+    _turn_limiter.forget(session_id)
     _prosody_registry.reset(session_id)
     return {"ok": True}
-
-
-@app.get("/debug/last_turn")
-def debug_last_turn():
-    return _last_turn_debug or {"ok": False, "error": "no turns yet"}
 
 
 @app.post("/turn")
@@ -224,6 +247,9 @@ async def turn(
     turn_reset_epoch = _session_reset_epoch
     try:
         session_id = _validate_session_id(session_id)
+        budget_reason = _turn_limiter.admit(session_id, time.time())
+        if budget_reason:
+            raise TurnBudgetError(budget_reason)
         if sample_rate < 8000 or sample_rate > 192000:
             raise ClientInputError("sample_rate must be between 8000 and 192000")
         onset_delay_ms = min(120000, max(0, int(onset_delay_ms)))
@@ -347,8 +373,6 @@ async def turn(
             "stt_ms": stt_ms, "ser_ms": ser_ms, "llm_ms": llm_ms, "tts_ms": tts_ms,
             "total_ms": total_ms,
         })
-        _last_turn_debug.clear()
-        _last_turn_debug.update(result)
         return result
 
     except Exception as e:
@@ -356,10 +380,13 @@ async def turn(
         cause_text = f"; cause={type(cause).__name__}: {cause}" if cause else ""
         print(f"[Sidecar] /turn failed ({type(e).__name__}): {e}{cause_text}")
         is_input_error = isinstance(e, ClientInputError)
-        result["error"] = str(e) if is_input_error else "turn pipeline failed; retry the utterance"
-        _last_turn_debug.clear()
-        _last_turn_debug.update(result)
-        return JSONResponse(status_code=400 if is_input_error else 500, content=result)
+        is_budget_error = isinstance(e, TurnBudgetError)
+        if is_input_error or is_budget_error:
+            result["error"] = str(e)
+        else:
+            result["error"] = "turn pipeline failed; retry the utterance"
+        status_code = 429 if is_budget_error else (400 if is_input_error else 500)
+        return JSONResponse(status_code=status_code, content=result)
 
 
 def _watch_parent(pid: int) -> None:

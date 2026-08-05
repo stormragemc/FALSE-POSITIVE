@@ -26,6 +26,9 @@ class _FakeFastAPI:
     def post(self, _path):
         return lambda function: function
 
+    def middleware(self, _kind):
+        return lambda function: function
+
 
 class _FakeJSONResponse:
     def __init__(self, status_code, content):
@@ -75,6 +78,9 @@ class AppFailureIsolationTests(unittest.TestCase):
             GCP_LOCATION="global",
             STT_MODEL="short",
             STT_LANGUAGE="en-US",
+            FP_CLIENT_KEY="test-key",
+            MAX_TURNS_PER_SESSION=40,
+            MAX_TURNS_PER_DAY=2000,
         )
         cls.captured_signals = []
 

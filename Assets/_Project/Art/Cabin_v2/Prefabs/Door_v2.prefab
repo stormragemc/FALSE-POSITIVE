@@ -109,3 +109,5 @@ MonoBehaviour:
   memoryFlag: 
   startsLocked: 0
   lockedPrompt: It's locked.
+  audioSource: {fileID: 0}
+  openClip: {fileID: 0}

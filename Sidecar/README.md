@@ -117,7 +117,7 @@ hosted.
 | `FP_CLIENT_KEY` | yes | The shared key every request must present. Empty means *deny everything*, never *allow everything*. |
 | `ELEVENLABS_API_KEY` | yes | From elevenlabs.io. Free tier is enough for light testing only. |
 | `ELEVENLABS_VOICE_ID` | yes | See the voice note below — not just any stock voice. |
-| `STT_MODEL` | — | Defaults to `short`, the sub-60s recognizer. Pinned deliberately (roadmap S7); do not swap in a floating alias. |
+| `STT_MODEL` | — | Defaults to `long`. Pinned deliberately (roadmap S7); do not swap in a floating alias. `short` cleans disfluencies, which this pipeline needs — see the filler-word note below. |
 | `STT_LANGUAGE` | — | Defaults to `en-US`. |
 | `MAX_TURNS_PER_SESSION` | — | Defaults to 40. |
 | `MAX_TURNS_PER_DAY` | — | Defaults to 2000. The budget ceiling for the whole service. |
@@ -355,6 +355,31 @@ An overridden `HUBERT_MODEL_ID`/`HUBERT_MODEL_REVISION` pair must expose exactly
 the neutral, happy, angry, and sad labels; startup rejects incompatible
 classifiers instead of silently zeroing Unity's fixed four-label debug DTO.
 The container loads only its baked revision and requires safetensors weights.
+
+### Why `STT_MODEL` defaults to `long`
+
+Verbal hesitation has exactly one route to the interrogator, and it is the
+transcript. The four IEMOCAP classes have no nervous bucket, so the label cannot
+carry it. Neither can the pacing gates: `_count_long_pauses` counts *silent* gaps
+of 0.40s or more, and a filler word is voiced — filling the gap is what it is
+for. Measured 6 Aug on the live service, "…store, uh, around nine" produced
+`long_pause_count` 0 and *"No long internal pause stood out"*, while the same
+sentence with 1.0s of true silence produced `long_pause_count` 1 and *"There were
+notable internal pauses"*. Filling a hesitation also *raises* speech ratio (0.764
+against 0.579), so on the acoustic channel a halting witness reads as more fluent,
+not less.
+
+That makes the choice of recognizer load-bearing. `short` cleans disfluencies for
+readability: it dropped the filler from "Um, I was at the store", and returned an
+empty transcript for a halting 8.5s clip on three consecutive attempts — a length
+sweep confirmed it handles a fluent 10.8s clip fine, so it is the disfluencies it
+bails on, not the duration. `long` keeps them at the same latency. `chirp_2` is
+the most verbatim of the three but does not exist at `global`, needs a regional
+`api_endpoint` in `stt.py`, and roughly doubles STT latency.
+
+One wrinkle when reading transcripts: Google normalizes the spelling. "um" stays
+"um", but "uh" comes back as "ah". The disfluency survives; the exact token does
+not.
 
 ---
 

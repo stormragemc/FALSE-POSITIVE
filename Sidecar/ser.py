@@ -31,6 +31,20 @@ _feature_extractor = None
 _model = None
 _device = "unavailable"
 
+# Mid-band of a comfortable speaking level, ~-26 dBFS.
+_TARGET_RMS = 0.05
+# Silence trimming, applied before normalization so the RMS target is computed
+# from speech rather than from speech diluted by dead air.
+_TRIM_FRAME = 320          # 20ms at 16kHz
+_TRIM_HOP = 160            # 10ms
+_TRIM_MARGIN_SAMPLES = 1600  # keep 100ms either side; onsets carry affect
+_TRIM_REL_FLOOR = 0.15     # share of the clip's own p95 frame energy
+_TRIM_ABS_FLOOR = 1e-4
+# Below this the clip is effectively silence; scaling it only amplifies noise
+# into something that looks like speech. features_classical.py raises
+# near_silence for these anyway, and prosody.py drops the turn as unreliable.
+_MIN_NORMALIZE_RMS = 1e-4
+
 
 @dataclass(frozen=True)
 class HubertObservation:
@@ -119,6 +133,58 @@ def _display_label(raw_label: str) -> str:
     return _LABEL_DISPLAY_NAMES.get(str(raw_label).lower(), str(raw_label).lower())
 
 
+def _trim_silence(audio: np.ndarray) -> np.ndarray:
+    """Drop leading and trailing dead air before the encoder sees the clip.
+
+    The classifier mean-pools over every frame, so dead air is not neutral
+    padding — it is a vote. Measured 6 Aug on one clip at a fixed level, adding
+    2s of room tone to each end moved `neutral` from 0.078 to 0.005 and `happy`
+    from 0.063 to 0.123, and diluted frame_instability from 0.169 to 0.119.
+    A hesitant witness produces exactly that shape of clip, which is the
+    opposite of what the affect channel should be rewarding.
+
+    Only leading and trailing silence goes. Internal pauses stay, because they
+    are affect, and features_classical.py measures them on the untrimmed audio
+    regardless — this function does not touch what the pacing channel sees.
+    """
+    if audio.size < _TRIM_FRAME * 2:
+        return audio
+    frames = np.lib.stride_tricks.sliding_window_view(audio, _TRIM_FRAME)[::_TRIM_HOP]
+    energies = np.sqrt(np.mean(np.square(frames, dtype=np.float64), axis=1))
+    if energies.size == 0:
+        return audio
+    floor = max(_TRIM_ABS_FLOOR, _TRIM_REL_FLOOR * float(np.percentile(energies, 95)))
+    voiced = np.flatnonzero(energies >= floor)
+    if voiced.size == 0:
+        return audio  # nothing crossed the floor; let the quality flags handle it
+    # The margins alone guarantee a usable remnant: even a single voiced frame
+    # yields margin + frame + margin, and edge clamping only widens that.
+    start = max(0, int(voiced[0]) * _TRIM_HOP - _TRIM_MARGIN_SAMPLES)
+    end = min(audio.size, int(voiced[-1]) * _TRIM_HOP + _TRIM_FRAME + _TRIM_MARGIN_SAMPLES)
+    return audio[start:end]
+
+
+def _normalize_level(audio: np.ndarray) -> np.ndarray:
+    """Scale to a fixed RMS so mic level stops leaking into the prediction.
+
+    This checkpoint ships preprocessor_config.json with do_normalize=false, so
+    raw waveform amplitude reaches the encoder unscaled — unusual, every
+    comparable SER checkpoint sets it true. Measured 6 Aug, one identical clip
+    replayed across a -34..-10 dBFS ladder moved `angry` by 0.104 unnormalized
+    and 0.013 normalized. Loudness there is a property of the room, the mic and
+    how close the player is sitting, not of how the witness feels.
+
+    The residual after normalizing is clipping, which is destructive and cannot
+    be undone here; features_classical.py flags it and prosody.py derates the
+    turn. True level is still measured there for the reliability flags, so
+    nothing downstream loses access to it.
+    """
+    rms = float(np.sqrt(np.mean(np.square(audio, dtype=np.float64))))
+    if rms < _MIN_NORMALIZE_RMS:
+        return audio
+    return np.clip(audio * (_TARGET_RMS / rms), -1.0, 1.0).astype(np.float32)
+
+
 def _analyze_impl(audio_f32_16k: np.ndarray) -> HubertObservation:
     audio = np.asarray(audio_f32_16k, dtype=np.float32).reshape(-1)
     if audio.size == 0:
@@ -129,6 +195,8 @@ def _analyze_impl(audio_f32_16k: np.ndarray) -> HubertObservation:
     maximum_samples = int(round(config.HUBERT_MAX_SECONDS * 16000))
     if audio.size > maximum_samples:
         audio = audio[:maximum_samples]
+
+    audio = _normalize_level(_trim_silence(audio))
 
     t0 = time.perf_counter()
     inputs = _feature_extractor(audio, sampling_rate=16000, return_tensors="pt")

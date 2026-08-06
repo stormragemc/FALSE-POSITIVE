@@ -114,6 +114,9 @@ class AppFailureIsolationTests(unittest.TestCase):
             PROSODY_BASELINE_TURNS=3,
             PROSODY_MIN_CONFIDENCE=0.4,
             PROSODY_ENABLED=True,
+            # Matches the shipped default; the Unity DTO contract assertion below
+            # is what keeps this debug echo out of the production response.
+            DEBUG_AFFECT_CONTEXT=False,
             HUBERT_MODEL_ID="test/hubert",
             HUBERT_MAX_SECONDS=20.0,
             SIDECAR_MAX_AUDIO_SECONDS=20.0,
@@ -711,6 +714,44 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(len(self.app._session_store.history("session-a")), 2)
         source = DTO_PATH.read_text(encoding="utf-8")
         self.assertEqual(set(result), set(_class_fields(source, "SidecarTurnResponse")))
+
+    def test_affect_context_echo_is_opt_in_and_stays_out_of_the_unity_contract(self):
+        """The echo is prompt text, so absence is the contract, not an oversight.
+
+        The test bench needs to see the affect block the model actually got, but
+        the client key is a speed bump rather than a security boundary, so the
+        echo is opt-in and deliberately absent from SidecarTurnResponse.
+        """
+        sample_count = 16000 * 2
+        pcm = (np.sin(np.arange(sample_count) * 0.1) * 8000).astype("<i2").tobytes()
+        observation = SimpleNamespace(
+            label="neutral",
+            confidence=0.82,
+            probabilities={"neutral": 0.82, "happy": 0.06, "angry": 0.07, "sad": 0.05},
+            normalized_entropy=0.40,
+            top_two_margin=0.75,
+            embedding=np.asarray([1.0, 0.0, 0.0, 0.0], dtype=np.float32),
+            frame_instability=0.10,
+            elapsed_ms=12,
+            model_id="test/hubert",
+        )
+
+        with patch.object(self.app.ser, "analyze", return_value=observation):
+            off = asyncio.run(self.app.turn("echo-off", 16000, 0, _FakeUpload(pcm)))
+            with patch.object(self.app.config, "DEBUG_AFFECT_CONTEXT", True):
+                on = asyncio.run(self.app.turn("echo-on", 16000, 0, _FakeUpload(pcm)))
+
+        self.assertNotIn("affect_prompt_context", off)
+        self.assertIn("affect_prompt_context", on)
+        # An opening turn is one with no audio at all (app.py: is_opening =
+        # len(raw_bytes) == 0) and carries no affect block. This turn sends real
+        # PCM, so the echo must be the marker-prefixed sensor text.
+        self.assertIn("LOCAL AFFECT SIGNAL", on["affect_prompt_context"])
+
+        source = DTO_PATH.read_text(encoding="utf-8")
+        dto_fields = set(_class_fields(source, "SidecarTurnResponse"))
+        self.assertEqual(set(off), dto_fields)
+        self.assertEqual(set(on) - dto_fields, {"affect_prompt_context"})
 
     def test_failed_second_turn_does_not_mutate_registered_tracker_or_history(self):
         sample_count = 16000 * 2

@@ -526,6 +526,17 @@ async def turn(
                 commit=False,
             )
 
+        # Debug echo of the affect block llm.py is about to embed. Captured here,
+        # pre-commit, so it reflects the signal the model actually saw rather than
+        # the post-commit signal that lands in the response. Opening turns carry no
+        # affect block at all, mirroring the is_opening branch in generate_reply.
+        affect_prompt_context = (
+            ("" if is_opening
+             else prosody_signal.prompt_context(config.PROSODY_MIN_CONFIDENCE))
+            if config.DEBUG_AFFECT_CONTEXT
+            else None
+        )
+
         reply_text, llm_ms = await _await_before_deadline(
             loop.run_in_executor(
                 _vendor_pool,
@@ -590,6 +601,8 @@ async def turn(
             "stt_ms": stt_ms, "ser_ms": ser_ms, "llm_ms": llm_ms, "tts_ms": tts_ms,
             "total_ms": total_ms,
         })
+        if affect_prompt_context is not None:
+            result["affect_prompt_context"] = affect_prompt_context
         return result
 
     except TimeoutError:

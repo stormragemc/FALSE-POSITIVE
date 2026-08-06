@@ -1,4 +1,4 @@
-"""Verify gemini-3.6-flash is a live model id and llm.generate_reply actually
+"""Verify llm.MODEL is a live model id and llm.generate_reply actually
 works, bypassing the fact that generate_reply swallows every exception into
 FALLBACK_LINE (see llm.py's docstring — deliberate for gameplay, but it means
 a dead model id currently looks identical to a working turn from Unity's
@@ -41,9 +41,12 @@ def main() -> None:
         resp = client.models.generate_content(
             model=llm.MODEL,
             contents=[{"role": "user", "parts": [{"text": "Say the word OK and nothing else."}]}],
+            # No thinking_config here on purpose: this call exists to prove the
+            # model id and auth are good, and the argument's name differs across
+            # model generations (`thinking_level` on 3.x, `thinking_budget` on
+            # 2.x). Pinning it here would fail a healthy model on a 400.
             config=types.GenerateContentConfig(
                 system_instruction="Reply with exactly one word.",
-                thinking_config=types.ThinkingConfig(thinking_level="minimal"),
                 max_output_tokens=64,
             ),
         )

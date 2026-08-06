@@ -36,7 +36,7 @@ namespace FalsePositive.UI
         {
             GameFlowDirector flow = GameFlowDirector.Instance;
             GamePhase phase = flow != null ? flow.Phase : GamePhase.Boot;
-            bool show = Selectable.allSelectablesCount > 0
+            bool show = Selectable.allSelectablesArray.Length > 0
                 || phase == GamePhase.Boot || phase == GamePhase.Menu;
 
             if (!_hasApplied || show != _applied || (show && Cursor.lockState != CursorLockMode.None))

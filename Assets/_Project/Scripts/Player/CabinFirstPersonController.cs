@@ -6,6 +6,10 @@ namespace FalsePositive.Player
     /// <summary>
     /// Lightweight controller used only by the standalone Cabin Aftermath level.
     /// It deliberately has no dependency on interrogation state or the sidecar.
+    /// Locks the cursor itself since this level may run without _Persistent
+    /// loaded; when it does run inside the normal flow,
+    /// UI.CursorVisibilityController's LateUpdate runs after this Awake and
+    /// overrides it whenever any UI is up.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class CabinFirstPersonController : MonoBehaviour

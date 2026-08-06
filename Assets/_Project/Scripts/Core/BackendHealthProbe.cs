@@ -14,16 +14,16 @@ namespace FalsePositive.Core
     /// Lives in _Persistent — see the "Unity scene setup" checklist in this
     /// commit for exactly which GameObject to attach it to and how to wire
     /// sidecarLauncher.
+    ///
+    /// Formerly also locked/hid the cursor in Awake() as a leftover from its
+    /// GameBootstrap days (starting the game seated, before Menu existed) —
+    /// that locked the cursor at boot, before the main menu ever appeared,
+    /// and nothing ever unlocked it again. Cursor ownership now belongs
+    /// entirely to UI.CursorVisibilityController.
     /// </summary>
     public sealed class BackendHealthProbe : MonoBehaviour
     {
         [SerializeField] private SidecarProcessLauncher sidecarLauncher;
-
-        private void Awake()
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
 
         private void Start()
         {

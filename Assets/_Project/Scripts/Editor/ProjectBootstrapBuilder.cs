@@ -88,6 +88,7 @@ namespace FalsePositive.Editor
             GameObject gfdGo = NewChild(flowRoot.transform, "GameFlowDirector");
             GameFlowDirector gfd = gfdGo.AddComponent<GameFlowDirector>();
             SceneRouter router = NewChild(flowRoot.transform, "SceneRouter").AddComponent<SceneRouter>();
+            NewChild(flowRoot.transform, "CursorVisibility").AddComponent<CursorVisibilityController>();
             SetField(gfd, "config", config);
 
             // --- BackendHealthProbe ---

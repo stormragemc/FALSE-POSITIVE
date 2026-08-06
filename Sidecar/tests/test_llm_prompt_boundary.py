@@ -118,6 +118,32 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         self.assertEqual(text, self.llm.OPENING_KICKOFF_TEXT)
         self.assertNotIn("<WITNESS_TRANSCRIPT>", text)
 
+    def test_generated_reply_is_filtered_before_returning(self):
+        def unsafe_reply(_client, _contents):
+            return SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="You are lying.", thought=False)]
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                prompt_feedback=None,
+            )
+
+        with patch.object(self.llm, "_call_llm", side_effect=unsafe_reply):
+            reply, _elapsed = self.llm.generate_reply(
+                history=[],
+                transcript="I went straight home.",
+                emotion="",
+                confidence=0.0,
+                is_opening=False,
+                prosody_signal=ProsodySignal(reliability_reason="test"),
+            )
+
+        self.assertEqual(reply, self.llm.FALLBACK_LINE)
+
 
 if __name__ == "__main__":
     unittest.main()

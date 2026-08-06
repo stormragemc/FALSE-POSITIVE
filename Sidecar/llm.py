@@ -22,6 +22,7 @@ from google import genai
 from google.genai import types
 
 import config
+import output_safety
 
 if TYPE_CHECKING:
     from prosody import ProsodySignal
@@ -63,7 +64,7 @@ OPENING_KICKOFF_TEXT = (
     "know it yet."
 )
 
-FALLBACK_LINE = "Let's come back to that."
+FALLBACK_LINE = output_safety.FALLBACK_LINE
 
 SILENT_WITNESS_TEXT = "[The witness says nothing.]"
 HISTORY_KIND_SCENE = "scene_instruction"
@@ -207,7 +208,7 @@ def generate_reply(
         else:
             text = _spoken_text(resp)
             if text:
-                reply_text = text
+                reply_text = output_safety.filter_spoken_text(text)
             else:
                 finish = resp.candidates[0].finish_reason if resp.candidates else None
                 print(f"[Sidecar] LLM returned no text content (finish_reason={finish}); using fallback line.")

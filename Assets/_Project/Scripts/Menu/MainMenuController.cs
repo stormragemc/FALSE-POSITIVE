@@ -1,5 +1,7 @@
 using FalsePositive.Flow;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace FalsePositive.Menu
@@ -20,9 +22,28 @@ namespace FalsePositive.Menu
 
         private void Awake()
         {
+            EnsureEventSystem();
+
             if (playButton != null) playButton.onClick.AddListener(HandlePlay);
             if (settingsButton != null) settingsButton.onClick.AddListener(HandleSettings);
             if (quitButton != null) quitButton.onClick.AddListener(HandleQuit);
+        }
+
+        /// <summary>Backstop for the case where this scene is played on its
+        /// own rather than via PersistentSceneBootstrap/_Persistent — without
+        /// an EventSystem + InputSystemUIInputModule in the loaded scene set,
+        /// the Canvas's GraphicRaycaster is never queried and every button
+        /// silently stops responding to clicks. The normal path already has
+        /// one from _Persistent, so this never fires there.</summary>
+        private static void EnsureEventSystem()
+        {
+            if (EventSystem.current != null) return;
+
+            GameObject go = new GameObject("EventSystem (fallback)",
+                typeof(EventSystem), typeof(InputSystemUIInputModule));
+            Debug.LogWarning("[MainMenuController] No EventSystem was loaded — created a fallback one. " +
+                "This scene is normally expected to run with _Persistent loaded (see PersistentSceneBootstrap).");
+            DontDestroyOnLoad(go);
         }
 
         private void HandlePlay()

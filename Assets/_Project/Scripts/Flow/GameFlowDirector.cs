@@ -55,6 +55,7 @@ namespace FalsePositive.Flow
         [SerializeField] private CalibrationPanelUI calibrationPanel;
         [SerializeField] private DebugOverlayUI debugOverlay;
         [SerializeField] private SettingsPanel settingsPanel;
+        [SerializeField] private OutcomeScreen outcomeScreen;
 
         [Header("Scene names — must match Build Settings exactly")]
         [SerializeField] private string mainMenuSceneName = "MainMenu";
@@ -85,6 +86,7 @@ namespace FalsePositive.Flow
         public MicCalibration MicCalibration => calibration;
         public DebugOverlayUI DebugOverlay => debugOverlay;
         public SettingsPanel SettingsPanel => settingsPanel;
+        public OutcomeScreen OutcomeScreen => outcomeScreen;
 
         public event Action<GamePhase> PhaseExiting;
         public event Action<GamePhase> PhaseChanged;

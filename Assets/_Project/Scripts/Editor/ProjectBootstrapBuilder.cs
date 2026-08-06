@@ -39,7 +39,26 @@ namespace FalsePositive.Editor
         private const string PromptsRoot = "Assets/_Project/Prompts/";
         private const string ConfigRoot = "Assets/_Project/Config/";
 
-        private static readonly DefaultControls.Resources UIResources = new DefaultControls.Resources();
+        private static readonly DefaultControls.Resources UIResources = BuildUiResources();
+
+        private static DefaultControls.Resources BuildUiResources()
+        {
+            // A fresh DefaultControls.Resources has every Sprite field null,
+            // so every DefaultControls.Create* control (every button, toggle,
+            // dropdown, slider in this file) rendered as a flat, borderless
+            // white rectangle. Populate it with the engine's built-in UI
+            // skin so buttons actually look like buttons.
+            return new DefaultControls.Resources
+            {
+                standard = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"),
+                background = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd"),
+                inputField = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/InputFieldBackground.psd"),
+                knob = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd"),
+                checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd"),
+                dropdown = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/DropdownArrow.psd"),
+                mask = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UIMask.psd"),
+            };
+        }
 
         [MenuItem("Tools/False Positive/Bootstrap/Build Everything (1-6)")]
         public static void BuildEverything()
@@ -192,10 +211,7 @@ namespace FalsePositive.Editor
             StretchFill(faultCard);
             faultCard.SetActive(false);
 
-            GameObject outcomeScreen = new GameObject("OutcomeScreen", typeof(RectTransform));
-            outcomeScreen.transform.SetParent(hud.transform, false);
-            StretchFill(outcomeScreen);
-            outcomeScreen.SetActive(false);
+            GameObject outcomeGo = BuildOutcomePanel(hud.transform, out OutcomeScreen outcomeScreen);
 
             // CutsceneDirector (B1) — same-scene wiring only, per its own
             // doc-comment: never a camera/object from whichever memory or
@@ -233,6 +249,7 @@ namespace FalsePositive.Editor
             SetField(gfd, "calibrationPanel", calibrationPanelUi);
             SetField(gfd, "debugOverlay", debugOverlay);
             SetField(gfd, "settingsPanel", settingsPanel);
+            SetField(gfd, "outcomeScreen", outcomeScreen);
 
             MemoryFlagCatalog catalog = AssetDatabase.LoadAssetAtPath<MemoryFlagCatalog>(ConfigRoot + "MemoryFlagCatalog.asset");
             if (catalog != null) SetField(gfd, "memoryFlagCatalog", catalog);
@@ -240,6 +257,29 @@ namespace FalsePositive.Editor
 
             SaveScene(scene, PersistentScenePath);
             Debug.Log("[ProjectBootstrapBuilder] _Persistent.unity rebuilt.");
+        }
+
+        private static GameObject BuildOutcomePanel(Transform hud, out OutcomeScreen outcomeScreen)
+        {
+            GameObject root = new GameObject("OutcomeScreen", typeof(RectTransform));
+            root.transform.SetParent(hud, false);
+            StretchFill(root);
+            Image backing = root.AddComponent<Image>();
+            backing.color = new Color(0f, 0f, 0f, 0.92f);
+
+            Text card = CreateText(root.transform, "CardText", string.Empty, 30);
+            card.alignment = TextAnchor.MiddleCenter;
+            AnchorCenter(card.gameObject, new Vector2(0f, 40f), new Vector2(1100f, 400f));
+
+            Button quitButton = CreateButton(root.transform, "QuitToMenuButton", "Return to menu");
+            AnchorCenter(quitButton.gameObject, new Vector2(0f, -260f), new Vector2(260f, 56f));
+
+            outcomeScreen = root.AddComponent<OutcomeScreen>();
+            SetField(outcomeScreen, "root", root);
+            SetField(outcomeScreen, "cardText", card);
+            SetField(outcomeScreen, "quitToMenuButton", quitButton);
+            root.SetActive(false);
+            return root;
         }
 
         private static GameObject BuildConsentPanel(Transform hud, MicrophoneService mic, out MicConsentFlow flow)
@@ -424,51 +464,71 @@ namespace FalsePositive.Editor
         {
             Scene scene = OpenOrCreateEmptyScene(MainMenuScenePath);
 
+            // Flat 2D menu, deliberately — no 3D geometry anywhere in this
+            // scene. Orthographic + Solid Color + a UI-only culling mask is
+            // what makes "the camera can only see the main menu" literally
+            // true, rather than a perspective camera pointed at whatever
+            // happens to still be active in the shared additive world.
             GameObject cameraGo = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
             cameraGo.tag = "MainCamera";
-            cameraGo.transform.position = new Vector3(0f, 1.6f, -6f);
-            cameraGo.transform.rotation = Quaternion.Euler(5f, 0f, 0f);
-
-            GameObject lightGo = new GameObject("Directional Light", typeof(Light));
-            Light light = lightGo.GetComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 0.4f;
-            lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-
-            GameObject environment = new GameObject("Environment");
-            GameObject placeholderCabin = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            placeholderCabin.name = "CabinExteriorPlaceholder";
-            placeholderCabin.transform.SetParent(environment.transform);
-            placeholderCabin.transform.position = new Vector3(0f, 0.5f, 0f);
-            placeholderCabin.transform.localScale = new Vector3(4f, 3f, 3f);
-            ApplyLabelMaterial(placeholderCabin, new Color(0.15f, 0.15f, 0.2f));
+            cameraGo.transform.position = new Vector3(0f, 0f, -10f);
+            cameraGo.transform.rotation = Quaternion.identity;
+            Camera camera = cameraGo.GetComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = 5f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.04f, 0.045f, 0.06f);
+            camera.cullingMask = LayerMask.GetMask("UI");
+            camera.depth = -1f;
 
             GameObject storm = new GameObject("StormAmbience", typeof(AudioSource));
             AudioSource stormSource = storm.GetComponent<AudioSource>();
             stormSource.loop = true;
             stormSource.playOnAwake = true;
             stormSource.volume = 0.3f;
+            stormSource.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(
+                "Assets/_Project/Art/Audio/SFX/menu_storm_bed.mp3");
+            if (stormSource.clip == null)
+            {
+                Debug.LogWarning("[ProjectBootstrapBuilder] menu_storm_bed.mp3 not found under " +
+                    "Assets/_Project/Art/Audio/SFX/ — StormAmbience will have no clip until it is generated.");
+            }
 
             GameObject canvasGo = CreateCanvasRoot("Canvas", 0);
-            GameObject panel = new GameObject("MenuPanel", typeof(RectTransform));
+            GameObject panel = new GameObject("MenuPanel", typeof(RectTransform), typeof(VerticalLayoutGroup));
             panel.transform.SetParent(canvasGo.transform, false);
-            AnchorCenter(panel, Vector2.zero, new Vector2(400f, 260f));
+            AnchorCenter(panel, new Vector2(0f, -40f), new Vector2(420f, 320f));
+            VerticalLayoutGroup layout = panel.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 24f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            Text title = CreateText(canvasGo.transform, "Title", "FALSE POSITIVE", 56);
+            title.fontStyle = FontStyle.Bold;
+            title.color = new Color(0.85f, 0.86f, 0.9f);
+            AnchorTopStretch(title.gameObject, -80f, 80f);
 
             Button playButton = CreateButton(panel.transform, "PlayButton", "Play");
-            AnchorTopStretch(playButton.gameObject, -20f, 60f);
+            SetLayoutHeight(playButton.gameObject, 64f);
             Button settingsButton = CreateButton(panel.transform, "SettingsButton", "Settings");
-            AnchorCenter(settingsButton.gameObject, new Vector2(0f, 0f), new Vector2(400f, 60f));
+            SetLayoutHeight(settingsButton.gameObject, 64f);
             Button quitButton = CreateButton(panel.transform, "QuitButton", "Quit");
-            AnchorBottomStretch(quitButton.gameObject, 20f, 60f);
+            SetLayoutHeight(quitButton.gameObject, 64f);
 
             MainMenuController controller = canvasGo.AddComponent<MainMenuController>();
             SetField(controller, "playButton", playButton);
             SetField(controller, "settingsButton", settingsButton);
             SetField(controller, "quitButton", quitButton);
 
-            // No EventSystem here — _Persistent's is never unloaded and already
-            // covers every additively-loaded scene's canvases. A second one in
-            // this scene would just log "2 event systems in the scene".
+            // No EventSystem here by design — _Persistent's is never unloaded
+            // and already covers every additively-loaded scene's canvases.
+            // MainMenuController.Awake also carries a runtime safety net that
+            // creates one if none exists, for the case where this scene is
+            // played on its own (PersistentSceneBootstrap normally prevents
+            // that from being necessary, but it costs nothing as a backstop).
 
             SaveScene(scene, MainMenuScenePath);
             Debug.Log("[ProjectBootstrapBuilder] MainMenu.unity rebuilt.");
@@ -722,6 +782,13 @@ namespace FalsePositive.Editor
             rt.pivot = new Vector2(1f, 1f);
             rt.anchoredPosition = anchoredPos;
             rt.sizeDelta = sizeDelta;
+        }
+
+        private static void SetLayoutHeight(GameObject go, float height)
+        {
+            LayoutElement element = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
+            element.preferredHeight = height;
+            element.minHeight = height;
         }
 
         private static void AnchorTopLeft(GameObject go, Vector2 anchoredPos, Vector2 sizeDelta)

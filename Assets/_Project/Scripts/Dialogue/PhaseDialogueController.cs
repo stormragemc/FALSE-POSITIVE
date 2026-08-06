@@ -51,6 +51,7 @@ namespace FalsePositive.Dialogue
         private bool _awaitingClosingAnswer;
         private bool _hasSeatedOnce;
         private Coroutine _noSpeechNudgeRoutine;
+        private Suspect _namedSuspect = Suspect.None;
 
         private DialogueManager Dialogue => binder != null ? binder.Dialogue : null;
 
@@ -97,10 +98,14 @@ namespace FalsePositive.Dialogue
                     EnterLiveDialoguePhase(prompts != null ? prompts.TextFor(phase) : string.Empty, p2TurnCap);
                     break;
                 case GamePhase.P3_Verdict:
+                    _namedSuspect = Suspect.None;
                     EnterLiveDialoguePhase(prompts != null ? prompts.TextFor(phase) : string.Empty, p3TurnCap);
                     break;
                 case GamePhase.P4_Ending:
                     EnterP4Placeholder();
+                    break;
+                case GamePhase.Outcome:
+                    EnterOutcome();
                     break;
             }
         }
@@ -126,6 +131,14 @@ namespace FalsePositive.Dialogue
             Dialogue?.Suspend();
             _flow.RequestSpokenPrompt("Who are you? Where am I?", requireLoud: false, onSatisfied: () =>
             {
+                // The prompt is already answered and hidden at this point —
+                // stop the nudge here rather than waiting for ExitPhase(),
+                // so it can never fire mid-cutscene against a hidden prompt.
+                if (_noSpeechNudgeRoutine != null)
+                {
+                    StopCoroutine(_noSpeechNudgeRoutine);
+                    _noSpeechNudgeRoutine = null;
+                }
                 _flow.RequestCutscene(CutsceneId.SpasskyAnswer, () =>
                     _flow.RequestCutscene(CutsceneId.FuzzyToNight, () => _flow.AdvancePhase()));
             });
@@ -178,6 +191,11 @@ namespace FalsePositive.Dialogue
             TurnsThisSession++;
             Marks.Observe(response.transcript);
 
+            if (_currentPhase == GamePhase.P3_Verdict && _namedSuspect == Suspect.None)
+            {
+                _namedSuspect = DetectNamedSuspect(response.transcript);
+            }
+
             _flow.Score.RecordTurn(new TurnRecord(
                 TurnsThisSession,
                 _currentPhase,
@@ -218,12 +236,54 @@ namespace FalsePositive.Dialogue
 
         private void EnterP4Placeholder()
         {
-            // A10 (Day 2) replaces this with real ending selection
-            // (docs/STORY_SCRIPT.md §8). Never claim otherwise in the deck
-            // while this placeholder is active — GAME_COMPLETION_PLAN.md
-            // §10's "never fake" rule.
+            // Day-1 stopgap ending pick, per docs/STORY_SCRIPT.md §8's rule
+            // that naming nobody (or nobody unambiguously) falls to E_DAVID.
+            // This is deliberately cruder than the real rule — it skips the
+            // credibility/fabrication-count/cited-clues conditions entirely
+            // and picks on the name alone. A10 (Day 2) replaces it with the
+            // full SessionScore-driven EndingSelector. Never claim the full
+            // rule is live while this is — GAME_COMPLETION_PLAN.md §10's
+            // "never fake" rule.
             Dialogue?.Suspend();
-            _flow.RequestCutscene(CutsceneId.EndingDavid, () => _flow.AdvancePhase());
+            CutsceneId ending = _namedSuspect switch
+            {
+                Suspect.Aaron => CutsceneId.EndingAaron,
+                Suspect.Ivy => CutsceneId.EndingIvy,
+                Suspect.Priya => CutsceneId.EndingPriya,
+                _ => CutsceneId.EndingDavid,
+            };
+            _flow.RequestCutscene(ending, () => _flow.AdvancePhase());
+        }
+
+        private void EnterOutcome()
+        {
+            const string card = "14:20 — Ivy has asked to make a second statement.\n" +
+                "She is still waiting.\n\nFALSE POSITIVE";
+            // A11 (Day 2) replaces this fixed card with 2-3 verbatim player
+            // lines quoted back with turn numbers, per docs/STORY_SCRIPT.md
+            // §4 P4_ENDING — "It never says they lied" (G6) applies to that
+            // version too.
+            _flow.OutcomeScreen?.Show(card);
+        }
+
+        /// <summary>Day-1 client-side stopgap for A9's SuspectNameDetector —
+        /// a single unambiguous name from {Aaron, Ivy, Priya} in one turn's
+        /// transcript. Deliberately crude: no possessive handling, no
+        /// mid-sentence disambiguation, and "maybe Aaron or Ivy" is rejected
+        /// only because both names appear in the same transcript, not because
+        /// "maybe" was understood as hedging.</summary>
+        private static Suspect DetectNamedSuspect(string transcript)
+        {
+            if (string.IsNullOrEmpty(transcript)) return Suspect.None;
+            string lower = transcript.ToLowerInvariant();
+            bool aaron = lower.Contains("aaron");
+            bool ivy = lower.Contains("ivy");
+            bool priya = lower.Contains("priya");
+            int count = (aaron ? 1 : 0) + (ivy ? 1 : 0) + (priya ? 1 : 0);
+            if (count != 1) return Suspect.None;
+            if (aaron) return Suspect.Aaron;
+            if (ivy) return Suspect.Ivy;
+            return Suspect.Priya;
         }
 
         private void UnsubscribeDialogue()

@@ -124,6 +124,8 @@ namespace FalsePositive.Editor
             return new GameObject("StoryProps");
         }
 
+        private const string ModelRoot = "Assets/_Project/Art/Props/";
+
         private static T AddProp<T>(
             GameObject parent, string name, Vector3 position, Vector3 size, Color color,
             string labelText, string lookPrompt, string memoryFlag) where T : Interactable
@@ -132,22 +134,55 @@ namespace FalsePositive.Editor
             go.transform.SetParent(parent.transform, false);
             go.transform.position = position;
 
-            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            visual.name = "Visual";
-            visual.transform.SetParent(go.transform, false);
-            visual.transform.localScale = size;
-            ApplyMaterial(visual, color);
+            // Real low-poly model when one exists for this prop (built via
+            // Blender MCP, see docs/GAME_COMPLETION_PLAN.md's model list) —
+            // falls back to the labelled placeholder cube so a missing FBX
+            // never produces an invisible/unpickable prop.
+            GameObject modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ModelRoot + name + ".fbx");
+            GameObject visual;
+            Bounds localBounds;
+            if (modelPrefab != null)
+            {
+                visual = (GameObject)PrefabUtility.InstantiatePrefab(modelPrefab, go.transform);
+                visual.name = "Visual";
+                visual.transform.localPosition = Vector3.zero;
+                visual.transform.localRotation = Quaternion.identity;
+                ApplyMaterialRecursive(visual, color);
+                localBounds = ComputeLocalBounds(visual, go.transform);
+            }
+            else
+            {
+                Debug.LogWarning($"[MemorySceneDressing] No model at {ModelRoot}{name}.fbx — " +
+                    "falling back to a placeholder cube.");
+                visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                visual.name = "Visual";
+                visual.transform.SetParent(go.transform, false);
+                visual.transform.localScale = size;
+                ApplyMaterialRecursive(visual, color);
+                localBounds = new Bounds(Vector3.zero, size);
+            }
 
+            BoxCollider collider = go.AddComponent<BoxCollider>();
+            collider.center = localBounds.center;
+            collider.size = Vector3.Max(localBounds.size, new Vector3(0.05f, 0.05f, 0.05f));
+
+            // The floating name label is the player's only on-screen ID for
+            // an interactable — InteractionRaycaster.cs deliberately has no
+            // separate look-prompt UI and says so in its own doc comment.
+            // Dropping it here would leave every prop unlabelled with
+            // nothing else picking up the slack, so it stays; shrunk now
+            // that a recognisable model sits under it instead of an
+            // anonymous coloured cube.
             GameObject labelGo = new GameObject("Label", typeof(TextMesh));
             labelGo.transform.SetParent(go.transform, false);
-            labelGo.transform.localPosition = new Vector3(0f, size.y * 0.5f + 0.2f, 0f);
+            labelGo.transform.localPosition = new Vector3(0f, localBounds.max.y + 0.12f, 0f);
             TextMesh label = labelGo.GetComponent<TextMesh>();
             label.text = labelText;
-            label.characterSize = 0.12f;
-            label.fontSize = 48;
+            label.characterSize = 0.08f;
+            label.fontSize = 32;
             label.anchor = TextAnchor.LowerCenter;
             label.alignment = TextAlignment.Center;
-            label.color = Color.yellow;
+            label.color = new Color(1f, 0.92f, 0.55f, 0.85f);
 
             T interactable = go.AddComponent<T>();
             SerializedObject so = new SerializedObject(interactable);
@@ -158,13 +193,30 @@ namespace FalsePositive.Editor
             return interactable;
         }
 
-        private static void ApplyMaterial(GameObject go, Color color)
+        private static Bounds ComputeLocalBounds(GameObject visual, Transform relativeTo)
         {
-            Renderer renderer = go.GetComponent<Renderer>();
-            if (renderer == null) return;
+            Renderer[] renderers = visual.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return new Bounds(Vector3.zero, Vector3.one * 0.1f);
+
+            Bounds worldBounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) worldBounds.Encapsulate(renderers[i].bounds);
+
+            Vector3 localCenter = relativeTo.InverseTransformPoint(worldBounds.center);
+            Vector3 localSize = relativeTo.InverseTransformVector(worldBounds.size);
+            localSize = new Vector3(Mathf.Abs(localSize.x), Mathf.Abs(localSize.y), Mathf.Abs(localSize.z));
+            return new Bounds(localCenter, localSize);
+        }
+
+        private static void ApplyMaterialRecursive(GameObject go, Color color)
+        {
             Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             Material material = new Material(shader) { color = color };
-            renderer.sharedMaterial = material;
+            foreach (Renderer renderer in go.GetComponentsInChildren<Renderer>())
+            {
+                Material[] shared = new Material[renderer.sharedMaterials.Length == 0 ? 1 : renderer.sharedMaterials.Length];
+                for (int i = 0; i < shared.Length; i++) shared[i] = material;
+                renderer.sharedMaterials = shared;
+            }
         }
     }
 }

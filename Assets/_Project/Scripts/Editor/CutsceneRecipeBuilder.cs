@@ -21,6 +21,7 @@ namespace FalsePositive.Editor
         private const string PersistentScenePath = "Assets/_Project/Scenes/_Persistent.unity";
 
         private const string VoRoot = "Assets/_Project/Art/Audio/VO/";
+        private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
 
         private static readonly Dictionary<CutsceneId, string[]> VoClipNames = new Dictionary<CutsceneId, string[]>
         {
@@ -165,6 +166,27 @@ namespace FalsePositive.Editor
             memoryFlagToSet = flag,
         };
 
+        /// <summary>A wordless beat carrying only SFX + hold (+ optional flag) —
+        /// for the cheap-form transitions and stubs that have no dialogue in
+        /// docs/STORY_SCRIPT.md §4/§5. `sfxName` is a file under
+        /// Assets/_Project/Art/Audio/SFX/ (no extension); missing files log a
+        /// warning and fall back to a silent hold rather than throwing, same
+        /// as the VO-attach path.</summary>
+        private static CutsceneBeat SfxBeat(string sfxName, float hold, string flag = null)
+        {
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".mp3");
+            if (clip == null)
+            {
+                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing SFX {sfxName}.mp3 under {SfxRoot} — beat will be a silent hold.");
+            }
+            return new CutsceneBeat
+            {
+                holdSecondsIfNoClip = hold,
+                memoryFlagToSet = flag,
+                voClip = clip,
+            };
+        }
+
         private static CutsceneRecipe Recipe(CutsceneId id, float fadeOut, float fadeIn, params CutsceneBeat[] beats) => new CutsceneRecipe
         {
             id = id,
@@ -191,25 +213,38 @@ namespace FalsePositive.Editor
                         "We have just finished interrogating the rest of your friends. So here we are. " +
                         "Please — try to recall everything that happened last night.", 8f)),
 
-                Recipe(CutsceneId.FuzzyToNight, 1.2f, 1.2f),
-                Recipe(CutsceneId.StandFromChair, 0.2f, 0.4f),
+                // The four "fuzzy" transitions (§10: "the same asset, parameterised")
+                // share one rewind-whoosh SFX, distinguished only by fade timing —
+                // FuzzyToNight is the reverse/rewind (long, disorienting), the
+                // other three are the forward return (shorter, snappier).
+                Recipe(CutsceneId.FuzzyToNight, 1.2f, 1.2f,
+                    SfxBeat("fuzzy_whoosh", 1.4f)),
+                Recipe(CutsceneId.StandFromChair, 0.2f, 0.4f,
+                    SfxBeat("chair_creak", 0.6f)),
 
                 Recipe(CutsceneId.RadioClears, 0.2f, 0.3f,
                     Beat("RADIO", "…a snow storm. Please stay indoors during these times.", 3f,
                         MemoryFlagIds.HeardRadioWarning)),
 
                 Recipe(CutsceneId.SomeoneLeft, 0.3f, 0.3f,
-                    Beat(null, null, 1.5f, MemoryFlagIds.SawDoorClose)),
+                    SfxBeat("door_latch_close", 1.5f, MemoryFlagIds.SawDoorClose)),
 
-                Recipe(CutsceneId.CallForNick, 0.2f, 0.3f),
-                Recipe(CutsceneId.FuzzyToInterrogation, 1.2f, 1.2f),
-                Recipe(CutsceneId.FuzzyToMorning, 1.2f, 1.2f),
+                // Never actually raised by M1NightController.cs (the call-for-Nick
+                // beat is a RequestSpokenPrompt, not a cutscene) — filled anyway so
+                // a future direct call never hits an empty stub.
+                Recipe(CutsceneId.CallForNick, 0.2f, 0.3f,
+                    SfxBeat("wind_gust_roar", 1.8f)),
+                Recipe(CutsceneId.FuzzyToInterrogation, 1.2f, 1.2f,
+                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                Recipe(CutsceneId.FuzzyToMorning, 1.2f, 1.2f,
+                    SfxBeat("fuzzy_whoosh", 0.9f)),
 
                 Recipe(CutsceneId.PriyaScreams, 0.3f, 0.5f,
                     Beat("PRIYA", "GUYS! GUYS! HELP! WHAT HAPPENED TO NICK? IVY! AARON! DAVID! GUYS, COME HERE PLEASE!", 4f,
                         MemoryFlagIds.SawBody)),
 
-                Recipe(CutsceneId.TheyComeDown, 0.2f, 0.3f),
+                Recipe(CutsceneId.TheyComeDown, 0.2f, 0.3f,
+                    SfxBeat("footsteps_stairs", 1.6f)),
 
                 Recipe(CutsceneId.OutIntoTheSnow, 0.3f, 0.3f,
                     Beat("PRIYA", "What do we do?? What do we do??", 2f),
@@ -226,13 +261,23 @@ namespace FalsePositive.Editor
                     Beat("AARON", "Lift on three.", 1.5f, MemoryFlagIds.HeardAaronDeflect)),
 
                 Recipe(CutsceneId.TheSofa, 0.3f, 0.4f,
-                    Beat(null, null, 2f)),
+                    SfxBeat("body_settle_thud", 2f)),
 
-                Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f),
+                Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
+                    SfxBeat("fuzzy_whoosh", 0.9f)),
 
-                Recipe(CutsceneId.FlashbackAaron, 0.5f, 0.5f, Beat(null, null, 5f)),
-                Recipe(CutsceneId.FlashbackIvy, 0.5f, 0.5f, Beat(null, null, 5f)),
-                Recipe(CutsceneId.FlashbackPriya, 0.5f, 0.5f, Beat(null, null, 5f)),
+                // Accusation flashbacks (docs/STORY_SCRIPT.md §4 P3_VERDICT):
+                // "heavily degraded, no dialogue" — the cheap form is a held
+                // black frame with a single diegetic sound doing the work.
+                // Aaron's bolt-click and Priya's glass-clink are named in the
+                // script; Ivy's beat is described as pure stillness/silence,
+                // so it deliberately carries no SFX.
+                Recipe(CutsceneId.FlashbackAaron, 0.5f, 0.5f,
+                    SfxBeat("flashback_bolt_click", 5f)),
+                Recipe(CutsceneId.FlashbackIvy, 0.5f, 0.5f,
+                    Beat(null, null, 5f)),
+                Recipe(CutsceneId.FlashbackPriya, 0.5f, 0.5f,
+                    SfxBeat("flashback_glass_clink", 5f)),
 
                 Recipe(CutsceneId.EndingDavid, 0.4f, 0.6f,
                     Beat("SPASSKY", "— you were the only one who couldn't tell me where you were.", 4f)),
@@ -250,7 +295,15 @@ namespace FalsePositive.Editor
                 if (match == null) continue;
                 for (int i = 0; i < recipe.beats.Length && i < match.beats.Length; i++)
                 {
-                    recipe.beats[i].voClip = match.beats[i].voClip;
+                    // Only carry an old clip forward into a beat that doesn't
+                    // already have one of its own — SfxBeat() above sets
+                    // ambient SFX directly, and this loop must not clobber
+                    // that with whatever (likely null) was in the scene from
+                    // before this recipe had any beats at all.
+                    if (recipe.beats[i].voClip == null)
+                    {
+                        recipe.beats[i].voClip = match.beats[i].voClip;
+                    }
                 }
             }
 

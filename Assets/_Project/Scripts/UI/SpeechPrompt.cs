@@ -36,7 +36,12 @@ namespace FalsePositive.UI
 
         public void Pulse()
         {
-            if (promptText == null) return;
+            // Guards a real race: PhaseDialogueController's no-speech nudge
+            // timer can still be in flight after the player already answered
+            // and Hide() deactivated this GameObject (StartCoroutine on an
+            // inactive object throws, logged as "Coroutine couldn't be
+            // started"). Nothing to pulse if it isn't showing anyway.
+            if (promptText == null || !gameObject.activeInHierarchy) return;
             StopAllCoroutines();
             StartCoroutine(PulseRoutine());
         }

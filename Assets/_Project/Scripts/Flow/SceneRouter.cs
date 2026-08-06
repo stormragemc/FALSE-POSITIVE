@@ -27,6 +27,18 @@ namespace FalsePositive.Flow
         {
             if (string.IsNullOrEmpty(sceneName) || _loaded.Contains(sceneName)) yield break;
 
+            // Already open (e.g. the scene the user pressed Play from, or one
+            // PersistentSceneBootstrap pulled in) — track it instead of
+            // loading a second copy, which would otherwise duplicate every
+            // GameObject in it.
+            Scene existing = SceneManager.GetSceneByName(sceneName);
+            if (existing.IsValid() && existing.isLoaded)
+            {
+                _loaded.Add(sceneName);
+                SetRootsActive(sceneName, false);
+                yield break;
+            }
+
             AsyncOperation op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
             if (op == null)
             {

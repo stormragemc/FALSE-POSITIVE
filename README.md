@@ -142,8 +142,52 @@ pipeline but isn't: [`Sidecar/README.md`](Sidecar/README.md).
 
 ### Opening the Unity project
 
-Unity **6000.5.6f1**, load `Assets/_Project/Scenes/Interrogation.unity`, press Play. The client
-checks `GET /health` on the configured backend before the scene starts.
+Unity **6000.5.6f1**. Open **`Assets/_Project/Scenes/_Persistent.unity`** and press Play — this
+is the entry scene (build index 0) and the one `_Persistent`/`GameFlowDirector`/the whole flow
+boot from. Pressing Play from any other scene still works: `PersistentSceneBootstrap` loads
+`_Persistent` additively before anything else runs. The client checks `GET /health` on the
+configured backend once the first live interrogation turn is reached — the menu, memory scenes,
+and cutscenes need no backend at all.
+
+## How to play
+
+The whole game is playable end to end without any dialogue options — you speak, the officer
+listens. The backend is only needed for the three live-interrogation phases (P1, P2, P3); the
+main menu, both memory scenes, and every cutscene work with it offline.
+
+**Flow:** Main Menu → mic consent card → mic calibration → **P1** (waking, "who are you?") →
+**M1 — the cabin at night** (free-roam, fix the radio, call for Nick) → **P2** (recall, free
+voice) → **M2 — the cabin at morning** (find the key, get outside, carry the body) → **P3**
+(verdict — name a suspect, or don't) → one of four endings → the outcome card.
+
+**Controls**
+
+| Input | Action |
+|---|---|
+| WASD + mouse | Move / look |
+| Hold **E** | Interact with whatever the crosshair is on |
+| Speak | Answer the officer, or satisfy an on-screen speech prompt |
+| Speak loudly | The one gate that requires volume — calling for Nick at the cabin door |
+| **F1** | Debug overlay — turn state, VAD, story marks |
+| **F2** | *(Editor / dev builds only)* Force-advance to the next phase, skipping its normal completion trigger |
+| **Esc** | Settings / pause |
+
+**What needs the backend:** only the officer's live replies in P1/P2/P3 — everything else
+(menu, both memory scenes, every cutscene, the ending pick, the outcome card) runs with the
+sidecar down. If the backend is unreachable, a live turn will fail with an in-fiction fault
+rather than silently hanging.
+
+**Honesty notes**, per `docs/GAME_COMPLETION_PLAN.md` §10's "never fake" rule:
+
+- Every cutscene is the documented **cheap form** — a fade, a subtitle, and either recorded VO or
+  a diegetic sound effect — not a Unity Timeline sequence, even though `com.unity.timeline` is in
+  the manifest.
+- The four endings are picked by a **client-side stopgap**: whichever suspect's name you say
+  unambiguously in P3, or nobody's, falls to the David ending. The full credibility/fabrication/
+  clue-citation rule in `docs/STORY_SCRIPT.md` §8 is Day-2 scope (`A10`).
+- The outcome card is a fixed closing line, not yet the verbatim-quote version (`A11`).
+- All character voice lines under `Assets/_Project/Art/Audio/VO/` are ElevenLabs-generated —
+  synthetic, not recordings of real people.
 
 ## Documentation
 
@@ -173,6 +217,7 @@ Rows marked **⚠** still need their licence confirmed by the owner of that area
 | Google Cloud Speech-to-Text v2 | API | Speech-to-text (`short` recognizer, pinned) | Google Cloud Terms of Service ⚠ confirm commercial-use terms |
 | Gemini 3.6 Flash (via Vertex AI) | API | Detective dialogue | Google Cloud Terms of Service ⚠ confirm commercial-use terms |
 | ElevenLabs TTS | API | Detective's voice | ElevenLabs commercial terms ⚠ confirm plan tier and any attribution requirement |
+| ElevenLabs Sound Generation | API | Ambient/diegetic SFX for cutscenes and the main menu storm bed (`Assets/_Project/Art/Audio/SFX/`) — synthetic, not field recordings | ElevenLabs commercial terms ⚠ confirm plan tier |
 | Google Cloud Run | Service | Hosts the backend | Google Cloud Terms of Service |
 
 ### Libraries and tools

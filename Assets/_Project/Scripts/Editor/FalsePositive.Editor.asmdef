@@ -2,7 +2,8 @@
     "name": "FalsePositive.Editor",
     "rootNamespace": "FalsePositive.EditorTools",
     "references": [
-        "FalsePositive.Runtime"
+        "FalsePositive.Runtime",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf97dc9ca961f8d4493f7066a6a108d4, type: 3}
+  m_Name: PhasePromptSet
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Dialogue.PhasePromptSet
+  caseFile: {fileID: 4900000, guid: 1a271eb522ce497499bd271475416c7b, type: 3}
+  p2Recall: {fileID: 4900000, guid: 6e143b53f8f35a341ad18315a8f3e494, type: 3}
+  p3Verdict: {fileID: 4900000, guid: c3f52a1067472df44991e36789645d42, type: 3}

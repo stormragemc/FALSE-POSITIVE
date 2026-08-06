@@ -1,0 +1,23 @@
+# WITNESS KNOWLEDGE — what this witness did and did not personally observe
+# in the memory sequences (docs/STORY_SCRIPT.md §6/§7/§9).
+#
+# Format: flag_id | present sentence | absent sentence
+# Parsed by MemoryFlagCatalog.cs. Do not remove a row for any id listed in
+# MemoryFlagIds.cs — a missing row means that trap or clue is silently
+# unreachable in every playthrough.
+
+saw_clock | The witness looked at the mantel clock and could know the time was 00:52. | The witness never looked at a clock; any specific time they give is invented, not observed.
+saw_five_cups | The witness noticed five cups on the table, meaning nobody had come in from outside. | The witness never counted the cups on the table.
+saw_coat_swap | The witness is aware they were wearing Nick's coat, having swapped earlier in the night. | The witness has not consciously registered that they were wearing Nick's coat.
+heard_radio_warning | The witness heard the radio's storm warning to stay indoors. | The witness never heard the radio's storm warning.
+saw_door_close | The witness saw the door swinging shut, but never saw who went through it. | The witness did not see the door close at all.
+called_for_nick | The witness went to the door and called Nick's name, and got no answer. | The witness never went to the door or called out.
+left_door_unlocked | The witness left the door unlocked when they walked away from it. | The witness does not know what state they left the door in.
+found_door_locked | The witness found the front door locked the next morning. | The witness did not personally check whether the door was locked the next morning.
+found_key_inside | The witness found the key on a hook inside, next to the door. | The witness never located the key.
+saw_grille_intact | The witness inspected the broken window and saw the exterior grille was undamaged. | The witness never closely inspected the broken window or its grille.
+saw_glass_inside | The witness saw that the glass shards were on the inside of the room. | The witness did not notice which side the glass shards fell on.
+saw_body | The witness saw Nick's body outside, face down in the snow. | The witness has not yet seen the body directly.
+heard_ivy_alibi | The witness heard Ivy volunteer, unprompted, that she was with Aaron all night. | The witness did not hear Ivy say anything about her or Aaron's whereabouts overnight.
+heard_aaron_deflect | The witness heard Aaron deflect Priya's question about who locked the door. | The witness did not hear anyone discuss who locked the door.
+carried_body | The witness helped carry Nick's body inside, so their own hands and prints are on it. | The witness did not physically touch or move the body.

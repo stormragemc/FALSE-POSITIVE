@@ -1,0 +1,365 @@
+using System;
+using System.Collections;
+using FalsePositive.Audio;
+using FalsePositive.Core;
+using FalsePositive.Menu;
+using FalsePositive.Net;
+using FalsePositive.UI;
+using FalsePositive.Voice;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace FalsePositive.Flow
+{
+    /// <summary>
+    /// Lives in _Persistent, never unloaded. The single owner of the phase
+    /// order, the session id, and every persistent-scene service — see the
+    /// frozen contract in docs/GAME_COMPLETION_PLAN.md A0.5. Person A owns
+    /// this file.
+    ///
+    /// Interrogation is loaded once, the first time consent is accepted
+    /// (see A3's MicConsentFlow), and from then on is only ever
+    /// deactivated/reactivated by SceneRouter — never unloaded. That, plus
+    /// SessionId being minted exactly once per playthrough (in
+    /// StartNewPlaythrough) rather than by DialogueManager on every
+    /// Awake, is what lets the officer remember what the witness said three
+    /// phases ago and what lets the HuBERT affect baseline hold across the
+    /// whole interrogation instead of resetting every time the player
+    /// leaves for a memory scene.
+    /// </summary>
+    public sealed class GameFlowDirector : MonoBehaviour
+    {
+        private static readonly GamePhase[] PhaseOrder =
+        {
+            GamePhase.Menu, GamePhase.P1_Tutorial, GamePhase.M1_Night, GamePhase.P2_Recall,
+            GamePhase.M2_Morning, GamePhase.P3_Verdict, GamePhase.P4_Ending, GamePhase.Outcome,
+        };
+
+        [Header("Config")]
+        [SerializeField] private InterrogationConfig config;
+
+        [Header("Persistent services")]
+        [SerializeField] private MicrophoneService mic;
+        [SerializeField] private VoiceActivityDetector vad;
+        [SerializeField] private UtteranceRecorder recorder;
+        [SerializeField] private InterrogationSidecarClient sidecar;
+        [SerializeField] private LoudnessGate loudnessGate;
+        [SerializeField] private ScreenFader fader;
+        [SerializeField] private SubtitleUI subtitles;
+        [SerializeField] private SpeechPrompt prompt;
+        [SerializeField] private ObjectiveHud objectives;
+        [SerializeField] private SceneRouter sceneRouter;
+        [SerializeField] private MemoryFlagCatalog memoryFlagCatalog;
+        [SerializeField] private MicConsentFlow consentFlow;
+        [SerializeField] private MicCalibration calibration;
+        [SerializeField] private CalibrationPanelUI calibrationPanel;
+        [SerializeField] private DebugOverlayUI debugOverlay;
+        [SerializeField] private SettingsPanel settingsPanel;
+
+        [Header("Scene names — must match Build Settings exactly")]
+        [SerializeField] private string mainMenuSceneName = "MainMenu";
+        [SerializeField] private string interrogationSceneName = "Interrogation";
+        [SerializeField] private string nightSceneName = "Memory_CabinNight";
+        [SerializeField] private string morningSceneName = "Memory_CabinMorning";
+
+        public static GameFlowDirector Instance { get; private set; }
+
+        public GamePhase Phase { get; private set; } = GamePhase.Boot;
+        public MemoryFlags Flags { get; private set; }
+        public SessionScore Score { get; } = new SessionScore();
+        public string SessionId { get; private set; }
+        public bool BackendReady { get; private set; }
+        public VoiceCalibrationState Calibration { get; } = new VoiceCalibrationState();
+        public InterrogationConfig Config => config;
+
+        public MicrophoneService Mic => mic;
+        public VoiceActivityDetector Vad => vad;
+        public UtteranceRecorder Recorder => recorder;
+        public InterrogationSidecarClient Sidecar => sidecar;
+        public LoudnessGate LoudnessGate => loudnessGate;
+        public ScreenFader Fader => fader;
+        public SubtitleUI Subtitles => subtitles;
+        public SpeechPrompt Prompt => prompt;
+        public ObjectiveHud Objectives => objectives;
+        public MicConsentFlow ConsentFlow => consentFlow;
+        public MicCalibration MicCalibration => calibration;
+        public DebugOverlayUI DebugOverlay => debugOverlay;
+        public SettingsPanel SettingsPanel => settingsPanel;
+
+        public event Action<GamePhase> PhaseExiting;
+        public event Action<GamePhase> PhaseChanged;
+        public event Action<string> BackendFault;
+        public event Action<string> BackendStatusChanged;
+        public event Action BackendReadyChanged;
+
+        private ICutscenePlayer _cutscenePlayer;
+        private bool _transitioning;
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Debug.LogError("[GameFlowDirector] A second instance was loaded; destroying it. " +
+                    "_Persistent must only ever be loaded once.");
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+            Flags = new MemoryFlags(memoryFlagCatalog);
+        }
+
+        private void Start()
+        {
+            // Consent -> calibration -> P1 handoff (docs/STORY_SCRIPT.md §4, S0).
+            // Kicking off the Interrogation scene load in parallel with
+            // calibration (rather than waiting for TransitionRoutine to do it
+            // on AdvancePhase) hides the load hitch behind the calibration
+            // card instead of showing it as a hang right after "Good."
+            if (consentFlow != null)
+            {
+                consentFlow.Accepted += HandleConsentAccepted;
+            }
+            if (calibration != null)
+            {
+                calibration.Completed += HandleCalibrationCompleted;
+            }
+
+            // The menu itself does not need the backend to be reachable —
+            // only the officer's first line does. A13 (Day 2) adds a proper
+            // "interrogation service offline" fault card for that moment;
+            // Day 1 accepts PostTurn failing with a connection error and
+            // DialogueManager.TurnFailed firing, same as any other turn fault.
+            if (Phase == GamePhase.Boot) GoToPhase(GamePhase.Menu);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            if (consentFlow != null) consentFlow.Accepted -= HandleConsentAccepted;
+            if (calibration != null) calibration.Completed -= HandleCalibrationCompleted;
+        }
+
+        private void HandleConsentAccepted()
+        {
+            consentFlow?.Hide();
+            if (sceneRouter != null && !string.IsNullOrEmpty(interrogationSceneName))
+            {
+                StartCoroutine(sceneRouter.EnsureLoaded(interrogationSceneName));
+            }
+            calibrationPanel?.Show();
+            calibration?.Begin();
+        }
+
+        private void HandleCalibrationCompleted(CalibrationResult result)
+        {
+            Calibration.Apply(result);
+            StartCoroutine(FinishCalibrationHandoff());
+        }
+
+        private IEnumerator FinishCalibrationHandoff()
+        {
+            // Hold on "Good. The officer can hear you." for a beat before the
+            // fade — CalibrationPanelUI already shows that copy on
+            // CalibrationStage.Done.
+            yield return new WaitForSeconds(1.2f);
+            calibrationPanel?.Hide();
+            AdvancePhase();
+        }
+
+        // --- Backend readiness, reported by BackendHealthProbe ---
+
+        public void ReportBackendStatus(string text) => BackendStatusChanged?.Invoke(text);
+
+        public void ReportBackendReady()
+        {
+            BackendReady = true;
+            BackendReadyChanged?.Invoke();
+        }
+
+        public void ReportBackendFailed(string reason)
+        {
+            BackendReady = false;
+            BackendFault?.Invoke(reason);
+        }
+
+        // --- Cutscenes ---
+
+        /// <summary>Person B's CutsceneDirector self-registers here once it exists.
+        /// Until it does, RequestCutscene degrades to a screen-fader blink — see
+        /// docs/GAME_COMPLETION_PLAN.md, Day-1 exit criterion #12.</summary>
+        public void RegisterCutscenePlayer(ICutscenePlayer player) => _cutscenePlayer = player;
+
+        public void RequestCutscene(CutsceneId id, Action onFinished)
+        {
+            if (_cutscenePlayer == null)
+            {
+                StartCoroutine(BlinkThenFinish(onFinished));
+                return;
+            }
+
+            void OnFinishedHandler(CutsceneId finishedId)
+            {
+                if (finishedId != id) return;
+                _cutscenePlayer.Finished -= OnFinishedHandler;
+                onFinished?.Invoke();
+            }
+            _cutscenePlayer.Finished += OnFinishedHandler;
+            _cutscenePlayer.Play(id);
+        }
+
+        private IEnumerator BlinkThenFinish(Action onFinished)
+        {
+            if (fader != null)
+            {
+                yield return fader.FadeToBlack(0.15f);
+                yield return fader.FadeFromBlack(0.15f);
+            }
+            onFinished?.Invoke();
+        }
+
+        // --- Scripted spoken prompts (P1's "who are you", M1's call-for-Nick) ---
+
+        /// <summary>Shows a prompt and waits for a qualifying utterance, entirely
+        /// client-side — never routed through DialogueManager/the backend. See
+        /// A6's LoudnessGate for the requireLoud path and STORY_SCRIPT.md §4
+        /// for both call sites.</summary>
+        public void RequestSpokenPrompt(string promptText, bool requireLoud, Action onSatisfied)
+        {
+            prompt?.Show(promptText);
+            vad.SetGated(false);
+
+            if (requireLoud && loudnessGate != null)
+            {
+                Action handleSatisfied = null;
+                Action handleTooQuiet = () => prompt?.SetHint("Louder — the storm is taking your voice.");
+                handleSatisfied = () =>
+                {
+                    loudnessGate.Satisfied -= handleSatisfied;
+                    loudnessGate.TooQuiet -= handleTooQuiet;
+                    FinishSpokenPrompt(onSatisfied);
+                };
+                loudnessGate.Satisfied += handleSatisfied;
+                loudnessGate.TooQuiet += handleTooQuiet;
+                loudnessGate.Arm(Calibration.LoudReferenceRms, config != null ? config.yellFactor : 1.6f);
+            }
+            else
+            {
+                Action<float[], int> handleUtterance = null;
+                handleUtterance = (samples, sampleRate) =>
+                {
+                    recorder.UtteranceCaptured -= handleUtterance;
+                    FinishSpokenPrompt(onSatisfied);
+                };
+                recorder.UtteranceCaptured += handleUtterance;
+            }
+        }
+
+        private void FinishSpokenPrompt(Action onSatisfied)
+        {
+            prompt?.ClearHint();
+            prompt?.Hide();
+            vad.SetGated(true);
+            onSatisfied?.Invoke();
+        }
+
+        // --- Playthrough / phase lifecycle ---
+
+        /// <summary>Mints a fresh SessionId, clears flags/score/calibration, and asks
+        /// the backend to drop any stale history for that id. Called once, from
+        /// the menu's Play button (A2), before the consent card ever shows.</summary>
+        public void StartNewPlaythrough()
+        {
+            SessionId = Guid.NewGuid().ToString("N");
+            Flags.Clear();
+            Score.Reset();
+
+            if (sidecar != null)
+            {
+                sidecar.ResetSession(SessionId, ok =>
+                {
+                    if (!ok)
+                    {
+                        Debug.LogWarning("[GameFlowDirector] /session/reset failed for the new session id " +
+                            "(harmless — the id is new server-side too, so there is nothing to clear).");
+                    }
+                });
+            }
+        }
+
+        public void AdvancePhase()
+        {
+            int index = Array.IndexOf(PhaseOrder, Phase);
+            GamePhase next = index < 0
+                ? PhaseOrder[0]
+                : PhaseOrder[Mathf.Min(index + 1, PhaseOrder.Length - 1)];
+            GoToPhase(next);
+        }
+
+        public void GoToPhase(GamePhase phase)
+        {
+            if (_transitioning)
+            {
+                Debug.LogWarning($"[GameFlowDirector] Ignoring GoToPhase({phase}) — a transition is already in flight.");
+                return;
+            }
+            StartCoroutine(TransitionRoutine(phase));
+        }
+
+        public void AbortToMenu() => GoToPhase(GamePhase.Menu);
+
+        private IEnumerator TransitionRoutine(GamePhase next)
+        {
+            _transitioning = true;
+            PhaseExiting?.Invoke(Phase);
+
+            float fadeDuration = config != null ? config.fadeDurationSeconds : 0.25f;
+            if (fader != null) yield return fader.FadeToBlack(fadeDuration);
+            yield return null; // one full frame fully black before swapping anything
+
+            string targetScene = SceneNameFor(next);
+            if (sceneRouter != null && !string.IsNullOrEmpty(targetScene))
+            {
+                yield return sceneRouter.EnsureLoaded(targetScene);
+                yield return sceneRouter.Activate(targetScene);
+            }
+
+            Phase = next;
+            PhaseChanged?.Invoke(next);
+
+            if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
+            _transitioning = false;
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>Verification aid (docs/GAME_COMPLETION_PLAN.md §9): F2 walks
+        /// the whole phase order with no natural completion trigger required —
+        /// confirms the game reaches Outcome from Menu with zero cutscenes
+        /// registered, and that SessionId never changes along the way.</summary>
+        private void Update()
+        {
+            if (Keyboard.current != null && Keyboard.current.f2Key.wasPressedThisFrame)
+            {
+                Debug.Log($"[GameFlowDirector] Debug AdvancePhase from {Phase} (SessionId={SessionId}).");
+                AdvancePhase();
+            }
+        }
+#endif
+
+        private string SceneNameFor(GamePhase phase)
+        {
+            switch (phase)
+            {
+                case GamePhase.Menu: return mainMenuSceneName;
+                case GamePhase.P1_Tutorial:
+                case GamePhase.P2_Recall:
+                case GamePhase.P3_Verdict:
+                case GamePhase.P4_Ending:
+                case GamePhase.Outcome:
+                    return interrogationSceneName;
+                case GamePhase.M1_Night: return nightSceneName;
+                case GamePhase.M2_Morning: return morningSceneName;
+                default: return null;
+            }
+        }
+    }
+}

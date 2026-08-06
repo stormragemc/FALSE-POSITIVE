@@ -54,6 +54,19 @@ namespace FalsePositive.Core
         [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         public float ttsEchoGateTailSeconds = 0.25f;
 
+        [Header("Voice calibration (A4) and the call-for-Nick loudness gate (A6)")]
+        [Tooltip("Room-tone sampling window during calibration's first stage.")]
+        public float calibrationSilenceSeconds = 1.0f;
+        [Tooltip("\"Speak normally\" sampling window during calibration's second stage.")]
+        public float calibrationSpeechSeconds = 4.0f;
+        [Tooltip("How long calibration waits for any signal above the noise floor before offering Retry.")]
+        public float calibrationTimeoutSeconds = 10.0f;
+        [Tooltip("Percentile of per-frame RMS (0..1) used as the loud reference — the 90th percentile, not the peak, so a single cough or chair scrape can't set an unpassable threshold.")]
+        [Range(0f, 1f)]
+        public float loudReferencePercentile = 0.9f;
+        [Tooltip("The call-for-Nick gate requires peak RMS >= loudReferenceRms * this factor.")]
+        public float yellFactor = 1.6f;
+
         public string SidecarBaseUrl =>
             string.IsNullOrWhiteSpace(backendBaseUrl)
                 ? $"http://{sidecarHost}:{sidecarPort}"

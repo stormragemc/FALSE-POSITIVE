@@ -3,7 +3,8 @@
     "rootNamespace": "FalsePositive",
     "references": [
         "Unity.InputSystem",
-        "uLipSync.Runtime"
+        "uLipSync.Runtime",
+        "Unity.Timeline"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

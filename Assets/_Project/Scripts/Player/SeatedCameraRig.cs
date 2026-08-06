@@ -1,4 +1,5 @@
 using FalsePositive.Core;
+using FalsePositive.Menu;
 using UnityEngine;
 
 namespace FalsePositive.Player
@@ -42,11 +43,16 @@ namespace FalsePositive.Player
         {
             if (playerCamera == null) return;
 
-            Vector2 look = input.LookDelta * config.lookSensitivity;
+            // SettingsStore.MouseSensitivity is a runtime multiplier, never
+            // written into InterrogationConfig — see SettingsStore's own
+            // doc-comment for why a play-mode ScriptableObject write would
+            // wrongly persist to the shipped .asset.
+            Vector2 look = input.LookDelta * config.lookSensitivity * SettingsStore.MouseSensitivity;
             float max = config.seatedMaxLookAngleDegrees;
+            float pitchSign = SettingsStore.InvertY ? 1f : -1f;
 
             _yawOffset = Mathf.Clamp(_yawOffset + look.x, -max, max);
-            _pitchOffset = Mathf.Clamp(_pitchOffset - look.y, -max, max);
+            _pitchOffset = Mathf.Clamp(_pitchOffset + pitchSign * look.y, -max, max);
 
             playerCamera.localRotation = Quaternion.Euler(_pitchOffset, _yawOffset, 0f);
         }

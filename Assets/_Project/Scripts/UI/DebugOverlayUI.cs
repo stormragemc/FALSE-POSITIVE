@@ -9,9 +9,16 @@ namespace FalsePositive.UI
 {
     /// <summary>
     /// Debug HUD: per-stage sidecar timings, VAD state, live RMS, the last
-    /// transcript/emotion/error, and the boot status line while the sidecar
-    /// is starting. Toggle with F1. Uses the new Input System's Keyboard API
-    /// directly — no legacy Input calls anywhere in this project.
+    /// transcript/emotion/error, the boot status line while the sidecar is
+    /// starting, and (A8) story-mark coverage. Toggle with F1. Uses the new
+    /// Input System's Keyboard API directly — no legacy Input calls anywhere
+    /// in this project.
+    ///
+    /// Lives in _Persistent; its VoiceActivityDetector and DialogueManager
+    /// are scene-local objects it does not own (the VAD lives in
+    /// _Persistent too, but DialogueManager lives in Interrogation), so both
+    /// are supplied at runtime via Bind rather than serialized in the
+    /// inspector — see docs/GAME_COMPLETION_PLAN.md A0.
     /// </summary>
     public sealed class DebugOverlayUI : MonoBehaviour
     {
@@ -20,25 +27,39 @@ namespace FalsePositive.UI
         [SerializeField] private Text stateText;
         [SerializeField] private Text vadText;
         [SerializeField] private Text lastTurnText;
+        [SerializeField] private Text marksText;
 
-        [SerializeField] private VoiceActivityDetector vad;
-        [SerializeField] private DialogueManager dialogueManager;
+        private VoiceActivityDetector _vad;
+        private DialogueManager _dialogueManager;
 
-        private void OnEnable()
+        /// <summary>Called by InterrogationSceneBinder once both dependencies exist.
+        /// Safe to call again (e.g. a future re-bind) — re-subscribes cleanly.</summary>
+        public void Bind(VoiceActivityDetector vad, DialogueManager dialogueManager)
         {
-            if (dialogueManager == null) return;
-            dialogueManager.StateChanged += OnDialogueStateChanged;
-            dialogueManager.TurnCompleted += OnTurnCompleted;
-            dialogueManager.TurnFailed += OnTurnFailed;
+            Unbind();
+            _vad = vad;
+            _dialogueManager = dialogueManager;
+            if (_dialogueManager != null)
+            {
+                _dialogueManager.StateChanged += OnDialogueStateChanged;
+                _dialogueManager.TurnCompleted += OnTurnCompleted;
+                _dialogueManager.TurnFailed += OnTurnFailed;
+            }
         }
 
-        private void OnDisable()
+        public void Unbind()
         {
-            if (dialogueManager == null) return;
-            dialogueManager.StateChanged -= OnDialogueStateChanged;
-            dialogueManager.TurnCompleted -= OnTurnCompleted;
-            dialogueManager.TurnFailed -= OnTurnFailed;
+            if (_dialogueManager != null)
+            {
+                _dialogueManager.StateChanged -= OnDialogueStateChanged;
+                _dialogueManager.TurnCompleted -= OnTurnCompleted;
+                _dialogueManager.TurnFailed -= OnTurnFailed;
+            }
+            _dialogueManager = null;
+            _vad = null;
         }
+
+        private void OnDisable() => Unbind();
 
         private void Update()
         {
@@ -47,16 +68,24 @@ namespace FalsePositive.UI
                 panel.SetActive(!panel.activeSelf);
             }
 
-            if (vadText != null && vad != null)
+            if (vadText != null && _vad != null)
             {
-                string gated = vad.Gated ? " [gated]" : "";
-                vadText.text = $"VAD: {(vad.IsSpeaking ? "speaking" : "idle")}{gated}  rms={vad.DisplayRms:F4}";
+                string gated = _vad.Gated ? " [gated]" : "";
+                string calibrated = _vad.IsCalibrated ? "" : " [uncalibrated]";
+                vadText.text = $"VAD: {(_vad.IsSpeaking ? "speaking" : "idle")}{gated}{calibrated}  rms={_vad.DisplayRms:F4}";
             }
         }
 
         public void SetBootStatus(string text)
         {
             if (bootStatusText != null) bootStatusText.text = text;
+        }
+
+        /// <summary>Renders the seven story marks and the turn count/cap for the
+        /// current phase — see A8's StoryMarkTracker, the only caller.</summary>
+        public void SetMarksStatus(string text)
+        {
+            if (marksText != null) marksText.text = text;
         }
 
         private void OnDialogueStateChanged(DialogueState state)

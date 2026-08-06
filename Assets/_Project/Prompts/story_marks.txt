@@ -1,0 +1,15 @@
+# Client-side keyword fallback for backend ask B2 (topics_covered /
+# all_marks_answered — docs/GAME_COMPLETION_PLAN.md §7). Cruder than the
+# server-side version will be; say so in the deck if this is still the
+# active path at freeze (GAME_COMPLETION_PLAN.md §10, "never fake").
+#
+# Format: mark_id | comma-separated keywords, matched case-insensitively on
+# word boundaries against the turn transcript.
+
+fire | drink,drank,beer,fire,fireplace,sat
+argument | argue,argument,fight,told him,said to him
+nick_left | left,went out,outside,door closed,gone
+door | door,opened,called,shouted,yelled,his name
+lock | lock,locked,unlocked,bolt,key
+sleep | sofa,slept,passed out,blacked out,don't remember
+morning | scream,morning,window,carried,sofa,aaron

@@ -61,6 +61,12 @@ _prosody_model_available = False
 _prosody_load_error = "loading" if config.PROSODY_ENABLED else "disabled"
 _session_reset_generations: dict[str, int] = {}
 _active_session_turns: dict[str, int] = {}
+# The current phase briefing per session (see the /turn handler's
+# scene_instruction handling below). Deliberately NOT part of `history` —
+# it is re-applied fresh to every turn rather than stored as a history
+# entry, so it can never desynchronize the strict user/model alternation
+# `history` must maintain.
+_scene_instructions: dict[str, str] = {}
 
 
 class ClientInputError(ValueError):
@@ -201,6 +207,25 @@ def _validate_session_id(session_id: str) -> str:
     return normalized
 
 
+def _validate_scene_instruction(scene_instruction: str) -> str:
+    """Empty is the common case (most turns carry no phase change). Non-empty
+    is trusted, unescaped context (see llm._to_contents / HISTORY_KIND_SCENE)
+    written only by the game client (docs/GAME_COMPLETION_PLAN.md A7) — so it
+    is validated at the boundary rather than escaped like witness speech."""
+    normalized = (scene_instruction or "").strip()
+    if not normalized:
+        return ""
+    if len(normalized) > config.SIDECAR_MAX_SCENE_INSTRUCTION_CHARS:
+        raise ClientInputError(
+            f"scene_instruction exceeds {config.SIDECAR_MAX_SCENE_INSTRUCTION_CHARS} characters"
+        )
+    if any(ord(char) < 32 and char not in "\n\t" for char in normalized):
+        raise ClientInputError("scene_instruction must not contain control characters")
+    if llm.contains_reserved_marker(normalized):
+        raise ClientInputError("scene_instruction must not contain a reserved context marker")
+    return normalized
+
+
 def _history_for(session_id: str) -> list[dict]:
     return _session_store.history(session_id)
 
@@ -230,6 +255,7 @@ def _expire_idle_sessions() -> None:
         _prosody_registry.reset(expired_id)
         _turn_limiter.forget(expired_id)
         _forget_reset_generation_if_inactive(expired_id)
+        _scene_instructions.pop(expired_id, None)
 
 
 async def _await_before_deadline(awaitable, deadline: float):
@@ -247,15 +273,21 @@ def _commit_history(
     history: list[dict],
     user_text: str,
     reply_text: str,
-    is_opening: bool,
+    is_scene_kind: bool,
 ) -> None:
-    history_kind = llm.HISTORY_KIND_SCENE if is_opening else llm.HISTORY_KIND_WITNESS
+    """`is_scene_kind` is true whenever `user_text` is a stage direction
+    rather than real witness speech — the true session opener AND an
+    audio-less phase-transition turn both qualify, so that on replay
+    `_to_contents` never re-wraps either of them as quoted witness speech.
+    """
+    history_kind = llm.HISTORY_KIND_SCENE if is_scene_kind else llm.HISTORY_KIND_WITNESS
     history.append({"role": "user", "content": user_text, "kind": history_kind})
     history.append({"role": "assistant", "content": reply_text})
     for evicted_id in _session_store.commit(session_id, history):
         _prosody_registry.reset(evicted_id)
         _turn_limiter.forget(evicted_id)
         _forget_reset_generation_if_inactive(evicted_id)
+        _scene_instructions.pop(evicted_id, None)
 
 
 def _analyze_affect(audio_f32: object, full_duration_seconds: float | None = None):
@@ -353,6 +385,7 @@ async def session_reset(session_id: str = Form(...)):
         _session_reset_generations.pop(session_id, None)
     _session_store.reset(session_id)
     _prosody_registry.reset(session_id)
+    _scene_instructions.pop(session_id, None)
     return {"ok": True}
 
 
@@ -362,6 +395,9 @@ async def turn(
     sample_rate: int = Form(16000),
     onset_delay_ms: int = Form(0),
     audio: Optional[UploadFile] = File(None),
+    # Appended last, after `audio`, so every existing positional call site
+    # (tests included) that predates this field keeps working unchanged.
+    scene_instruction: str = Form(""),
 ):
     t_total0 = time.perf_counter()
     loop = asyncio.get_running_loop()
@@ -373,6 +409,7 @@ async def turn(
     turn_reset_generation = 0
     try:
         session_id = _validate_session_id(session_id)
+        scene_instruction = _validate_scene_instruction(scene_instruction)
         _expire_idle_sessions()
         if sample_rate < 8000 or sample_rate > 192000:
             raise ClientInputError("sample_rate must be between 8000 and 192000")
@@ -389,8 +426,8 @@ async def turn(
                 raise ClientInputError(
                     f"audio exceeds {config.SIDECAR_MAX_AUDIO_SECONDS:g} second limit"
                 )
-        is_opening = len(raw_bytes) == 0
-        if not is_opening and len(raw_bytes) % 2:
+        has_audio = len(raw_bytes) > 0
+        if has_audio and len(raw_bytes) % 2:
             raise ClientInputError("audio must be aligned little-endian PCM16")
 
         admitted, limit_reason = _turn_limiter.admit(session_id)
@@ -401,8 +438,29 @@ async def turn(
         tracked_session_id = session_id
         turn_reset_generation = _begin_session_turn(session_id)
         history = _history_for(session_id)
+        # True ONLY for the very first turn of a brand-new session — an
+        # audio-less turn later in the same session (a phase transition,
+        # where the officer speaks first with no witness utterance to
+        # react to) is NOT a session opening, and must not replay the
+        # "you've just sat down" kickoff line every time a phase changes.
+        is_session_opening = not has_audio and not history
 
-        if is_opening:
+        # The active phase briefing is NOT stored inside `history` — every
+        # entry appended to `history` must be part of a strictly alternating
+        # user/model sequence (Gemini's `contents` array requires this;
+        # bolting an unpaired extra "user" entry in front of the turn's own
+        # user content would permanently corrupt every future turn's replay
+        # of this session). Instead it lives in its own tiny side-store,
+        # keyed by session_id like `_active_session_turns`, and is folded
+        # into `turn_texts` as an extra PART of the current (always
+        # correctly paired) turn — see llm.generate_reply. A client sends it
+        # once per phase; the server re-applies it on every subsequent turn
+        # until the next phase sends a new one.
+        if scene_instruction:
+            _scene_instructions[session_id] = scene_instruction
+        active_scene_instruction = _scene_instructions.get(session_id, "")
+
+        if not has_audio:
             transcript, emotion, emotion_conf = "", "", 0.0
             stt_ms = ser_ms = 0
             prosody_signal = prosody.ProsodySignal(
@@ -477,8 +535,10 @@ async def turn(
                     transcript=transcript,
                     emotion=emotion,
                     confidence=emotion_conf,
-                    is_opening=is_opening,
+                    is_opening=is_session_opening,
+                    has_audio=has_audio,
                     prosody_signal=prosody_signal,
+                    scene_instruction=active_scene_instruction,
                 ),
             ),
             deadline,
@@ -501,8 +561,14 @@ async def turn(
             if prosody_tracker is not None and pending_prosody_update is not None:
                 prosody_signal = prosody_tracker.update(**pending_prosody_update, commit=True)
 
-            user_text = transcript if not is_opening else llm.OPENING_KICKOFF_TEXT
-            _commit_history(session_id, history, user_text, reply_text, is_opening)
+            if is_session_opening:
+                user_text = llm.OPENING_KICKOFF_TEXT
+            elif not has_audio:
+                user_text = llm.PHASE_CONTINUATION_TEXT
+            else:
+                user_text = transcript
+            is_scene_kind = is_session_opening or not has_audio
+            _commit_history(session_id, history, user_text, reply_text, is_scene_kind)
             if prosody_tracker is not None:
                 _prosody_registry.commit(session_id, prosody_tracker)
         else:

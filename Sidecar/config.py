@@ -51,6 +51,12 @@ SIDECAR_MAX_AUDIO_SECONDS = max(
     1.0, float(os.environ.get("SIDECAR_MAX_AUDIO_SECONDS", "20"))
 )
 SIDECAR_MAX_SESSIONS = max(1, int(os.environ.get("SIDECAR_MAX_SESSIONS", "32")))
+# The client sends one of these per interrogation phase (see docs/GAME_COMPLETION_PLAN.md
+# A7) — generous enough for a phase prompt plus the witness-knowledge briefing, small
+# enough that it can't be used to smuggle a large payload into history.
+SIDECAR_MAX_SCENE_INSTRUCTION_CHARS = max(
+    256, int(os.environ.get("SIDECAR_MAX_SCENE_INSTRUCTION_CHARS", "6000"))
+)
 MAX_TURN_REQUEST_BYTES = min(
     1_000_000,
     max(65_536, int(os.environ.get("MAX_TURN_REQUEST_BYTES", "700000"))),

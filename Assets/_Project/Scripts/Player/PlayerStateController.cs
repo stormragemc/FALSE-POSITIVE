@@ -31,7 +31,6 @@ namespace FalsePositive.Player
     {
         [SerializeField] private PlayerInputRouter input;
         [SerializeField] private InterrogationConfig config;
-        [SerializeField] private ScreenFader fader;
         [SerializeField] private Transform playerCamera;
         [SerializeField] private CharacterController characterController;
         [SerializeField] private FreeLookCameraRig freeLookRig;
@@ -39,8 +38,15 @@ namespace FalsePositive.Player
         [SerializeField] private SeatedCameraRig seatedRig;
         [SerializeField] private SeatAnchor currentSeat;
 
+        // ScreenFader now lives in _Persistent (docs/GAME_COMPLETION_PLAN.md A0),
+        // so it can no longer be wired in the Interrogation scene inspector —
+        // InterrogationSceneBinder supplies it once at bind time.
+        private ScreenFader _fader;
+
         /// <summary>true = the player just sat down (mic UI on, VAD armed); false = just stood up (mic UI off, VAD gated).</summary>
         public event Action<bool> SeatedChanged;
+
+        public void SetFader(ScreenFader fader) => _fader = fader;
 
         public PlayerState State { get; private set; } = PlayerState.Standing;
 
@@ -80,7 +86,10 @@ namespace FalsePositive.Player
             }
         }
 
-        /// <summary>Called once by GameBootstrap once the sidecar is ready — the game begins seated with no fade.</summary>
+        /// <summary>Called once by InterrogationSceneBinder on first bind — the game
+        /// begins seated with no fade. See docs/GAME_COMPLETION_PLAN.md A0
+        /// (formerly called by GameBootstrap, now renamed BackendHealthProbe
+        /// and reduced to reporting readiness only).</summary>
         public void BeginSeated()
         {
             State = PlayerState.Seated;
@@ -101,7 +110,7 @@ namespace FalsePositive.Player
         {
             State = PlayerState.Transitioning;
 
-            yield return fader.FadeToBlack(config.fadeDurationSeconds);
+            yield return _fader.FadeToBlack(config.fadeDurationSeconds);
             yield return null; // one full frame fully black before swapping anything
 
             freeLookRig.enabled = false;
@@ -116,7 +125,7 @@ namespace FalsePositive.Player
 
             SeatedChanged?.Invoke(true);
 
-            yield return fader.FadeFromBlack(config.fadeDurationSeconds);
+            yield return _fader.FadeFromBlack(config.fadeDurationSeconds);
             State = PlayerState.Seated;
         }
 
@@ -124,7 +133,7 @@ namespace FalsePositive.Player
         {
             State = PlayerState.Transitioning;
 
-            yield return fader.FadeToBlack(config.fadeDurationSeconds);
+            yield return _fader.FadeToBlack(config.fadeDurationSeconds);
             yield return null;
 
             seatedRig.enabled = false;
@@ -149,7 +158,7 @@ namespace FalsePositive.Player
 
             SeatedChanged?.Invoke(false);
 
-            yield return fader.FadeFromBlack(config.fadeDurationSeconds);
+            yield return _fader.FadeFromBlack(config.fadeDurationSeconds);
             State = PlayerState.Standing;
         }
     }

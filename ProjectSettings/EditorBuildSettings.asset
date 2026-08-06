@@ -6,14 +6,20 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    path: Assets/_Project/Scenes/_Persistent.unity
+    guid: 2cf6c24ea0a02ed4a93bcb5286d802d9
+  - enabled: 1
+    path: Assets/_Project/Scenes/MainMenu.unity
+    guid: b0069cf177a60a14482a259a3ace413e
   - enabled: 1
     path: Assets/_Project/Scenes/Interrogation.unity
     guid: 861bf2014995a674e9547129e5d368d2
   - enabled: 1
-    path: Assets/_Project/Scenes/NobodyWentOut_CabinNight.unity
-    guid: f7abdad2838e57c40871b1d9c2265f46
+    path: Assets/_Project/Scenes/Memory_CabinNight.unity
+    guid: d7f4d3b970d34e0468981893404ee9f5
+  - enabled: 1
+    path: Assets/_Project/Scenes/Memory_CabinMorning.unity
+    guid: 2ec2ff89779a0244f869494bf5ae6614
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

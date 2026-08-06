@@ -1,4 +1,5 @@
 using FalsePositive.Core;
+using FalsePositive.Menu;
 using UnityEngine;
 
 namespace FalsePositive.Player
@@ -46,9 +47,10 @@ namespace FalsePositive.Player
 
         private void Update()
         {
-            Vector2 look = input.LookDelta * config.lookSensitivity;
+            Vector2 look = input.LookDelta * config.lookSensitivity * SettingsStore.MouseSensitivity;
+            float pitchSign = SettingsStore.InvertY ? 1f : -1f;
             _yaw += look.x;
-            _pitch = Mathf.Clamp(_pitch - look.y, -config.standingPitchClampDegrees, config.standingPitchClampDegrees);
+            _pitch = Mathf.Clamp(_pitch + pitchSign * look.y, -config.standingPitchClampDegrees, config.standingPitchClampDegrees);
 
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
             if (playerCamera != null)

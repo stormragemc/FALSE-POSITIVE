@@ -38,6 +38,20 @@ namespace FalsePositive.Editor
         public static void BuildCharacters()
         {
             Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            RebuildCastInOpenScene(scene, ScenePath);
+        }
+
+        /// <summary>Reusable for T04's duplicated memory scenes
+        /// (Memory_CabinNight / Memory_CabinMorning) — opens the given scene,
+        /// rebuilds the cast in place, and saves back to the same path.</summary>
+        public static void RebuildCastForScene(string scenePath)
+        {
+            Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            RebuildCastInOpenScene(scene, scenePath);
+        }
+
+        private static void RebuildCastInOpenScene(Scene scene, string scenePath)
+        {
             Transform cast = GameObject.Find("Characters").transform;
             while (cast.childCount > 0)
             {
@@ -52,12 +66,12 @@ namespace FalsePositive.Editor
             ConfigurePlayer(player);
             SaveCharacter(player, "Player_FirstPerson");
 
-            GameObject nico = BuildCharacter(
-                cast, "Nico Vlahos (Male)", false,
+            GameObject nick = BuildCharacter(
+                cast, "Nick Vlahos (Male)", false,
                 new Vector3(0.12f, 0.08f, 1.28f), new Vector3(0f, 192f, 0f), 0.98f,
                 Material("MaleBodyJeansShirt"), CabinIdleProfile.Confrontational,
                 null, null, MaleHair, Material("HairBrown"), MaleShoes);
-            SaveCharacter(nico, "Nico_Vlahos");
+            SaveCharacter(nick, "Nick_Vlahos");
 
             GameObject aaron = BuildCharacter(
                 cast, "Aaron Teague (Male)", false,
@@ -88,16 +102,16 @@ namespace FalsePositive.Editor
             }
 
             List<EditorBuildSettingsScene> buildScenes = EditorBuildSettings.scenes.ToList();
-            if (buildScenes.All(item => item.path != ScenePath))
+            if (buildScenes.All(item => item.path != scenePath))
             {
-                buildScenes.Add(new EditorBuildSettingsScene(ScenePath, true));
+                buildScenes.Add(new EditorBuildSettingsScene(scenePath, true));
                 EditorBuildSettings.scenes = buildScenes.ToArray();
             }
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, ScenePath);
+            EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
-            Debug.Log("Cabin Night cast rebuilt: player, Nico, Aaron, Ivy, and Priya.");
+            Debug.Log($"Cabin Night cast rebuilt in {scenePath}: player, Nick, Aaron, Ivy, and Priya.");
         }
 
         private static Material Material(string name)

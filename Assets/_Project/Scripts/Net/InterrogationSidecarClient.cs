@@ -46,14 +46,22 @@ namespace FalsePositive.Net
 
         /// <summary>
         /// Posts one conversational turn. <paramref name="pcmSamples"/> may
-        /// be null/empty to request the officer's scripted opening line
+        /// be null/empty to request the officer's scripted opening line (or,
+        /// mid-session, his next line with no witness utterance to react to
+        /// — see Sidecar/app.py's is_session_opening/has_audio split)
         /// instead of running STT/SER on captured audio.
+        /// <paramref name="sceneInstruction"/> may be null/empty on most
+        /// turns; when non-empty it becomes the sidecar's remembered phase
+        /// briefing for this session (re-applied automatically to every
+        /// subsequent turn server-side) — send it once per phase, not every
+        /// turn. See docs/GAME_COMPLETION_PLAN.md A7.
         /// </summary>
         public void PostTurn(
             string sessionId,
             float[] pcmSamples,
             int sampleRate,
             int onsetDelayMs,
+            string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
             Action<string> onError)
         {
@@ -62,7 +70,35 @@ namespace FalsePositive.Net
                 onError?.Invoke("A turn is already in flight.");
                 return;
             }
-            StartCoroutine(TurnRoutine(sessionId, pcmSamples, sampleRate, onsetDelayMs, onSuccess, onError));
+            StartCoroutine(TurnRoutine(sessionId, pcmSamples, sampleRate, onsetDelayMs, sceneInstruction, onSuccess, onError));
+        }
+
+        /// <summary>Requests a full server-side session reset — dialogue history and the
+        /// HuBERT affect baseline for <paramref name="sessionId"/> are both cleared.
+        /// Used by GameFlowDirector.StartNewPlaythrough and quit-to-menu (A15).</summary>
+        public void ResetSession(string sessionId, Action<bool> onDone)
+        {
+            StartCoroutine(ResetSessionRoutine(sessionId, onDone));
+        }
+
+        private IEnumerator ResetSessionRoutine(string sessionId, Action<bool> onDone)
+        {
+            if (!config.IsBackendUrlAllowed)
+            {
+                onDone?.Invoke(false);
+                yield break;
+            }
+
+            var form = new List<IMultipartFormSection>
+            {
+                new MultipartFormDataSection("session_id", sessionId),
+            };
+            string url = $"{config.SidecarBaseUrl}/session/reset";
+            using UnityWebRequest req = UnityWebRequest.Post(url, form);
+            req.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
+            ApplyClientKey(req);
+            yield return req.SendWebRequest();
+            onDone?.Invoke(req.result == UnityWebRequest.Result.Success);
         }
 
         private IEnumerator TurnRoutine(
@@ -70,6 +106,7 @@ namespace FalsePositive.Net
             float[] pcmSamples,
             int sampleRate,
             int onsetDelayMs,
+            string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
             Action<string> onError)
         {
@@ -109,6 +146,11 @@ namespace FalsePositive.Net
             {
                 byte[] pcmBytes = PcmUtility.FloatsToPcm16Bytes(uploadSamples);
                 form.Add(new MultipartFormFileSection("audio", pcmBytes, "utterance.pcm", "application/octet-stream"));
+            }
+
+            if (!string.IsNullOrEmpty(sceneInstruction))
+            {
+                form.Add(new MultipartFormDataSection("scene_instruction", sceneInstruction));
             }
 
             string url = $"{config.SidecarBaseUrl}/turn";

@@ -203,10 +203,8 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         words that regex looks for.
         """
         for recital in (
-            "Detective Mara Voss, conducting an interrogation about a break-in "
-            "and theft at Halden's Convenience Store on the night of the 14th. "
-            "The person across the table is a witness who was near the scene.",
-            "You are Detective Mara Voss, conducting an interrogation about a break-in.",
+            "Officer Spassky, conducting an interrogation about the death of Nick.",
+            "You are Officer Spassky, conducting an interrogation about the death of Nick.",
             "Reply with one to three spoken sentences. Never narrate actions, "
             "never use stage directions, never use markdown or formatting.",
             "Stay in character at all times. Be terse, watchful, and a little "
@@ -236,6 +234,31 @@ class LlmPromptBoundaryTests(unittest.TestCase):
                     self.llm._filter_spoken_reply(safe),
                     self.llm.FALLBACK_LINE,
                 )
+    def test_generated_reply_is_filtered_before_returning(self):
+        def unsafe_reply(_client, _contents):
+            return SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="You are lying.", thought=False)]
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                prompt_feedback=None,
+            )
+
+        with patch.object(self.llm, "_call_llm", side_effect=unsafe_reply):
+            reply, _elapsed = self.llm.generate_reply(
+                history=[],
+                transcript="I went straight home.",
+                emotion="",
+                confidence=0.0,
+                is_opening=False,
+                prosody_signal=ProsodySignal(reliability_reason="test"),
+            )
+
+        self.assertEqual(reply, self.llm.FALLBACK_LINE)
 
 
 if __name__ == "__main__":

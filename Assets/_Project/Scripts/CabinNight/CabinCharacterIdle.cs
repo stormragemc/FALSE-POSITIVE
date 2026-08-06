@@ -83,9 +83,20 @@ namespace FalsePositive.CabinNight
 
         private void CacheBones(string boneName, ICollection<BoneState> target)
         {
+            // Dedupe by Transform reference — necessary now that Apply live-
+            // samples localRotation instead of writing from a cached rest
+            // pose (see Apply's doc comment). Body/clothes/hair are separate
+            // skeletons with identically-named bones, but AddAccessory
+            // (CabinNightCharacterBuilder) remaps every accessory renderer's
+            // bones onto the body's own transforms, so the same Transform can
+            // legitimately turn up more than once in this search. Applying a
+            // live-sampled offset to the same Transform twice in one frame
+            // would compound it — the head would slowly rotate off over time
+            // instead of settling into a fixed breathing amplitude.
+            HashSet<Transform> seen = new();
             foreach (Transform child in GetComponentsInChildren<Transform>(true))
             {
-                if (child.name == boneName)
+                if (child.name == boneName && seen.Add(child))
                 {
                     target.Add(new BoneState(child, child.localRotation));
                 }
@@ -98,7 +109,14 @@ namespace FalsePositive.CabinNight
             {
                 if (bone.Transform != null)
                 {
-                    bone.Transform.localRotation = bone.RestRotation * offset;
+                    // Live-sampled, not RestRotation * offset: CabinCharacterIdle
+                    // now runs alongside CabinAnimatorDriver's Animator, which
+                    // writes these same bones (Spine1/Neck/Head) every frame
+                    // before LateUpdate. RestRotation was a frozen snapshot
+                    // from Awake — applying it here would silently replace
+                    // whatever pose the Animator just wrote with that frozen
+                    // rest pose instead of adding breathing on top of it.
+                    bone.Transform.localRotation = bone.Transform.localRotation * offset;
                 }
             }
         }

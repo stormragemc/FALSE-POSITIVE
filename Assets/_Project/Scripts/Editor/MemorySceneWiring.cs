@@ -93,6 +93,32 @@ namespace FalsePositive.Editor
             if (controller == null) controller = controllerGo.AddComponent<M2MorningController>();
             SetField(controller, "frontDoor", door);
 
+            // CutsceneStage lives on "Sequencing" (MemorySceneBuilderV2) —
+            // wire its lift-interlude SFX the same way frontDoor is wired
+            // above. Missing SFX is non-fatal (LiftPrompt no-ops on a null
+            // clip); AssetDatabase just leaves the field null.
+            CutsceneStage stage = UnityEngine.Object.FindAnyObjectByType<CutsceneStage>();
+            if (stage != null)
+            {
+                AudioClip liftClip = AssetDatabase.LoadAssetAtPath<AudioClip>(
+                    "Assets/_Project/Art/Audio/SFX/body_lift_effort.mp3");
+                if (liftClip == null)
+                {
+                    Debug.LogWarning("[MemorySceneWiring] Assets/_Project/Art/Audio/SFX/body_lift_effort.mp3 " +
+                        "not found — CutsceneStage.liftEffortClip left unset.");
+                }
+                SetField(stage, "liftEffortClip", liftClip);
+
+                AudioClip ivyLine = AssetDatabase.LoadAssetAtPath<AudioClip>(
+                    "Assets/_Project/Art/Audio/VO/ivy_careful_lift.mp3");
+                if (ivyLine == null)
+                {
+                    Debug.LogWarning("[MemorySceneWiring] Assets/_Project/Art/Audio/VO/ivy_careful_lift.mp3 " +
+                        "not found — CutsceneStage.ivyLiftLineClip left unset.");
+                }
+                SetField(stage, "ivyLiftLineClip", ivyLine);
+            }
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, MorningScenePath);
             AssetDatabase.SaveAssets();

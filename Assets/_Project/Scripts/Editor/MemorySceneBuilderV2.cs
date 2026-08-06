@@ -91,6 +91,12 @@ namespace FalsePositive.Editor
             GameObject door = BuildInterior(interior, isMorning);
             BuildLighting(lighting, isMorning);
             BuildAtmosphere(atmosphere);
+
+            // CabinNightCharacterBuilder.ApplyPose wires CabinCast.controller
+            // onto every cast member's Animator — must exist before the cast
+            // is built, or the wiring step silently no-ops (LoadAssetAtPath
+            // returns null) and every character reverts to a static T-pose.
+            CabinAnimationBuilder.EnsureBuilt();
             CabinNightCharacterBuilder.BuildCastInScene(characters, isMorning);
 
             if (door != null)

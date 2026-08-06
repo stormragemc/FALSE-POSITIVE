@@ -17,6 +17,11 @@ namespace FalsePositive.Flow
     /// </summary>
     public sealed class SceneRouter : MonoBehaviour
     {
+        // This component's own scene — never unloaded, never deactivated,
+        // and Activate() must never iterate into it even when it shows up
+        // in SceneManager's loaded-scene list.
+        private const string PersistentSceneName = "_Persistent";
+
         private readonly HashSet<string> _loaded = new HashSet<string>();
 
         public string ActiveSceneName { get; private set; }
@@ -52,16 +57,32 @@ namespace FalsePositive.Flow
         }
 
         /// <summary>Activates <paramref name="sceneName"/>'s roots and deactivates every
-        /// other scene this router has loaded (never touches _Persistent). Also
-        /// sets it as SceneManager's active scene, which matters for where
-        /// newly-instantiated objects and lighting settings default to.</summary>
+        /// other loaded scene (never touches _Persistent). Also sets it as
+        /// SceneManager's active scene, which matters for where
+        /// newly-instantiated objects and lighting settings default to.
+        ///
+        /// Deliberately walks every scene SceneManager currently has loaded,
+        /// not just the ones tracked in _loaded — a scene already open in
+        /// the editor when Play is pressed (e.g. a memory scene opened
+        /// directly to iterate on it) is live and fully active before its
+        /// own phase ever calls EnsureLoaded, so relying on _loaded alone
+        /// left it active for the whole session: two simultaneously-active
+        /// memory scenes, two Cameras, two AudioListeners, and every
+        /// GameObject.Find("Player ...") in CutsceneStage liable to resolve
+        /// to the wrong cabin. Any such scene is adopted into _loaded here
+        /// so EnsureLoaded doesn't later load a duplicate copy of it.</summary>
         public IEnumerator Activate(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) yield break;
 
-            foreach (string loadedSceneName in _loaded)
+            for (int i = 0; i < SceneManager.sceneCount; i++)
             {
-                if (loadedSceneName != sceneName) SetRootsActive(loadedSceneName, false);
+                Scene loadedScene = SceneManager.GetSceneAt(i);
+                if (!loadedScene.isLoaded) continue;
+                if (loadedScene.name == PersistentSceneName || loadedScene.name == sceneName) continue;
+
+                _loaded.Add(loadedScene.name);
+                SetRootsActive(loadedScene.name, false);
             }
 
             SetRootsActive(sceneName, true);

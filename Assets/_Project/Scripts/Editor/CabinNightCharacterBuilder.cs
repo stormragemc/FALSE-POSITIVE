@@ -157,6 +157,15 @@ namespace FalsePositive.Editor
             AddAccessory(root, bodyBones, hairPath, "Hair", hairMaterial);
             AddAccessory(root, bodyBones, shoesPath, "Shoes", Material("Shoes"));
 
+            // Every cast member gets a driver, including the player — the
+            // player has no ScriptedActor/CabinCharacterIdle below (their
+            // pose was always player-controlled, not ambient), but they do
+            // need the Lift_Crouch state for the sofa-carry beat. The
+            // player's renderers are ShadowsOnly (ConfigurePlayer), so the
+            // lift reads as a cast shadow rather than a visible mesh.
+            CabinAnimatorDriver driver = root.AddComponent<FalsePositive.CabinNight.CabinAnimatorDriver>();
+            driver.Configure(profile);
+
             if (!name.StartsWith("Player", StringComparison.Ordinal))
             {
                 CapsuleCollider collider = root.AddComponent<CapsuleCollider>();
@@ -351,12 +360,30 @@ namespace FalsePositive.Editor
             using HumanPoseHandler handler = new HumanPoseHandler(animator.avatar, animator.transform);
             HumanPose pose = new HumanPose();
             handler.GetHumanPose(ref pose);
-            // Muscle tuning lives in CabinPoseLibrary (runtime assembly) so
-            // Cutscene.ScriptedActor can apply the same poses at Play-mode
-            // time for procedural cutscene staging, not just this one-shot
-            // Editor-time bake.
+            // Muscle tuning lives in CabinPoseLibrary (runtime assembly), used
+            // here for a one-shot Editor-time bake so the prefab doesn't look
+            // like a T-pose in the Scene view / Inspector preview outside
+            // Play mode. In Play mode this is overwritten within the first
+            // frame by CabinCast.controller (assigned below) via
+            // CabinAnimatorDriver.Start -> PlayProfile, which is now the real
+            // owner of this pose data.
             CabinPoseLibrary.Apply(ref pose, profile);
             handler.SetHumanPose(ref pose);
+
+            // Wire the baked animation clips onto this Animator. Every state
+            // (idle profiles, walk/carry, the lift) lives on one shared
+            // controller — see Editor.CabinAnimationBuilder's class doc for
+            // why zero root curves means applyRootMotion must be false, and
+            // why cullingMode must stay AlwaysAnimate: accessory renderers
+            // already need updateWhenOffscreen = true (AddAccessory below)
+            // for the same reason — offscreen culling would desync them from
+            // an Animator that silently stopped evaluating.
+            CabinAnimationBuilder.EnsureBuilt();
+            RuntimeAnimatorController controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                "Assets/_Project/CabinNight/Animations/CabinCast.controller");
+            if (controller != null) animator.runtimeAnimatorController = controller;
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         }
 
         private static void SaveCharacter(GameObject character, string fileName)

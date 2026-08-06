@@ -776,6 +776,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: a835c9ed2f78c374f8ea784164e0acec, type: 3}
       holdSecondsIfNoClip: 1
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 2
     fadeOutSeconds: 0.3
     fadeInSeconds: 0.5
@@ -787,6 +788,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 7c0375c9df2a70645b602290b6c68a39, type: 3}
       holdSecondsIfNoClip: 8
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 3
     fadeOutSeconds: 1.2
     fadeInSeconds: 1.2
@@ -796,6 +798,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 372b7593d2de48a488c72d1bdeb65f53, type: 3}
       holdSecondsIfNoClip: 1.4
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 4
     fadeOutSeconds: 0.2
     fadeInSeconds: 0.4
@@ -805,6 +808,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: be4b25939d31a964cb860276b1d7ecec, type: 3}
       holdSecondsIfNoClip: 0.6
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 5
     fadeOutSeconds: 0.2
     fadeInSeconds: 0.3
@@ -814,6 +818,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: f92dfee5d8e1e0f4f91f2e1271b8915a, type: 3}
       holdSecondsIfNoClip: 3
       memoryFlagToSet: heard_radio_warning
+    keepScreenLit: 0
   - id: 6
     fadeOutSeconds: 0.3
     fadeInSeconds: 0.3
@@ -823,6 +828,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: e2ae14da0ef5a2249b94aebb278e139c, type: 3}
       holdSecondsIfNoClip: 1.5
       memoryFlagToSet: saw_door_close
+    keepScreenLit: 0
   - id: 7
     fadeOutSeconds: 0.2
     fadeInSeconds: 0.3
@@ -832,6 +838,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 4ec852397533e3f40ba452263b625ca6, type: 3}
       holdSecondsIfNoClip: 1.8
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 8
     fadeOutSeconds: 1.2
     fadeInSeconds: 1.2
@@ -841,6 +848,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 372b7593d2de48a488c72d1bdeb65f53, type: 3}
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 9
     fadeOutSeconds: 1.2
     fadeInSeconds: 1.2
@@ -850,6 +858,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 372b7593d2de48a488c72d1bdeb65f53, type: 3}
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 10
     fadeOutSeconds: 0.3
     fadeInSeconds: 0.5
@@ -860,6 +869,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: a7047c8c70fac7547ae655cab5c6524a, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: saw_body
+    keepScreenLit: 0
   - id: 11
     fadeOutSeconds: 0.2
     fadeInSeconds: 0.3
@@ -869,9 +879,10 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: cb7d98da1477b004c8f04adf9c195dbc, type: 3}
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 12
-    fadeOutSeconds: 0.3
-    fadeInSeconds: 0.3
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
     beats:
     - speaker: PRIYA
       line: What do we do?? What do we do??
@@ -888,9 +899,10 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 3ec0ae55469f92a439a790a9f8013d3c, type: 3}
       holdSecondsIfNoClip: 3
       memoryFlagToSet: 
+    keepScreenLit: 1
   - id: 13
-    fadeOutSeconds: 0.3
-    fadeInSeconds: 0.3
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
     beats:
     - speaker: PRIYA
       line: What could have happened here?
@@ -927,15 +939,22 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 197f90a0e9ea49b4289545da4c3be5f7, type: 3}
       holdSecondsIfNoClip: 1.5
       memoryFlagToSet: heard_aaron_deflect
+    keepScreenLit: 1
   - id: 14
-    fadeOutSeconds: 0.3
-    fadeInSeconds: 0.4
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
     beats:
     - speaker: 
       line: 
       voClip: {fileID: 8300000, guid: 9e24a7ab08548ad40843da3426149308, type: 3}
       holdSecondsIfNoClip: 2
       memoryFlagToSet: 
+    - speaker: PRIYA
+      line: Nick? Nick, can you hear me?
+      voClip: {fileID: 8300000, guid: 9e24a7ab08548ad40843da3426149308, type: 3}
+      holdSecondsIfNoClip: 2.5
+      memoryFlagToSet: 
+    keepScreenLit: 1
   - id: 15
     fadeOutSeconds: 1.2
     fadeInSeconds: 1.2
@@ -945,6 +964,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 372b7593d2de48a488c72d1bdeb65f53, type: 3}
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 16
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
@@ -954,6 +974,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 17
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
@@ -963,6 +984,7 @@ MonoBehaviour:
       voClip: {fileID: 0}
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 18
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
@@ -972,6 +994,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: b889e8ceacf8cc24188dd979e352edcf, type: 3}
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 19
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -981,6 +1004,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 20
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -990,6 +1014,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 21
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -999,6 +1024,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 779ee8702a11764488a813601e3c16a2, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 22
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -1008,6 +1034,7 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: 458c1f42d94f2d44daf7a4ced8dc8832, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
+    keepScreenLit: 0
 --- !u!4 &186494267
 Transform:
   m_ObjectHideFlags: 0

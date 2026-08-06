@@ -332,9 +332,19 @@ namespace FalsePositive.Flow
             }
 
             Phase = next;
-            PhaseChanged?.Invoke(next);
 
+            // Fired after FadeFromBlack completes, not before — a phase
+            // handler (e.g. M2MorningController) commonly reacts by
+            // requesting a cutscene, which starts its own
+            // CutsceneDirector.PlayRoutine fade on the same ScreenFader.
+            // Firing PhaseChanged first used to let that second fade start
+            // concurrently with this routine's own FadeFromBlack; ScreenFader
+            // now tolerates the race via its generation counter, but there's
+            // no reason to invite it — waiting here means the screen is
+            // fully lit and settled before anything downstream can touch the
+            // fader again.
             if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
+            PhaseChanged?.Invoke(next);
             _transitioning = false;
         }
 

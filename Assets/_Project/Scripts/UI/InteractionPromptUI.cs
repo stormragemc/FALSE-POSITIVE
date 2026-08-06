@@ -14,9 +14,13 @@ namespace FalsePositive.UI
     /// one wiring its own copy. Polls for an InteractionRaycaster the same
     /// way CursorVisibilityController polls Selectable.allSelectablesArray —
     /// only one memory scene's player (and therefore one raycaster) is ever
-    /// active at a time, and re-finding it via FindFirstObjectByType only
-    /// when the cached one goes null/disabled (scene change) is cheap enough
-    /// not to need an event.
+    /// active at a time, and re-finding it via FindAnyObjectByType whenever
+    /// the cached one goes null OR its GameObject is deactivated (scene
+    /// change — SceneRouter deactivates roots, it never unloads them, so a
+    /// stale reference stays non-null forever otherwise) is cheap enough not
+    /// to need an event. While no memory scene is active (all of
+    /// Interrogation) this re-runs FindAnyObjectByType every LateUpdate —
+    /// intentional, not an oversight; there is nothing to find so it's cheap.
     ///
     /// A completed Interactable shows nothing (there is nothing left to do).
     /// A locked DoorInteractable shows its lockedPrompt WITHOUT the "[E]"
@@ -35,15 +39,21 @@ namespace FalsePositive.UI
 
         private void LateUpdate()
         {
-            if (_raycaster == null)
+            if (_raycaster == null || !_raycaster.isActiveAndEnabled)
             {
                 _raycaster = FindAnyObjectByType<InteractionRaycaster>();
             }
 
             Interactable current = _raycaster != null ? _raycaster.Current : null;
-            UpdateHighlight(current);
 
-            if (current == null || current.IsComplete)
+            // Decide whether anything is actually shown BEFORE highlighting —
+            // a completed or promptless Interactable used to still get the
+            // emissive tint here (UpdateHighlight ran unconditionally first),
+            // which reads as "it glows but E does nothing."
+            bool shown = current != null && !current.IsComplete && !string.IsNullOrEmpty(current.LookPrompt);
+            UpdateHighlight(shown ? current : null);
+
+            if (!shown)
             {
                 SetVisible(false);
                 return;
@@ -51,7 +61,7 @@ namespace FalsePositive.UI
 
             bool isLockedDoor = current is DoorInteractable door && door.IsLocked;
             string text = isLockedDoor ? current.LookPrompt : $"[E] {current.LookPrompt}";
-            SetVisible(!string.IsNullOrEmpty(current.LookPrompt));
+            SetVisible(true);
             if (promptText != null) promptText.text = text;
         }
 

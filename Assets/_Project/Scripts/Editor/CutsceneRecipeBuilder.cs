@@ -139,6 +139,7 @@ namespace FalsePositive.Editor
             element.FindPropertyRelative("id").enumValueIndex = (int)recipe.id;
             element.FindPropertyRelative("fadeOutSeconds").floatValue = recipe.fadeOutSeconds;
             element.FindPropertyRelative("fadeInSeconds").floatValue = recipe.fadeInSeconds;
+            element.FindPropertyRelative("keepScreenLit").boolValue = recipe.keepScreenLit;
 
             SerializedProperty beatsProp = element.FindPropertyRelative("beats");
             beatsProp.arraySize = recipe.beats.Length;
@@ -187,11 +188,48 @@ namespace FalsePositive.Editor
             };
         }
 
+        /// <summary>A dialogue beat whose voClip is loaded directly from
+        /// Art/Audio/VO by filename, for lines added after the AttachVoClips
+        /// VoClipNames table was written (VoClipNames maps by beat index, which
+        /// gets fragile to extend for a single inserted line) — subtitle text
+        /// still comes from `line`, same as Beat().</summary>
+        private static CutsceneBeat VoBeat(string speaker, string line, string voName, float holdIfMissing, string flag = null)
+        {
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".mp3");
+            if (clip == null)
+            {
+                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO {voName}.mp3 under {VoRoot} — beat will be a silent hold.");
+            }
+            return new CutsceneBeat
+            {
+                speaker = speaker,
+                line = line,
+                holdSecondsIfNoClip = holdIfMissing,
+                memoryFlagToSet = flag,
+                voClip = clip,
+            };
+        }
+
         private static CutsceneRecipe Recipe(CutsceneId id, float fadeOut, float fadeIn, params CutsceneBeat[] beats) => new CutsceneRecipe
         {
             id = id,
             fadeOutSeconds = fadeOut,
             fadeInSeconds = fadeIn,
+            beats = beats,
+        };
+
+        /// <summary>Same as Recipe(), but the screen stays lit for the whole
+        /// cutscene instead of fading to black — for the M2 beats staged to be
+        /// watched (Cutscene.CutsceneStage's player-walks-out/carries-Nick-in
+        /// staging). fadeOut/fadeIn are kept at 0 here only for clarity in the
+        /// recipe list; CutsceneDirector.PlayRoutine skips both fade calls
+        /// entirely when keepScreenLit is set, so these values are never read.</summary>
+        private static CutsceneRecipe VisibleRecipe(CutsceneId id, params CutsceneBeat[] beats) => new CutsceneRecipe
+        {
+            id = id,
+            fadeOutSeconds = 0f,
+            fadeInSeconds = 0f,
+            keepScreenLit = true,
             beats = beats,
         };
 
@@ -246,12 +284,17 @@ namespace FalsePositive.Editor
                 Recipe(CutsceneId.TheyComeDown, 0.2f, 0.3f,
                     SfxBeat("footsteps_stairs", 1.6f)),
 
-                Recipe(CutsceneId.OutIntoTheSnow, 0.3f, 0.3f,
+                // These three beats used to be fade-to-black+VO like everything
+                // else — the M2 fix (docs/GAME_COMPLETION_PLAN.md follow-up)
+                // keeps the screen lit for them specifically, so the player
+                // actually watches the door open, the walk out, the lift, and
+                // the carry back rather than hearing it narrated over black.
+                VisibleRecipe(CutsceneId.OutIntoTheSnow,
                     Beat("PRIYA", "What do we do?? What do we do??", 2f),
                     Beat("IVY", "Oh my god, what happened to him? What do we do now?", 2.5f),
                     Beat("AARON", "He looks cold. Let's bring him in — to the sofa, near the fireplace.", 3f)),
 
-                Recipe(CutsceneId.TheCarry, 0.3f, 0.3f,
+                VisibleRecipe(CutsceneId.TheCarry,
                     Beat("PRIYA", "What could have happened here?", 2f),
                     Beat("IVY", "I don't know! I was with Aaron upstairs!!", 2f),
                     Beat("PRIYA", "…All night?", 1.2f),
@@ -260,8 +303,9 @@ namespace FalsePositive.Editor
                     Beat("PRIYA", "The door was locked. Who locked the door?", 2f),
                     Beat("AARON", "Lift on three.", 1.5f, MemoryFlagIds.HeardAaronDeflect)),
 
-                Recipe(CutsceneId.TheSofa, 0.3f, 0.4f,
-                    SfxBeat("body_settle_thud", 2f)),
+                VisibleRecipe(CutsceneId.TheSofa,
+                    SfxBeat("body_settle_thud", 2f),
+                    VoBeat("PRIYA", "Nick? Nick, can you hear me?", "priya_can_you_hear_me", 2.5f)),
 
                 Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),

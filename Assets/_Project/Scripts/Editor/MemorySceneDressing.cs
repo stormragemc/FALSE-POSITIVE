@@ -60,10 +60,51 @@ namespace FalsePositive.Editor
                 "Look at the clock", MemoryFlagIds.SawClock);
             AddAmbientLoop(clock.gameObject, "clock_tick_loop", volume: 0.35f);
 
-            // On the coat hanger, BO_CoatHanger at (-1.4, 0, -4.5), ~1.79 m tall.
-            AddProp<InspectPoint>(root, "Prop_CoatOnChair", new Vector3(-1.4f, 1.45f, -4.5f),
+            // On the front peg of BO_CoatHanger (pole at (-1.4, 0, -4.5),
+            // ~1.79 m tall). Its own BoxCollider is a solid 0.56x0.56x1.79 m
+            // box centred on that axis (z in [-4.78,-4.22]) — a prop placed
+            // ON the axis, like this used to be, sits fully enclosed inside
+            // it, so every raycast toward the prop hits the hanger first and
+            // it becomes invisible AND unpickable (GetComponentInParent
+            // finds no Interactable on the hanger). Offset along +Z, clear
+            // of that box, to read as hung on the front peg instead.
+            AddProp<InspectPoint>(root, "Prop_CoatOnChair", new Vector3(-1.4f, 1.45f, -4.10f),
                 new Vector3(0.4f, 0.5f, 0.15f), new Color(0.5f, 0.15f, 0.15f), "Nick's Coat",
                 "Look at the coat", MemoryFlagIds.SawCoatSwap);
+
+            // The M1 front door — same Door_v2 instance MemorySceneBuilderV2
+            // places as "Prop_FrontDoor_Locked", but DressNight never
+            // configured it, so it ran on the prefab's own defaults:
+            // lookPrompt empty, startsLocked false, no AudioSource. Result:
+            // InteractionPromptUI.UpdateHighlight still emissive-tints it on
+            // look (no prompt gates that), and E fires MarkComplete()+Opened
+            // in total silence — it read as a broken, glowing, do-nothing
+            // door. M1's door is meant to stay a trigger-volume-only beat
+            // (see M1NightController) — locking it and giving the locked
+            // branch feedback, same as DressMorning already does for M2,
+            // fixes both without changing what the door DOES here.
+            GameObject nightDoorGo = GameObject.Find("Prop_FrontDoor_Locked");
+            DoorInteractable nightDoor = nightDoorGo != null ? nightDoorGo.GetComponent<DoorInteractable>() : null;
+            if (nightDoor != null)
+            {
+                SerializedObject nightDoorSo = new SerializedObject(nightDoor);
+                nightDoorSo.FindProperty("startsLocked").boolValue = true;
+                nightDoorSo.FindProperty("lookPrompt").stringValue = "It's locked.";
+                nightDoorSo.FindProperty("memoryFlag").stringValue = string.Empty;
+                nightDoorSo.ApplyModifiedPropertiesWithoutUndo();
+
+                AudioSource nightDoorAudio = nightDoor.gameObject.GetComponent<AudioSource>();
+                if (nightDoorAudio == null) nightDoorAudio = nightDoor.gameObject.AddComponent<AudioSource>();
+                nightDoorAudio.playOnAwake = false;
+                nightDoorSo.Update();
+                nightDoorSo.FindProperty("audioSource").objectReferenceValue = nightDoorAudio;
+                nightDoorSo.ApplyModifiedPropertiesWithoutUndo();
+                SetClip(nightDoor, "lockedClip", "door_locked_rattle");
+            }
+            else
+            {
+                Debug.LogWarning("[MemorySceneDressing] Prop_FrontDoor_Locked not found in Memory_CabinNight — door feedback skipped.");
+            }
 
             // Bottom of the +X wall stair run (SM_Cabin_Stairs x in [3.9,5.0]).
             AddProp<InspectPoint>(root, "Prop_BlockedStairs", new Vector3(3.9f, 0.2f, -1.2f),
@@ -126,7 +167,13 @@ namespace FalsePositive.Editor
                 SerializedObject doorSo = new SerializedObject(door);
                 doorSo.FindProperty("startsLocked").boolValue = true;
                 doorSo.FindProperty("lookPrompt").stringValue = "It's locked.";
-                doorSo.FindProperty("memoryFlag").stringValue = MemoryFlagIds.FoundDoorLocked;
+                // No base-class memoryFlag here on purpose: DoorInteractable
+                // now writes MemoryFlagIds.FoundDoorLocked itself, directly,
+                // the first time the player tries the locked door — writing
+                // it here would instead fire MarkComplete's memoryFlag on
+                // *open* (the base Interactable.MarkComplete path), which is
+                // the wrong moment and backwards from what the flag name says.
+                doorSo.FindProperty("memoryFlag").stringValue = string.Empty;
                 doorSo.ApplyModifiedPropertiesWithoutUndo();
 
                 AudioSource doorAudio = door.gameObject.GetComponent<AudioSource>();
@@ -136,15 +183,26 @@ namespace FalsePositive.Editor
                 doorSo.FindProperty("audioSource").objectReferenceValue = doorAudio;
                 doorSo.ApplyModifiedPropertiesWithoutUndo();
                 SetClip(door, "openClip", "door_creak_open");
+                SetClip(door, "lockedClip", "door_locked_rattle");
+                SetClip(door, "unlockClip", "door_unlock_click");
             }
             else
             {
                 Debug.LogError("[MemorySceneDressing] Prop_FrontDoor_Locked (Door_v2 instance) not found — run MemorySceneBuilderV2 first.");
             }
 
-            // Hook immediately left of the door frame (hinge at x=-3.379,
-            // z=-4.121; "left of the frame" facing the door from inside).
-            KeyPickup key = AddProp<KeyPickup>(root, "Prop_DoorKey", new Vector3(-2.75f, 1.5f, -4.65f),
+            // On the front peg of BO_CoatHanger, same spot DressNight hangs
+            // Nick's coat (matches the story beat — key hung on the inside
+            // hook, STORY_SCRIPT.md §2). Used to float at (-2.75, 1.5, -4.65),
+            // ~1.4m from the actual hanger and effectively unfindable; then
+            // moved onto the hanger's own axis (-1.4, 1.45, -4.5), which is
+            // WORSE — the hanger's BoxCollider is a solid 0.56x0.56x1.79 m
+            // box centred on that exact axis (z in [-4.78,-4.22]), so the key
+            // was fully enclosed inside it: every raycast hit the hanger
+            // first, GetComponentInParent found no Interactable there, and
+            // the key was unpickable from any direction. Offset along +Z,
+            // clear of that box, same as Prop_CoatOnChair in DressNight.
+            KeyPickup key = AddProp<KeyPickup>(root, "Prop_DoorKey", new Vector3(-1.4f, 1.45f, -4.10f),
                 new Vector3(0.08f, 0.08f, 0.02f), new Color(0.8f, 0.7f, 0.2f), "Key",
                 "Take the key", MemoryFlagIds.FoundKeyInside);
             if (door != null)

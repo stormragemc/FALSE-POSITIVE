@@ -5,49 +5,36 @@ using UnityEngine;
 namespace FalsePositive.Cutscene
 {
     /// <summary>
-    /// Procedural cutscene motion for a cast member — no .anim assets, no
-    /// Animator Controller, per the plan's explicit "procedural only" choice.
-    /// Drives the same HumanPose muscle vocabulary CabinNightCharacterBuilder
-    /// bakes at build time (via the shared CabinPoseLibrary), plus a simple
-    /// procedural leg/arm counter-swing layered on top while actually moving.
-    /// CutsceneStage owns *when* each of these runs per beat; this only knows
-    /// how to move/turn/pose one actor.
+    /// Procedural cutscene MOVEMENT for a cast member — root Transform
+    /// position/rotation only. Pose/animation is CabinAnimatorDriver's job
+    /// (CabinCast.controller, built by Editor.CabinAnimationBuilder); this
+    /// class delegates to it rather than writing muscles itself, which is
+    /// what it did before real AnimationClips existed in the project (see
+    /// git history / the plan doc this superseded — "no .anim assets, no
+    /// Animator Controller" was a Day-1 scope decision that a later pass
+    /// reversed once HumanoidClipAuthoringTests confirmed clip authoring
+    /// actually works for this rig).
     ///
     /// CabinCharacterIdle (breathing/sway) keeps running on the same object
-    /// underneath — that component only touches Spine1/Neck/Head bones, this
-    /// one touches the full-body HumanPose plus root transform, so they don't
-    /// fight each other.
+    /// underneath — that component only touches Spine1/Neck/Head bones as a
+    /// live additive offset on top of whatever the Animator wrote this frame,
+    /// so it doesn't fight the controller.
+    ///
+    /// Public signatures are unchanged from the pre-clip version, so
+    /// CutsceneStage's call sites (PlayPose/MoveTo) needed zero edits when
+    /// this was rewritten.
     /// </summary>
     public sealed class ScriptedActor : MonoBehaviour
     {
-        private Animator _animator;
-        private HumanPoseHandler _poseHandler;
-        private HumanPose _pose;
-        private bool _hasPose;
+        private CabinAnimatorDriver _driver;
 
         private void Awake()
         {
-            _animator = GetComponentInChildren<Animator>();
-            if (_animator != null && _animator.avatar != null && _animator.avatar.isHuman)
-            {
-                _poseHandler = new HumanPoseHandler(_animator.avatar, _animator.transform);
-                _poseHandler.GetHumanPose(ref _pose);
-                _hasPose = true;
-            }
-        }
-
-        private void OnDestroy()
-        {
-            _poseHandler?.Dispose();
+            _driver = GetComponent<CabinAnimatorDriver>();
         }
 
         /// <summary>Applies a static profile pose immediately (no walk cycle).</summary>
-        public void PlayPose(CabinIdleProfile profile)
-        {
-            if (!_hasPose) return;
-            CabinPoseLibrary.Apply(ref _pose, profile);
-            _poseHandler.SetHumanPose(ref _pose);
-        }
+        public void PlayPose(CabinIdleProfile profile) => _driver?.PlayProfile(profile);
 
         /// <summary>Instant yaw snap to face a point (e.g. the door, on a forced head-turn beat).</summary>
         public void TurnTo(Vector3 worldPoint)
@@ -59,16 +46,16 @@ namespace FalsePositive.Cutscene
         }
 
         /// <summary>
-        /// Walks to a world position over time, applying the Walking (or
-        /// Carrying) pose with a procedural counter-swing layered on top so
-        /// the walk doesn't read as a statue sliding across the floor.
+        /// Walks to a world position over time, cross-fading into the Walk (or
+        /// Walk_Carry) animator state for the duration of the move.
         /// </summary>
         public IEnumerator MoveTo(Vector3 worldPosition, float speed, CabinIdleProfile walkProfile = CabinIdleProfile.Walking)
         {
-            if (!_hasPose)
+            if (_driver == null)
             {
-                // No humanoid avatar (shouldn't happen for cast members, but
-                // don't hard-fail a cutscene over it) — just translate.
+                // No driver (shouldn't happen for cast members — every
+                // BuildCharacter call adds one — but don't hard-fail a
+                // cutscene over it), just translate.
                 while (Vector3.Distance(transform.position, worldPosition) > 0.05f)
                 {
                     transform.position = Vector3.MoveTowards(transform.position, worldPosition, speed * Time.deltaTime);
@@ -78,30 +65,60 @@ namespace FalsePositive.Cutscene
                 yield break;
             }
 
-            CabinPoseLibrary.Apply(ref _pose, walkProfile);
-            float strideRate = walkProfile == CabinIdleProfile.Carrying ? 3.2f : 5.5f;
-            float strideDegrees = walkProfile == CabinIdleProfile.Carrying ? 6f : 14f;
+            _driver.PlayState(walkProfile == CabinIdleProfile.Carrying ? "Walk_Carry" : "Walk", 0.2f);
 
             while (Vector3.Distance(transform.position, worldPosition) > 0.05f)
             {
                 TurnTo(worldPosition);
                 transform.position = Vector3.MoveTowards(transform.position, worldPosition, speed * Time.deltaTime);
-
-                float swing = Mathf.Sin(Time.time * strideRate) * strideDegrees;
-                CabinPoseLibrary.SetMuscle(ref _pose, "Left Upper Leg Front-Back", swing / 30f + (walkProfile == CabinIdleProfile.Carrying ? 0f : 0.12f));
-                CabinPoseLibrary.SetMuscle(ref _pose, "Right Upper Leg Front-Back", -swing / 30f - (walkProfile == CabinIdleProfile.Carrying ? 0f : 0.12f));
-                if (walkProfile != CabinIdleProfile.Carrying)
-                {
-                    CabinPoseLibrary.SetMuscle(ref _pose, "Left Arm Front-Back", -swing / 20f);
-                    CabinPoseLibrary.SetMuscle(ref _pose, "Right Arm Front-Back", swing / 20f);
-                }
-                _poseHandler.SetHumanPose(ref _pose);
                 yield return null;
             }
 
             transform.position = worldPosition;
-            CabinPoseLibrary.Apply(ref _pose, walkProfile == CabinIdleProfile.Carrying ? CabinIdleProfile.Carrying : CabinIdleProfile.Controlled);
-            _poseHandler.SetHumanPose(ref _pose);
+            _driver.PlayProfile(walkProfile == CabinIdleProfile.Carrying ? CabinIdleProfile.Carrying : CabinIdleProfile.Controlled);
+        }
+
+        /// <summary>
+        /// Walks a bent path (e.g. through a doorway rather than straight
+        /// through a wall) as ONE continuous walk-cycle, not a walk/idle
+        /// stutter per leg. MoveTo cross-fades into Walk/Walk_Carry before
+        /// its loop and back to Controlled/Carrying after — calling MoveTo
+        /// once per waypoint would replay both transitions at every corner.
+        /// This instead cross-fades once at the start and once at the end,
+        /// looping MoveTowards/TurnTo across every leg in between.
+        /// </summary>
+        public IEnumerator MoveAlong(Vector3[] waypoints, float speed, CabinIdleProfile walkProfile = CabinIdleProfile.Walking)
+        {
+            if (waypoints == null || waypoints.Length == 0) yield break;
+
+            if (_driver == null)
+            {
+                foreach (Vector3 waypoint in waypoints)
+                {
+                    while (Vector3.Distance(transform.position, waypoint) > 0.05f)
+                    {
+                        transform.position = Vector3.MoveTowards(transform.position, waypoint, speed * Time.deltaTime);
+                        TurnTo(waypoint);
+                        yield return null;
+                    }
+                }
+                yield break;
+            }
+
+            _driver.PlayState(walkProfile == CabinIdleProfile.Carrying ? "Walk_Carry" : "Walk", 0.2f);
+
+            foreach (Vector3 waypoint in waypoints)
+            {
+                while (Vector3.Distance(transform.position, waypoint) > 0.05f)
+                {
+                    TurnTo(waypoint);
+                    transform.position = Vector3.MoveTowards(transform.position, waypoint, speed * Time.deltaTime);
+                    yield return null;
+                }
+                transform.position = waypoint;
+            }
+
+            _driver.PlayProfile(walkProfile == CabinIdleProfile.Carrying ? CabinIdleProfile.Carrying : CabinIdleProfile.Controlled);
         }
     }
 }

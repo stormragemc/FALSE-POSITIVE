@@ -25,6 +25,17 @@ namespace FalsePositive.Interaction
 
         private Interactable _current;
 
+        // Non-alloc buffer, scanned for the nearest hit that actually has an
+        // Interactable. A plain Physics.Raycast (single nearest hit) used to
+        // silently kill the prompt whenever any non-interactable collider
+        // sat in front of a prop — e.g. Prop_DoorKey/Prop_CoatOnChair are
+        // fully enclosed inside BO_CoatHanger's BoxCollider, and
+        // M1NightController's trigger box sits directly in front of the M1
+        // door on a straight-on approach. 16, not 8: an overflowing buffer
+        // fills with an arbitrary subset of hits, not the nearest ones, and
+        // could silently drop exactly the prop near a collider cluster.
+        private readonly RaycastHit[] _hitBuffer = new RaycastHit[16];
+
         /// <summary>The Interactable currently under the crosshair, or null. Read by UI.InteractionPromptUI.</summary>
         public Interactable Current => _current;
 
@@ -42,8 +53,23 @@ namespace FalsePositive.Interaction
         {
             _current = null;
             if (raycastCamera == null) return;
-            if (!Physics.Raycast(raycastCamera.transform.position, raycastCamera.transform.forward, out RaycastHit info, maxDistance)) return;
-            _current = info.collider.GetComponentInParent<Interactable>();
+
+            int hitCount = Physics.RaycastNonAlloc(
+                raycastCamera.transform.position, raycastCamera.transform.forward,
+                _hitBuffer, maxDistance);
+
+            float nearestDistance = float.MaxValue;
+            for (int i = 0; i < hitCount; i++)
+            {
+                RaycastHit hit = _hitBuffer[i];
+                if (hit.distance >= nearestDistance) continue;
+
+                Interactable candidate = hit.collider.GetComponentInParent<Interactable>();
+                if (candidate == null || candidate.IsComplete) continue;
+
+                nearestDistance = hit.distance;
+                _current = candidate;
+            }
         }
 
         private void HandleInteractPressed()

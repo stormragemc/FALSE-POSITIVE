@@ -26,6 +26,15 @@ namespace FalsePositive.Cutscene
         public float fadeOutSeconds = 0.3f;
         public float fadeInSeconds = 0.5f;
         public CutsceneBeat[] beats = Array.Empty<CutsceneBeat>();
+
+        /// <summary>When true, CutsceneDirector.PlayRoutine skips both fade calls
+        /// entirely and the screen stays lit for the whole cutscene — for beats
+        /// meant to be watched (M2's OutIntoTheSnow/TheCarry/TheSofa), not the
+        /// cheap fade-to-black+VO form every other cutscene uses. NOTE: setting
+        /// fadeOutSeconds/fadeInSeconds to 0 does NOT achieve this —
+        /// ScreenFader.Fade's duration&lt;=0 branch snaps straight to
+        /// canvasGroup.alpha = 1 (fully black), it doesn't skip the fade.</summary>
+        public bool keepScreenLit;
     }
 
     /// <summary>
@@ -90,8 +99,9 @@ namespace FalsePositive.Cutscene
         {
             IsPlaying = true;
             _byId.TryGetValue(id, out CutsceneRecipe recipe);
+            bool keepScreenLit = recipe != null && recipe.keepScreenLit;
 
-            if (fader != null) yield return fader.FadeToBlack(recipe?.fadeOutSeconds ?? 0.3f);
+            if (!keepScreenLit && fader != null) yield return fader.FadeToBlack(recipe?.fadeOutSeconds ?? 0.3f);
             Started?.Invoke(id);
 
             if (recipe != null)
@@ -102,7 +112,7 @@ namespace FalsePositive.Cutscene
                 }
             }
 
-            if (fader != null) yield return fader.FadeFromBlack(recipe?.fadeInSeconds ?? 0.5f);
+            if (!keepScreenLit && fader != null) yield return fader.FadeFromBlack(recipe?.fadeInSeconds ?? 0.5f);
 
             IsPlaying = false;
             Finished?.Invoke(id);

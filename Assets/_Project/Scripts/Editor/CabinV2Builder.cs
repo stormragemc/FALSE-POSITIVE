@@ -284,19 +284,28 @@ namespace FalsePositive.Editor
         }
 
         /// <summary>
-        /// A BoxCollider's center/size live in the GameObject's own LOCAL
-        /// space and rotate automatically with its transform — so the right
-        /// source is the mesh's own local bounds (MeshFilter.sharedMesh.bounds)
-        /// scaled by localScale, NOT an inverse-transform of the renderer's
-        /// WORLD-space AABB. Every object here (Cabin.fbx's children and
-        /// Door.fbx's root alike) carries a baked (270, 0, 0) import rotation
-        /// converting the source's Z-up to Unity's Y-up, plus a 100x
-        /// localScale compensating the source's unit scale (confirmed via
-        /// Unity_RunCommand: mesh.bounds reads ~0.008 units, times 100 = the
-        /// real ~0.8 m footprint). Inverse-transforming a world AABB size
-        /// through that 270 degree rotation mixes axes nonsensically and
-        /// collapses the result near zero — this collapsed every BoxCollider
-        /// this builder made until caught by an empirical bounds check.
+        /// A BoxCollider's center/size are ALREADY local-space fields, and
+        /// Unity automatically multiplies them by the GameObject's own
+        /// transform.lossyScale to get the real world collision volume — so
+        /// the right source is the mesh's raw local bounds
+        /// (MeshFilter.sharedMesh.bounds), UNSCALED. Two bugs lived here
+        /// before this was caught by an in-Play-mode Physics.OverlapSphere
+        /// check (a local-field comparison against renderer.bounds looked
+        /// "correct" by coincidence and missed both):
+        ///
+        /// 1. The original version inverse-transformed the renderer's WORLD
+        ///    AABB size through each object's baked (270, 0, 0) import
+        ///    rotation (Blender Z-up -> Unity Y-up) — invalid for a rotated
+        ///    object, and collapsed every collider near zero.
+        /// 2. The fix for #1 pre-multiplied meshBounds by target.localScale
+        ///    (every object here carries localScale=100, compensating the
+        ///    source mesh's small units) BEFORE assigning to collider.size —
+        ///    but Unity applies that same localScale AGAIN automatically,
+        ///    so the real-world collider ballooned to ~100x too large
+        ///    (confirmed: SM_Chair_05's collider measured ~95 units tall via
+        ///    Collider.bounds in Play mode, and the player's CharacterController
+        ///    spawned wedged inside it and got shoved up to y=3.3).
+        ///
         /// Assumes the mesh sits directly on `target` (true for every call
         /// site here — Cabin.fbx's per-object children and Door.fbx's root).
         /// </summary>
@@ -304,10 +313,7 @@ namespace FalsePositive.Editor
         {
             MeshFilter mf = target.GetComponent<MeshFilter>();
             if (mf == null || mf.sharedMesh == null) return new Bounds(Vector3.zero, Vector3.one * 0.1f);
-            Bounds meshBounds = mf.sharedMesh.bounds;
-            return new Bounds(
-                Vector3.Scale(meshBounds.center, target.localScale),
-                Vector3.Scale(meshBounds.size, target.localScale));
+            return mf.sharedMesh.bounds;
         }
     }
 }

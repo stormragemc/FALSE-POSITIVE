@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using FalsePositive.CabinNight;
+using FalsePositive.Core;
 using FalsePositive.Player;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -43,11 +44,94 @@ namespace FalsePositive.Editor
 
         /// <summary>Reusable for T04's duplicated memory scenes
         /// (Memory_CabinNight / Memory_CabinMorning) — opens the given scene,
-        /// rebuilds the cast in place, and saves back to the same path.</summary>
+        /// rebuilds the cast in place, and saves back to the same path.
+        /// Superseded by <see cref="BuildCastInScene"/> for the Cabin_v2
+        /// rebuild (MemorySceneBuilderV2); kept only until the teaser scene
+        /// this reads coordinates from is retired (plan Phase 6).</summary>
         public static void RebuildCastForScene(string scenePath)
         {
             Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             RebuildCastInOpenScene(scene, scenePath);
+        }
+
+        /// <summary>
+        /// MemorySceneBuilderV2's cast builder for the Cabin_v2 shell. Unlike
+        /// <see cref="RebuildCastForScene"/> this does not open/save a scene
+        /// itself — the caller already has the scene open and saves once at
+        /// the end of its own build pass, so this only mutates the given
+        /// Characters root in place. Reuses the same BuildCharacter/pose
+        /// machinery as the teaser-scene builder (kept, still good).
+        ///
+        /// Per the plan's Phase 2b staging: M1_Night only needs the player
+        /// (seated at SM_Chair_05) and Priya (asleep — reuses the Sofa, no
+        /// separate armchair model exists in Cabin_v2) visibly present; Nick
+        /// is already outside and Aaron/Ivy are upstairs per STORY_SCRIPT.md
+        /// §4, so those three are built but start inactive (Phase 4's
+        /// CutsceneStage re-enables them for later beats that need them, e.g.
+        /// "TheyComeDown"). M2_Morning stages everyone per §4: player on the
+        /// sofa, Priya at the window, Aaron/Ivy at the top of the landing.
+        /// </summary>
+        public static void BuildCastInScene(Transform charactersRoot, bool isMorning)
+        {
+            while (charactersRoot.childCount > 0)
+            {
+                UnityEngine.Object.DestroyImmediate(charactersRoot.GetChild(0).gameObject);
+            }
+
+            GameObject player = isMorning
+                ? BuildCharacter(charactersRoot, "Player (Male - First Person)", false,
+                    new Vector3(0.75f, 0f, 0.25f), new Vector3(0f, -90f, 0f), 0.98f,
+                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null)
+                : BuildCharacter(charactersRoot, "Player (Male - First Person)", false,
+                    new Vector3(-3.0f, 0f, 0.85f), new Vector3(0f, 0f, 0f), 0.98f,
+                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null);
+            ConfigurePlayer(player);
+            ConvertToRouterRig(player);
+            SaveCharacter(player, "Player_FirstPerson");
+
+            GameObject nick = BuildCharacter(charactersRoot, "Nick Vlahos (Male)", false,
+                new Vector3(2.3f, 0f, -6.3f), new Vector3(0f, 20f, 0f), 0.98f,
+                Material("MaleBodyJeansShirt"), CabinIdleProfile.Confrontational,
+                null, null, MaleHair, Material("HairBrown"), MaleShoes);
+            SaveCharacter(nick, "Nick_Vlahos");
+
+            GameObject aaron = isMorning
+                ? BuildCharacter(charactersRoot, "Aaron Teague (Male)", false,
+                    new Vector3(4.3f, 2.7f, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
+                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled,
+                    MaleHoodie, Material("HoodieGray"), MaleMilitaryHair, Material("HairDark"), MaleShoes)
+                : BuildCharacter(charactersRoot, "Aaron Teague (Male)", false,
+                    new Vector3(4.3f, 2.7f, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
+                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled,
+                    MaleHoodie, Material("HoodieGray"), MaleMilitaryHair, Material("HairDark"), MaleShoes);
+            SaveCharacter(aaron, "Aaron_Teague");
+
+            GameObject ivy = BuildCharacter(charactersRoot, "Ivy Teague (Female)", true,
+                new Vector3(4.6f, 2.7f, 3.0f), new Vector3(0f, 248f, 0f), 0.98f,
+                Material("FemaleBodyJeans"), CabinIdleProfile.Guarded,
+                FemaleShirt, Material("IvyYellowShirt"), FemaleLongHair, Material("HairBlack"), FemaleShoes);
+            SaveCharacter(ivy, "Ivy_Teague");
+
+            GameObject priya = isMorning
+                ? BuildCharacter(charactersRoot, "Priya Raman (Female)", true,
+                    new Vector3(2.3f, 0f, -4.4f), new Vector3(0f, 0f, 0f), 0.96f,
+                    Material("FemaleBodyJeans"), CabinIdleProfile.Panicked,
+                    FemaleDress, Material("PriyaDress"), FemalePonytail, Material("HairBlack"), FemaleShoes)
+                : BuildCharacter(charactersRoot, "Priya Raman (Female)", true,
+                    new Vector3(0.75f, 0f, -0.5f), new Vector3(0f, 30f, 0f), 0.96f,
+                    Material("FemaleBodyJeans"), CabinIdleProfile.Sleeping,
+                    FemaleDress, Material("PriyaDress"), FemalePonytail, Material("HairBlack"), FemaleShoes);
+            SaveCharacter(priya, "Priya_Raman");
+
+            if (!isMorning)
+            {
+                // Not physically present in M1_Night's staging — Nick is
+                // already outside, Aaron/Ivy are upstairs (blocked stairs).
+                // Phase 4's CutsceneStage re-enables whichever it needs.
+                nick.SetActive(false);
+                aaron.SetActive(false);
+                ivy.SetActive(false);
+            }
         }
 
         private static void RebuildCastInOpenScene(Scene scene, string scenePath)
@@ -213,6 +297,51 @@ namespace FalsePositive.Editor
             recovery.Configure(player.transform.position);
         }
 
+        /// <summary>
+        /// Swaps ConfigurePlayer's standalone CabinFirstPersonController
+        /// (reads Mouse/Keyboard directly, cannot be input-gated during a
+        /// cutscene) for the router-based rig the memory scenes actually
+        /// use. Mirrors MemorySceneBuilder.ConvertPlayerToRouterRig, which
+        /// only ran on the teaser-scene copy; BuildCastInScene has no
+        /// equivalent step of its own, so leaving this out left the player
+        /// with BOTH controllers fighting for the CharacterController and no
+        /// FreeLookCameraRig at all — caught via a Play-mode traversal test
+        /// (player levitated to the ceiling instead of walking on the floor).
+        /// </summary>
+        private static void ConvertToRouterRig(GameObject player)
+        {
+            CabinFirstPersonController legacy = player.GetComponent<CabinFirstPersonController>();
+            if (legacy != null) UnityEngine.Object.DestroyImmediate(legacy);
+
+            Transform view = player.transform.Find("FirstPersonView");
+            if (view == null)
+            {
+                throw new InvalidOperationException("[CabinNightCharacterBuilder] FirstPersonView child not found on Player.");
+            }
+
+            InterrogationConfig config = AssetDatabase.LoadAssetAtPath<InterrogationConfig>(
+                "Assets/_Project/Config/InterrogationConfig.asset");
+
+            PlayerInputRouter router = player.GetComponent<PlayerInputRouter>();
+            if (router == null) router = player.AddComponent<PlayerInputRouter>();
+            FreeLookCameraRig rig = player.GetComponent<FreeLookCameraRig>();
+            if (rig == null) rig = player.AddComponent<FreeLookCameraRig>();
+            SetField(rig, "input", router);
+            SetField(rig, "playerCamera", view);
+            SetField(rig, "config", config);
+        }
+
+        private static void SetField(object target, string fieldName, object value)
+        {
+            var field = target.GetType().GetField(fieldName,
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            if (field == null)
+            {
+                throw new InvalidOperationException($"[CabinNightCharacterBuilder] {target.GetType().Name} has no field '{fieldName}'.");
+            }
+            field.SetValue(target, value);
+        }
+
         private static void AssignBodyMaterials(GameObject body, bool female, Material bodyMaterial)
         {
             foreach (Renderer renderer in body.GetComponentsInChildren<Renderer>(true))
@@ -340,6 +469,15 @@ namespace FalsePositive.Editor
                     SetMuscle(ref pose, "Right Forearm Stretch", -0.58f);
                     SetMuscle(ref pose, "Spine Twist Left-Right", -0.08f);
                     SetMuscle(ref pose, "Head Turn Left-Right", -0.12f);
+                    break;
+                case CabinIdleProfile.Panicked:
+                    SetMuscle(ref pose, "Spine Front-Back", 0.15f);
+                    SetMuscle(ref pose, "Chest Front-Back", 0.1f);
+                    SetMuscle(ref pose, "Left Arm Down-Up", -0.28f);
+                    SetMuscle(ref pose, "Right Arm Down-Up", -0.28f);
+                    SetMuscle(ref pose, "Left Forearm Stretch", -0.55f);
+                    SetMuscle(ref pose, "Right Forearm Stretch", -0.4f);
+                    SetMuscle(ref pose, "Head Nod Down-Up", 0.15f);
                     break;
                 case CabinIdleProfile.Sleeping:
                     pose.bodyPosition += new Vector3(0f, -0.12f, 0f);

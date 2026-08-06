@@ -49,12 +49,13 @@ namespace FalsePositive.Editor
 
             GameObject controllerGo = GameObject.Find("M1NightController");
             if (controllerGo == null) controllerGo = new GameObject("M1NightController");
-            controllerGo.transform.position = new Vector3(-3.76f, 1f, -1.35f); // at the front door
+            // Just inside the Cabin_v2 door hinge (-3.379, 0, -4.121).
+            controllerGo.transform.position = new Vector3(-3.0f, 1f, -3.8f);
 
             BoxCollider trigger = controllerGo.GetComponent<BoxCollider>();
             if (trigger == null) trigger = controllerGo.AddComponent<BoxCollider>();
             trigger.isTrigger = true;
-            trigger.size = new Vector3(1f, 2f, 1f);
+            trigger.size = new Vector3(1.5f, 2f, 1.5f);
 
             M1NightController controller = controllerGo.GetComponent<M1NightController>();
             if (controller == null) controller = controllerGo.AddComponent<M1NightController>();

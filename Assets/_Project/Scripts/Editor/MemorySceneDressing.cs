@@ -35,35 +35,37 @@ namespace FalsePositive.Editor
             Scene scene = EditorSceneManager.OpenScene(NightScenePath, OpenSceneMode.Single);
             GameObject root = FindOrCreateRoot();
 
-            // Table at (0.71, 0.04, -1.64) per the existing Kitchen Table.
-            InspectPoint cups = AddProp<InspectPoint>(root, "Prop_FiveCups", new Vector3(0.71f, 0.42f, -1.64f),
+            // Coordinates below are the Cabin_v2 shell's own layout (plan
+            // Phase 2b), not the old Assets\Cabin pack's — SM_Table top is
+            // at (-3.0, 0.75, 2.3), the mantel runs along the +Z fireplace
+            // wall, the coat hanger is BO_CoatHanger at (-1.4, 0, -4.5).
+            InspectPoint cups = AddProp<InspectPoint>(root, "Prop_FiveCups", new Vector3(-3.0f, 0.78f, 2.15f),
                 new Vector3(0.35f, 0.15f, 0.35f), new Color(0.85f, 0.8f, 0.7f), "5 Cups",
                 "Look at the cups", MemoryFlagIds.SawFiveCups);
-            AddProp<InspectPoint>(root, "Prop_Bottles", new Vector3(0.95f, 0.46f, -1.5f),
+            AddProp<InspectPoint>(root, "Prop_Bottles", new Vector3(-2.7f, 0.82f, 2.4f),
                 new Vector3(0.12f, 0.3f, 0.12f), new Color(0.15f, 0.4f, 0.2f), "Bottles",
                 "Look at the bottles", null);
 
-            // Mantel at (0.65, 1.72, 2.05).
-            RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(0.2f, 1.72f, 2.0f),
+            // Mantel — fireplace runs the +Z wall (x in [-0.9,0.9], z~4.3).
+            RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.35f, 3.45f),
                 new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
                 "Hold E to tune", null);
-            AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(1.05f, 1.75f, 2.0f),
+            AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.45f, 3.45f),
                 new Vector3(0.2f, 0.25f, 0.1f), new Color(0.5f, 0.4f, 0.25f), "Clock (00:52)",
                 "Look at the clock", MemoryFlagIds.SawClock);
 
-            // Chair by the door at (-3.76, 0.02, -1.35).
-            AddProp<InspectPoint>(root, "Prop_CoatOnChair", new Vector3(-3.2f, 0.5f, -1.0f),
+            // On the coat hanger, BO_CoatHanger at (-1.4, 0, -4.5), ~1.79 m tall.
+            AddProp<InspectPoint>(root, "Prop_CoatOnChair", new Vector3(-1.4f, 1.45f, -4.5f),
                 new Vector3(0.4f, 0.5f, 0.15f), new Color(0.5f, 0.15f, 0.15f), "Nick's Coat",
                 "Look at the coat", MemoryFlagIds.SawCoatSwap);
 
-            // Landing/stairs — Ivy's built position (4.58, 1.72, -1.68) is upstairs.
-            AddProp<InspectPoint>(root, "Prop_BlockedStairs", new Vector3(3.6f, 0.1f, -1.6f),
+            // Bottom of the +X wall stair run (SM_Cabin_Stairs x in [3.9,5.0]).
+            AddProp<InspectPoint>(root, "Prop_BlockedStairs", new Vector3(3.9f, 0.2f, -1.2f),
                 new Vector3(0.6f, 0.2f, 0.6f), new Color(0.4f, 0.3f, 0.2f), "Stairs (blocked)",
                 "Aaron and Ivy went up an hour ago.", null);
 
-            // Front window — no separate window GameObject exists on the wall
-            // containing the front door; placed on the same wall.
-            AddProp<InspectPoint>(root, "Prop_FrontWindow", new Vector3(-3.76f, 1.4f, 1.2f),
+            // In front of BO_WindowGrille on the -Z wall (grille at z~-5.05).
+            AddProp<InspectPoint>(root, "Prop_FrontWindow", new Vector3(2.3f, 1.6f, -4.95f),
                 new Vector3(0.1f, 0.7f, 0.9f), new Color(0.15f, 0.2f, 0.35f), "Window (curtained)",
                 "Look at the window", null);
 
@@ -79,30 +81,63 @@ namespace FalsePositive.Editor
             Scene scene = EditorSceneManager.OpenScene(MorningScenePath, OpenSceneMode.Single);
             GameObject root = FindOrCreateRoot();
 
-            AddProp<InspectPoint>(root, "Prop_BrokenPane", new Vector3(-3.76f, 1.4f, 1.2f),
+            // Window opening on the -Z wall (BO_WindowGrille at z~-5.05).
+            AddProp<InspectPoint>(root, "Prop_BrokenPane", new Vector3(2.3f, 1.6f, -5.0f),
                 new Vector3(0.1f, 0.7f, 0.9f), new Color(0.6f, 0.75f, 0.85f), "Broken Pane",
                 "Look at the window", MemoryFlagIds.SawGlassInside);
-            AddProp<InspectPoint>(root, "Prop_IntactGrille", new Vector3(-3.7f, 1.4f, 1.2f),
-                new Vector3(0.05f, 0.7f, 0.9f), new Color(0.25f, 0.25f, 0.25f), "Grille (intact)",
-                "Look at the grille", MemoryFlagIds.SawGrilleIntact);
 
-            AddProp<InspectPoint>(root, "Prop_NickBody", new Vector3(-6.5f, 0.15f, 2.5f),
+            // The intact grille is Cabin_v2's own BO_WindowGrille — no new
+            // geometry needed, just an inspect trigger on the existing mesh.
+            GameObject cabin = GameObject.Find("Cabin_v2");
+            Transform grilleTransform = cabin != null ? cabin.transform.Find("BO_WindowGrille") : null;
+            if (grilleTransform != null)
+            {
+                InspectPoint grilleInspect = grilleTransform.gameObject.GetComponent<InspectPoint>();
+                if (grilleInspect == null) grilleInspect = grilleTransform.gameObject.AddComponent<InspectPoint>();
+                SerializedObject grilleSo = new SerializedObject(grilleInspect);
+                grilleSo.FindProperty("lookPrompt").stringValue = "Look at the grille";
+                grilleSo.FindProperty("memoryFlag").stringValue = MemoryFlagIds.SawGrilleIntact;
+                grilleSo.ApplyModifiedPropertiesWithoutUndo();
+            }
+            else
+            {
+                Debug.LogWarning("[MemorySceneDressing] BO_WindowGrille not found on Cabin_v2 — grille inspect point skipped.");
+            }
+
+            // Outside, past the window, visible through the broken pane.
+            AddProp<InspectPoint>(root, "Prop_NickBody", new Vector3(2.3f, 0.1f, -6.3f),
                 new Vector3(1.8f, 0.3f, 0.6f), new Color(0.65f, 0.55f, 0.55f), "Nick (in the snow)",
                 "Look at the body", MemoryFlagIds.SawBody);
 
-            DoorInteractable door = AddProp<DoorInteractable>(root, "Prop_FrontDoor_Locked",
-                new Vector3(-3.9f, 0.5f, -1.35f), new Vector3(0.15f, 1f, 0.6f),
-                new Color(0.35f, 0.22f, 0.12f), "Front Door", "It's locked.", MemoryFlagIds.FoundDoorLocked);
-            SerializedObject doorSo = new SerializedObject(door);
-            doorSo.FindProperty("startsLocked").boolValue = true;
-            doorSo.ApplyModifiedPropertiesWithoutUndo();
+            // The door itself is the real Door_v2 instance placed by
+            // MemorySceneBuilderV2 (named "Prop_FrontDoor_Locked" so
+            // downstream lookups need no changes) — not a placeholder cube.
+            GameObject doorGo = GameObject.Find("Prop_FrontDoor_Locked");
+            DoorInteractable door = doorGo != null ? doorGo.GetComponent<DoorInteractable>() : null;
+            if (door != null)
+            {
+                SerializedObject doorSo = new SerializedObject(door);
+                doorSo.FindProperty("startsLocked").boolValue = true;
+                doorSo.FindProperty("lookPrompt").stringValue = "It's locked.";
+                doorSo.FindProperty("memoryFlag").stringValue = MemoryFlagIds.FoundDoorLocked;
+                doorSo.ApplyModifiedPropertiesWithoutUndo();
+            }
+            else
+            {
+                Debug.LogError("[MemorySceneDressing] Prop_FrontDoor_Locked (Door_v2 instance) not found — run MemorySceneBuilderV2 first.");
+            }
 
-            KeyPickup key = AddProp<KeyPickup>(root, "Prop_DoorKey", new Vector3(-3.55f, 1.1f, -1.35f),
+            // Hook immediately left of the door frame (hinge at x=-3.379,
+            // z=-4.121; "left of the frame" facing the door from inside).
+            KeyPickup key = AddProp<KeyPickup>(root, "Prop_DoorKey", new Vector3(-2.75f, 1.5f, -4.65f),
                 new Vector3(0.08f, 0.08f, 0.02f), new Color(0.8f, 0.7f, 0.2f), "Key",
                 "Take the key", MemoryFlagIds.FoundKeyInside);
-            SerializedObject keySo = new SerializedObject(key);
-            keySo.FindProperty("doorToUnlock").objectReferenceValue = door;
-            keySo.ApplyModifiedPropertiesWithoutUndo();
+            if (door != null)
+            {
+                SerializedObject keySo = new SerializedObject(key);
+                keySo.FindProperty("doorToUnlock").objectReferenceValue = door;
+                keySo.ApplyModifiedPropertiesWithoutUndo();
+            }
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, MorningScenePath);

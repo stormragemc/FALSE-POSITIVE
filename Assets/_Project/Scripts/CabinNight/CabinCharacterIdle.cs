@@ -9,7 +9,8 @@ namespace FalsePositive.CabinNight
         Confrontational,
         Controlled,
         Guarded,
-        Sleeping
+        Sleeping,
+        Panicked
     }
 
     /// <summary>
@@ -52,6 +53,7 @@ namespace FalsePositive.CabinNight
                 CabinIdleProfile.Controlled => 0.28f,
                 CabinIdleProfile.Guarded => 0.45f,
                 CabinIdleProfile.Sleeping => 1.1f,
+                CabinIdleProfile.Panicked => 1.4f,
                 _ => 0.4f
             };
 
@@ -61,6 +63,7 @@ namespace FalsePositive.CabinNight
                 CabinIdleProfile.Controlled => drift * 0.35f,
                 CabinIdleProfile.Guarded => drift * 1.5f,
                 CabinIdleProfile.Sleeping => drift * 0.18f,
+                CabinIdleProfile.Panicked => drift * 2.2f,
                 _ => 0f
             };
 

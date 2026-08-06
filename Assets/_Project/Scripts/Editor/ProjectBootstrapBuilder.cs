@@ -60,16 +60,20 @@ namespace FalsePositive.Editor
             };
         }
 
-        [MenuItem("Tools/False Positive/Bootstrap/Build Everything (1-6)")]
+        [MenuItem("Tools/False Positive/Bootstrap/Build Everything (0-9)")]
         public static void BuildEverything()
         {
+            CabinV2Builder.BuildAll();
             BuildConfigAssets();
             BuildPersistentScene();
             BuildMainMenuScene();
             FixInterrogationScene();
-            MemorySceneBuilder.BuildMemoryScenes();
+            MemorySceneBuilderV2.BuildBoth();
+            MemorySceneDressing.DressBothScenes();
+            MemorySceneWiring.WireBoth();
             RewriteBuildSettings();
             CutsceneRecipeBuilder.PopulateRecipes();
+            CutsceneRecipeBuilder.AttachVoClips();
             Debug.Log("[ProjectBootstrapBuilder] Full scaffold rebuilt.");
         }
 

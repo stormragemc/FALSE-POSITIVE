@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using FalsePositive.CabinNight;
 using FalsePositive.Core;
 using FalsePositive.Player;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.SceneManagement;
 
 namespace FalsePositive.Editor
 {
@@ -19,7 +16,6 @@ namespace FalsePositive.Editor
     /// </summary>
     public static class CabinNightCharacterBuilder
     {
-        private const string ScenePath = "Assets/_Project/Scenes/NobodyWentOut_CabinNight.unity";
         private const string MaterialRoot = "Assets/_Project/CabinNight/Materials/";
         private const string PrefabRoot = "Assets/_Project/CabinNight/Prefabs/";
 
@@ -35,32 +31,11 @@ namespace FalsePositive.Editor
         private const string MaleShoes = "Assets/o3n/o3nBaseUMARaces/Content/Shoes/o3n_male_shoes_01/o3n_male_shoes_01_LOD0/o3n_male_shoes_01_LOD0_Skinned.prefab";
         private const string FemaleShoes = "Assets/o3n/o3nBaseUMARaces/Content/Shoes/o3n_female_shoes_01/o3n_female_shoes_01_LOD0/o3n_female_shoes_01_LOD0_Skinned.prefab";
 
-        [MenuItem("Tools/False Positive/Rebuild Cabin Night Cast")]
-        public static void BuildCharacters()
-        {
-            Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-            RebuildCastInOpenScene(scene, ScenePath);
-        }
-
-        /// <summary>Reusable for T04's duplicated memory scenes
-        /// (Memory_CabinNight / Memory_CabinMorning) — opens the given scene,
-        /// rebuilds the cast in place, and saves back to the same path.
-        /// Superseded by <see cref="BuildCastInScene"/> for the Cabin_v2
-        /// rebuild (MemorySceneBuilderV2); kept only until the teaser scene
-        /// this reads coordinates from is retired (plan Phase 6).</summary>
-        public static void RebuildCastForScene(string scenePath)
-        {
-            Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
-            RebuildCastInOpenScene(scene, scenePath);
-        }
-
         /// <summary>
-        /// MemorySceneBuilderV2's cast builder for the Cabin_v2 shell. Unlike
-        /// <see cref="RebuildCastForScene"/> this does not open/save a scene
-        /// itself — the caller already has the scene open and saves once at
-        /// the end of its own build pass, so this only mutates the given
-        /// Characters root in place. Reuses the same BuildCharacter/pose
-        /// machinery as the teaser-scene builder (kept, still good).
+        /// MemorySceneBuilderV2's cast builder for the Cabin_v2 shell. Does
+        /// not open/save a scene itself — the caller already has the scene
+        /// open and saves once at the end of its own build pass, so this
+        /// only mutates the given Characters root in place.
         ///
         /// Per the plan's Phase 2b staging: M1_Night only needs the player
         /// (seated at SM_Chair_05) and Priya (asleep — reuses the Sofa, no
@@ -132,70 +107,6 @@ namespace FalsePositive.Editor
                 aaron.SetActive(false);
                 ivy.SetActive(false);
             }
-        }
-
-        private static void RebuildCastInOpenScene(Scene scene, string scenePath)
-        {
-            Transform cast = GameObject.Find("Characters").transform;
-            while (cast.childCount > 0)
-            {
-                UnityEngine.Object.DestroyImmediate(cast.GetChild(0).gameObject);
-            }
-
-            GameObject player = BuildCharacter(
-                cast, "Player (Male - First Person)", false,
-                new Vector3(-0.65f, 0.08f, -1.65f), new Vector3(0f, 12f, 0f), 0.98f,
-                Material("MaleBodyJeans"), CabinIdleProfile.Controlled,
-                null, null, null, null, null);
-            ConfigurePlayer(player);
-            SaveCharacter(player, "Player_FirstPerson");
-
-            GameObject nick = BuildCharacter(
-                cast, "Nick Vlahos (Male)", false,
-                new Vector3(0.12f, 0.08f, 1.28f), new Vector3(0f, 192f, 0f), 0.98f,
-                Material("MaleBodyJeansShirt"), CabinIdleProfile.Confrontational,
-                null, null, MaleHair, Material("HairBrown"), MaleShoes);
-            SaveCharacter(nick, "Nick_Vlahos");
-
-            GameObject aaron = BuildCharacter(
-                cast, "Aaron Teague (Male)", false,
-                new Vector3(3.82f, 0.08f, 0.92f), new Vector3(0f, 226f, 0f), 1.02f,
-                Material("MaleBodyJeans"), CabinIdleProfile.Controlled,
-                MaleHoodie, Material("HoodieGray"), MaleMilitaryHair, Material("HairDark"), MaleShoes);
-            SaveCharacter(aaron, "Aaron_Teague");
-
-            GameObject ivy = BuildCharacter(
-                cast, "Ivy Teague (Female)", true,
-                new Vector3(4.58f, 1.72f, -1.68f), new Vector3(0f, 248f, 0f), 0.98f,
-                Material("FemaleBodyJeans"), CabinIdleProfile.Guarded,
-                FemaleShirt, Material("IvyYellowShirt"), FemaleLongHair, Material("HairBlack"), FemaleShoes);
-            SaveCharacter(ivy, "Ivy_Teague");
-
-            GameObject priya = BuildCharacter(
-                cast, "Priya Raman (Female)", true,
-                new Vector3(-2.35f, 0.62f, -0.25f), new Vector3(0f, 92f, -76f), 0.96f,
-                Material("FemaleBodyJeans"), CabinIdleProfile.Sleeping,
-                FemaleDress, Material("PriyaDress"), FemalePonytail, Material("HairBlack"), FemaleShoes);
-            SaveCharacter(priya, "Priya_Raman");
-
-            GameObject fireplace = GameObject.Find("Fireplace");
-            if (fireplace != null && fireplace.GetComponent<CabinFireFlicker>() == null)
-            {
-                CabinFireFlicker flicker = fireplace.AddComponent<CabinFireFlicker>();
-                flicker.Configure(fireplace.GetComponentsInChildren<Light>(true));
-            }
-
-            List<EditorBuildSettingsScene> buildScenes = EditorBuildSettings.scenes.ToList();
-            if (buildScenes.All(item => item.path != scenePath))
-            {
-                buildScenes.Add(new EditorBuildSettingsScene(scenePath, true));
-                EditorBuildSettings.scenes = buildScenes.ToArray();
-            }
-
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, scenePath);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"Cabin Night cast rebuilt in {scenePath}: player, Nick, Aaron, Ivy, and Priya.");
         }
 
         private static Material Material(string name)
@@ -304,12 +215,11 @@ namespace FalsePositive.Editor
         /// Swaps ConfigurePlayer's standalone CabinFirstPersonController
         /// (reads Mouse/Keyboard directly, cannot be input-gated during a
         /// cutscene) for the router-based rig the memory scenes actually
-        /// use. Mirrors MemorySceneBuilder.ConvertPlayerToRouterRig, which
-        /// only ran on the teaser-scene copy; BuildCastInScene has no
-        /// equivalent step of its own, so leaving this out left the player
-        /// with BOTH controllers fighting for the CharacterController and no
-        /// FreeLookCameraRig at all — caught via a Play-mode traversal test
-        /// (player levitated to the ceiling instead of walking on the floor).
+        /// use. Called by BuildCastInScene right after ConfigurePlayer —
+        /// omitting this once left the player with BOTH controllers fighting
+        /// for the CharacterController and no FreeLookCameraRig at all,
+        /// caught via a Play-mode traversal test (player levitated to the
+        /// ceiling instead of walking on the floor).
         /// </summary>
         private static void ConvertToRouterRig(GameObject player)
         {

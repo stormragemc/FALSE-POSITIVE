@@ -172,17 +172,22 @@ namespace FalsePositive.Dialogue
                 dialogue.BeginOfflinePhase(lines);
                 if (lines != null && lines.Length >= 2)
                 {
-                    // The scripted script's last line is always the phase's
-                    // closing question. P2 additionally waits one more turn
-                    // after the cap for OnTurnCompleted's _awaitingClosingAnswer
-                    // hand-off (see the case above) before that closing line
-                    // plays; P3 has no such hand-off and finishes the moment
-                    // its last line plays. Deriving the cap from the actual
-                    // authored line count — rather than hard-coding it —
-                    // keeps this correct if the script is ever re-authored.
+                    // The opening RequestOfficerTurn call plays line[0] and
+                    // itself fires TurnCompleted (same as a live opening
+                    // turn), so TurnsThisPhase reaches N right after line[N-1]
+                    // plays. P2's cap must land one line before the closing
+                    // question so OnTurnCompleted's _awaitingClosingAnswer
+                    // hand-off (see below) lets exactly one more line — the
+                    // closing question, the script's last line — play before
+                    // finishing: cap = Length - 1. P3 has no such hand-off
+                    // and finishes the instant capReached is true, so its
+                    // cap must equal the full length so that line plays
+                    // first: cap = Length. Verified against the live turn
+                    // counter, not just derived on paper — see the offline
+                    // playthrough check in the plan.
                     _currentTurnCap = _currentPhase == GamePhase.P2_Recall
-                        ? lines.Length - 2
-                        : lines.Length - 1;
+                        ? lines.Length - 1
+                        : lines.Length;
                 }
                 else if (offlineScript == null)
                 {

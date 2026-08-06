@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c844a562016cd549bd28f375e6b1933, type: 3}
+  m_Name: OfflineDialogueScript
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Dialogue.OfflineDialogueScript
+  p2Recall:
+  - line: So. What's the last thing you remember?
+    voClip: {fileID: 8300000, guid: 0d716d4925ecbfa4a97cc5b5d73bb28d, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: Let's start simple. Were you drinking last night? With who, and until when?
+    voClip: {fileID: 8300000, guid: 7792deb24fd265e41a674943950c5266, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: Tell me about the argument with Nick. What was it actually about?
+    voClip: {fileID: 8300000, guid: 65af13a0aec00a6488e6498018feb08a, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: Did you see Nick go outside?
+    voClip: {fileID: 8300000, guid: 90cddfad0b8184044ba1175bde3ba243, type: 3}
+    holdSecondsIfNoClip: 3
+  - line: Did you go to the door yourself? Did you call out?
+    voClip: {fileID: 8300000, guid: 51d8e48409635ad4f817dfc86e44267b, type: 3}
+    holdSecondsIfNoClip: 3.5
+  - line: Was the door locked or unlocked, the last time you had anything to do with
+      it?
+    voClip: {fileID: 8300000, guid: e5c067dd7f0b21647a8820ca590ff2db, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: What did you do afterward? How long were you out for?
+    voClip: {fileID: 8300000, guid: 3f7880e69ae892f42ad16be9c70bffbc, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: Walk me through what happened when the body was found the next morning.
+    voClip: {fileID: 8300000, guid: e68cf348faeaa2e47819852de3ff15ee, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: What happened to Nick?
+    voClip: {fileID: 8300000, guid: 3392eb0bb6d2a7f4ea042158328a7d77, type: 3}
+    holdSecondsIfNoClip: 3
+  p3Verdict:
+  - line: Tell me why I should spare your life.
+    voClip: {fileID: 8300000, guid: 0c50caa903d172f488b1a23fe4ae3ead, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: If it's not you, then tell me who did it?
+    voClip: {fileID: 8300000, guid: b043b234278599c4dbc2fb5471ef1995, type: 3}
+    holdSecondsIfNoClip: 4
+  - line: That's not an answer. Try again.
+    voClip: {fileID: 8300000, guid: 2f5d490228da61643a7f9d1a66fb91d1, type: 3}
+    holdSecondsIfNoClip: 3
+  - line: You understand how that sounds, don't you?
+    voClip: {fileID: 8300000, guid: 0bd93119706f22b47a1bc608dc195f86, type: 3}
+    holdSecondsIfNoClip: 3.5
+  - line: Last chance. Who do you think did this?
+    voClip: {fileID: 8300000, guid: c235c7d81d2e18547b5721d6f663b8e2, type: 3}
+    holdSecondsIfNoClip: 3.5

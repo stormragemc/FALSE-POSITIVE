@@ -152,13 +152,27 @@ and cutscenes need no backend at all.
 ## How to play
 
 The whole game is playable end to end without any dialogue options — you speak, the officer
-listens. The backend is only needed for the three live-interrogation phases (P1, P2, P3); the
-main menu, both memory scenes, and every cutscene work with it offline.
+listens. Only P2 and P3's officer replies actually need the backend; everything else (menu,
+both memory scenes, every cutscene, P1's scripted prompt, M1's yell gate) is local already.
 
 **Flow:** Main Menu → mic consent card → mic calibration → **P1** (waking, "who are you?") →
 **M1 — the cabin at night** (free-roam, fix the radio, call for Nick) → **P2** (recall, free
 voice) → **M2 — the cabin at morning** (find the key, get outside, carry the body) → **P3**
 (verdict — name a suspect, or don't) → one of four endings → the outcome card.
+
+### Offline demo
+
+The main menu has a second button, **Offline demo**, next to Play. It runs the identical
+consent → calibration → P1 → … → outcome flow — the mic is still required, since P1's spoken
+prompt and M1's yell gate are local-only either way — but P2 and P3 replace the live officer
+with a fixed, pre-written Spassky script (14 authored lines, real ElevenLabs VO) instead of a
+sidecar call. Use this to play or demo the full story with no backend running at all.
+
+Offline demo is **honestly labelled, not a substitute for the real interrogation**: an
+"OFFLINE — scripted interrogation" badge stays on screen throughout, the officer cannot react
+to anything you actually say (there is no speech-to-text without the backend), and the ending
+is always the David ending, since naming a suspect requires a transcript the offline path
+doesn't have. Normal **Play** is unchanged and still needs the sidecar for P2/P3.
 
 **Controls**
 
@@ -172,10 +186,11 @@ voice) → **M2 — the cabin at morning** (find the key, get outside, carry the
 | **F2** | *(Editor / dev builds only)* Force-advance to the next phase, skipping its normal completion trigger |
 | **Esc** | Settings / pause |
 
-**What needs the backend:** only the officer's live replies in P1/P2/P3 — everything else
-(menu, both memory scenes, every cutscene, the ending pick, the outcome card) runs with the
-sidecar down. If the backend is unreachable, a live turn will fail with an in-fiction fault
-rather than silently hanging.
+**What needs the backend:** only the officer's live replies in P2/P3 (P1 is local, see above).
+If you press normal **Play** with the sidecar down, those two phases will not receive a reply —
+after three failed turns in a row the console logs a clear pointer to Offline demo, but there is
+still no in-fiction fault card yet (that's `A13`, Day-2 scope). Use **Offline demo** to avoid
+this entirely.
 
 **Honesty notes**, per `docs/GAME_COMPLETION_PLAN.md` §10's "never fake" rule:
 
@@ -188,6 +203,10 @@ rather than silently hanging.
 - The outcome card is a fixed closing line, not yet the verbatim-quote version (`A11`).
 - All character voice lines under `Assets/_Project/Art/Audio/VO/` are ElevenLabs-generated —
   synthetic, not recordings of real people.
+- **Offline demo** plays a fixed script, not a reactive conversation — it exists so the full
+  flow is playable with no backend, not as a claim that the interrogation mechanic works
+  offline. It is labelled on screen for the entirety of P2/P3 so it is never mistaken for the
+  real thing.
 
 ## Documentation
 

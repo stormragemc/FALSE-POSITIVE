@@ -27,6 +27,19 @@ One real bug was also found and fixed during verification, independent of the ab
 answered and hidden, throwing. Both the symptom (guard in `SpeechPrompt`) and the cause (stop the
 nudge coroutine the moment the prompt is satisfied, not just on phase exit) are fixed.
 
+**Also landed after this file was first written (6 Aug, later that day):** the game is now
+playable end to end with **no backend running at all**. Pressing **Play** with the sidecar down
+still dead-ends at P2 exactly as described above — that gap is unchanged. What's new is a
+second main-menu button, **Offline demo**, which runs the identical consent → calibration → P1
+→ … → outcome flow but replaces P2/P3's live officer with a fixed 14-line authored script
+(`Assets/_Project/Config/OfflineDialogueScript.asset`, built by
+`Editor/OfflineScriptBuilder.cs`, real ElevenLabs VO in `Art/Audio/VO/spassky_offline_*`),
+played by `DialogueManager.PlayOfflineTurn` instead of `InterrogationSidecarClient.PostTurn`.
+It's honestly labelled on screen throughout ("OFFLINE — scripted interrogation") and always
+lands on the David ending, since there's no transcript to detect a named suspect from. **A13
+below is now specifically the online-with-no-backend case** — Offline demo covers the
+"no backend at all" case, A13 covers "backend expected but unreachable mid-session."
+
 **Not done, and explicitly Day-2 scope per the sections below:** the full `EndingSelector` /
 `SessionScore`-driven ending rule (`STORY_SCRIPT.md` §8), verbatim-quote `OutcomeScreen`, real
 `SuspectNameDetector`, `OutputGuard`, fault UX beyond the mic-calibration failure card, backend

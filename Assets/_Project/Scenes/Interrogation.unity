@@ -2503,6 +2503,7 @@ MonoBehaviour:
   prompts: {fileID: 11400000, guid: 084ad599d24289d4c9a43aeb85bbe40a, type: 2}
   storyMarksSource: {fileID: 4900000, guid: 2945ad6f7140d264bab2967ecf64c719, type: 3}
   binder: {fileID: 1144409104}
+  offlineScript: {fileID: 11400000, guid: ac131d68cc6581944a28415d1b354569, type: 2}
   p1NoSpeechNudgeSeconds: 15
   p2TurnCap: 14
   p3TurnCap: 8

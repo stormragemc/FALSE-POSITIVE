@@ -211,9 +211,35 @@ namespace FalsePositive.Editor
                 CabinFireFlicker flicker = fireplace.gameObject.GetComponent<CabinFireFlicker>();
                 if (flicker == null) flicker = fireplace.gameObject.AddComponent<CabinFireFlicker>();
                 flicker.Configure(new[] { fireLight });
+
+                AddLoopingAudio(fireplace.gameObject, "fire_crackle_loop", volume: 0.6f);
             }
 
+            AddLoopingAudio(root.gameObject, "interior_wind_loop", volume: 0.25f, spatial: false);
+
             return door;
+        }
+
+        private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
+
+        /// <summary>Loop AudioSource, playOnAwake — fire crackle (3D, from the
+        /// fireplace) and interior wind (2D bed, heard evenly through the
+        /// whole cabin — spatializing it would make it drop out mid-room).</summary>
+        private static void AddLoopingAudio(GameObject go, string clipName, float volume, bool spatial = true)
+        {
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
+            if (clip == null)
+            {
+                Debug.LogWarning($"[MemorySceneBuilderV2] {SfxRoot}{clipName}.mp3 not found — skipping ambient loop on {go.name}.");
+                return;
+            }
+            AudioSource source = go.AddComponent<AudioSource>();
+            source.clip = clip;
+            source.loop = true;
+            source.playOnAwake = true;
+            source.volume = volume;
+            source.spatialBlend = spatial ? 1f : 0f;
+            go.AddComponent<FalsePositive.Audio.LoopOnEnable>();
         }
 
         private static void BuildLighting(Transform root, bool isMorning)

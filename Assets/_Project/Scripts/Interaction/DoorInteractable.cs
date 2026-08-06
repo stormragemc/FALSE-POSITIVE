@@ -12,6 +12,8 @@ namespace FalsePositive.Interaction
     {
         [SerializeField] private bool startsLocked;
         [SerializeField] private string lockedPrompt = "It's locked.";
+        [SerializeField] private AudioSource audioSource;
+        [SerializeField] private AudioClip openClip;
 
         public bool IsLocked { get; private set; }
         public event Action Opened;
@@ -35,6 +37,7 @@ namespace FalsePositive.Interaction
                 return;
             }
 
+            if (audioSource != null && openClip != null) audioSource.PlayOneShot(openClip);
             MarkComplete();
             Opened?.Invoke();
         }

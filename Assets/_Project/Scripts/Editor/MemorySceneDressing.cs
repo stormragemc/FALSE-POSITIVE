@@ -53,9 +53,12 @@ namespace FalsePositive.Editor
             RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.35f, 3.45f),
                 new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
                 "Tune the radio", null);
-            AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.45f, 3.45f),
+            WireRadioAudio(radio);
+
+            InspectPoint clock = AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.45f, 3.45f),
                 new Vector3(0.2f, 0.25f, 0.1f), new Color(0.5f, 0.4f, 0.25f), "Clock (00:52)",
                 "Look at the clock", MemoryFlagIds.SawClock);
+            AddAmbientLoop(clock.gameObject, "clock_tick_loop", volume: 0.35f);
 
             // On the coat hanger, BO_CoatHanger at (-1.4, 0, -4.5), ~1.79 m tall.
             AddProp<InspectPoint>(root, "Prop_CoatOnChair", new Vector3(-1.4f, 1.45f, -4.5f),
@@ -85,9 +88,10 @@ namespace FalsePositive.Editor
             GameObject root = FindOrCreateRoot();
 
             // Window opening on the -Z wall (BO_WindowGrille at z~-5.05).
-            AddProp<InspectPoint>(root, "Prop_BrokenPane", new Vector3(2.3f, 1.6f, -5.0f),
+            InspectPoint brokenPane = AddProp<InspectPoint>(root, "Prop_BrokenPane", new Vector3(2.3f, 1.6f, -5.0f),
                 new Vector3(0.1f, 0.7f, 0.9f), new Color(0.6f, 0.75f, 0.85f), "Broken Pane",
                 "Look at the window", MemoryFlagIds.SawGlassInside);
+            SetClip(brokenPane, "inspectClip", "glass_crunch");
 
             // The intact grille is Cabin_v2's own BO_WindowGrille — no new
             // geometry needed, just an inspect trigger on the existing mesh.
@@ -124,6 +128,14 @@ namespace FalsePositive.Editor
                 doorSo.FindProperty("lookPrompt").stringValue = "It's locked.";
                 doorSo.FindProperty("memoryFlag").stringValue = MemoryFlagIds.FoundDoorLocked;
                 doorSo.ApplyModifiedPropertiesWithoutUndo();
+
+                AudioSource doorAudio = door.gameObject.GetComponent<AudioSource>();
+                if (doorAudio == null) doorAudio = door.gameObject.AddComponent<AudioSource>();
+                doorAudio.playOnAwake = false;
+                doorSo.Update();
+                doorSo.FindProperty("audioSource").objectReferenceValue = doorAudio;
+                doorSo.ApplyModifiedPropertiesWithoutUndo();
+                SetClip(door, "openClip", "door_creak_open");
             }
             else
             {
@@ -141,11 +153,71 @@ namespace FalsePositive.Editor
                 keySo.FindProperty("doorToUnlock").objectReferenceValue = door;
                 keySo.ApplyModifiedPropertiesWithoutUndo();
             }
+            SetClip(key, "pickupClip", "key_pickup");
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, MorningScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("[MemorySceneDressing] Memory_CabinMorning dressed.");
+        }
+
+        private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
+
+        /// <summary>Loop AudioSource, playOnAwake, on the given GameObject — clock tick, and (from MemorySceneBuilderV2) fire crackle / interior wind.</summary>
+        private static void AddAmbientLoop(GameObject go, string clipName, float volume = 1f)
+        {
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
+            if (clip == null)
+            {
+                Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}{clipName}.mp3 not found — skipping ambient loop on {go.name}.");
+                return;
+            }
+            AudioSource source = go.AddComponent<AudioSource>();
+            source.clip = clip;
+            source.loop = true;
+            source.playOnAwake = true;
+            source.volume = volume;
+            source.spatialBlend = 1f; // 3D — fades with distance from the prop
+            go.AddComponent<FalsePositive.Audio.LoopOnEnable>();
+        }
+
+        /// <summary>Sets a serialized AudioClip field by name, loading from Art/Audio/SFX by filename.</summary>
+        private static void SetClip(Interactable interactable, string fieldName, string clipName)
+        {
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
+            if (clip == null)
+            {
+                Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}{clipName}.mp3 not found — {interactable.name}.{fieldName} left unset.");
+                return;
+            }
+            SerializedObject so = new SerializedObject(interactable);
+            so.FindProperty(fieldName).objectReferenceValue = clip;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void WireRadioAudio(RadioTuner radio)
+        {
+            AudioSource staticSource = radio.gameObject.AddComponent<AudioSource>();
+            staticSource.loop = true;
+            staticSource.playOnAwake = false; // RadioTuner.Awake() starts it explicitly
+            staticSource.volume = 0.5f;
+            staticSource.spatialBlend = 1f;
+
+            AudioSource sfxSource = radio.gameObject.AddComponent<AudioSource>();
+            sfxSource.playOnAwake = false;
+            sfxSource.spatialBlend = 1f;
+
+            SerializedObject so = new SerializedObject(radio);
+            so.FindProperty("staticLoopSource").objectReferenceValue = staticSource;
+            so.FindProperty("sfxSource").objectReferenceValue = sfxSource;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            SetClip(radio, "tuningSweepClip", "radio_tuning_sweep");
+            SetClip(radio, "lockOnClip", "radio_lock_on");
+
+            AudioClip staticClip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + "radio_static_loop.mp3");
+            if (staticClip != null) staticSource.clip = staticClip;
+            else Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}radio_static_loop.mp3 not found — radio static loop left unset.");
         }
 
         private static GameObject FindOrCreateRoot()

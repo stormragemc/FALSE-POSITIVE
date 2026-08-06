@@ -531,7 +531,7 @@ async def turn(
         # the post-commit signal that lands in the response. Opening turns carry no
         # affect block at all, mirroring the is_opening branch in generate_reply.
         affect_prompt_context = (
-            ("" if is_opening
+            ("" if is_session_opening
              else prosody_signal.prompt_context(config.PROSODY_MIN_CONFIDENCE))
             if config.DEBUG_AFFECT_CONTEXT
             else None

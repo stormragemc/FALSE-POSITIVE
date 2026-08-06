@@ -182,6 +182,27 @@ namespace FalsePositive.Editor
             SetField(subtitleUi, "lineText", lineText);
             subtitleGo.SetActive(false);
 
+            // InteractionPromptUI — centre-screen "[E] <prompt>", the on-
+            // screen prompt InteractionRaycaster never had (see its doc
+            // comment). Replaces the floating TextMesh labels
+            // MemorySceneDressing used to put over every prop. Poller/root
+            // split matching OfflineModeLabel: the poller (this GameObject)
+            // must stay active for LateUpdate to ever run, so the toggled
+            // visibility lives on a separate child.
+            GameObject interactionPromptPoller = new GameObject("InteractionPrompt", typeof(RectTransform));
+            interactionPromptPoller.transform.SetParent(hud.transform, false);
+            StretchFill(interactionPromptPoller);
+            GameObject interactionPromptRoot = new GameObject("Root", typeof(RectTransform));
+            interactionPromptRoot.transform.SetParent(interactionPromptPoller.transform, false);
+            AnchorBottomCenter(interactionPromptRoot, new Vector2(0f, 90f), new Vector2(600f, 50f));
+            Text interactionPromptText = CreateText(interactionPromptRoot.transform, "PromptText", string.Empty, 26);
+            interactionPromptText.color = new Color(1f, 0.92f, 0.6f);
+            StretchFill(interactionPromptText.gameObject);
+            InteractionPromptUI interactionPrompt = interactionPromptPoller.AddComponent<InteractionPromptUI>();
+            SetField(interactionPrompt, "root", interactionPromptRoot);
+            SetField(interactionPrompt, "promptText", interactionPromptText);
+            interactionPromptRoot.SetActive(false);
+
             // ObjectiveHud
             GameObject objectiveGo = new GameObject("ObjectiveHud", typeof(RectTransform));
             objectiveGo.transform.SetParent(hud.transform, false);

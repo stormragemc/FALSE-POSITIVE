@@ -39,6 +39,16 @@ namespace FalsePositive.Player
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
         }
 
+        /// <summary>Seeds pitch directly (clamped, same convention Update()
+        /// applies) — for forced camera moments a cutscene stages (e.g. the
+        /// M1_Night "someone left" head-turn to the door) without needing to
+        /// fake mouse input.</summary>
+        public void SeedPitch(float pitchDegrees)
+        {
+            _pitch = Mathf.Clamp(pitchDegrees, -config.standingPitchClampDegrees, config.standingPitchClampDegrees);
+            if (playerCamera != null) playerCamera.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+        }
+
         private void Awake()
         {
             _controller = GetComponent<CharacterController>();

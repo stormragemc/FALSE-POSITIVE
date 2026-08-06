@@ -8,9 +8,14 @@ namespace FalsePositive.Interaction
     /// player. Lives on the player in each memory scene. Subscribes to
     /// PlayerInputRouter.InteractPressed (.started, not .performed — see that
     /// file for why) rather than polling a key directly, matching every other
-    /// input consumer in the project. No on-screen prompt UI: each prop
-    /// already carries a floating name label (see MemorySceneDressing), which
-    /// is the identification a prompt line would otherwise provide.
+    /// input consumer in the project.
+    ///
+    /// <see cref="Current"/> is the hook UI.InteractionPromptUI polls (Phase 3
+    /// of the Cabin_v2 pass) to show "[E] &lt;LookPrompt&gt;" on screen — this
+    /// used to have no prompt UI at all, relying on a floating TextMesh label
+    /// over every prop instead (see MemorySceneDressing's old AddProp), which
+    /// is exactly the "placeholder text above objects" the user asked to
+    /// remove. Now the raycast target IS the identification.
     /// </summary>
     public sealed class InteractionRaycaster : MonoBehaviour
     {
@@ -19,6 +24,9 @@ namespace FalsePositive.Interaction
         [SerializeField] private float maxDistance = 3f;
 
         private Interactable _current;
+
+        /// <summary>The Interactable currently under the crosshair, or null. Read by UI.InteractionPromptUI.</summary>
+        public Interactable Current => _current;
 
         private void OnEnable()
         {

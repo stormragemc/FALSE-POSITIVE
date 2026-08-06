@@ -153,6 +153,15 @@ namespace FalsePositive.Editor
                 material.SetTexture("_BumpMap", normal);
                 material.EnableKeyword("_NORMALMAP");
             }
+            // UI.InteractionPromptUI highlights the looked-at Interactable via
+            // a per-renderer MaterialPropertyBlock override of _EmissionColor
+            // — that can only change the VALUE of an already-active shader
+            // keyword, not enable it, so _EMISSION must be on here (Door_v2
+            // and the window grille InspectPoint both share these materials
+            // with plain, non-interactable shell geometry — MaterialPropertyBlock
+            // is per-renderer, so this doesn't make the walls glow too).
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", Color.black);
             EditorUtility.SetDirty(material);
         }
 

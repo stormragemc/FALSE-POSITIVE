@@ -9,13 +9,16 @@ using UnityEngine.SceneManagement;
 namespace FalsePositive.Editor
 {
     /// <summary>
-    /// B3/B6 (docs/GAME_COMPLETION_PLAN.md): labelled primitive placeholders
-    /// for every interactable and cutscene prop in the two memory scenes.
-    /// Existing cabin furniture (table, door, fireplace, ...) is left as-is —
-    /// this only adds the story-relevant props that don't exist yet. Coloured
-    /// cube/cylinder + a floating TextMesh name label makes each one
-    /// unambiguous to identify while playing, per the user's explicit choice
-    /// over bare/unlabelled cubes.
+    /// B3/B6 (docs/GAME_COMPLETION_PLAN.md): places every interactable and
+    /// cutscene prop in the two memory scenes on the Cabin_v2 shell (see
+    /// CabinV2Builder/MemorySceneBuilderV2). Existing shell furniture (table,
+    /// door, fireplace, window grille, ...) is left as-is — this only adds
+    /// the story-relevant props that don't exist yet, using a real low-poly
+    /// model from Art/Props/ when one exists for the prop, or a coloured
+    /// placeholder cube otherwise. No floating name label anymore — that was
+    /// removed per the user's explicit request; UI.InteractionPromptUI's
+    /// on-screen "[E] &lt;prompt&gt;" line plus a looked-at highlight are the
+    /// replacement identification.
     /// </summary>
     public static class MemorySceneDressing
     {
@@ -49,7 +52,7 @@ namespace FalsePositive.Editor
             // Mantel — fireplace runs the +Z wall (x in [-0.9,0.9], z~4.3).
             RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.35f, 3.45f),
                 new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
-                "Hold E to tune", null);
+                "Tune the radio", null);
             AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.45f, 3.45f),
                 new Vector3(0.2f, 0.25f, 0.1f), new Color(0.5f, 0.4f, 0.25f), "Clock (00:52)",
                 "Look at the clock", MemoryFlagIds.SawClock);
@@ -201,24 +204,17 @@ namespace FalsePositive.Editor
             collider.center = localBounds.center;
             collider.size = Vector3.Max(localBounds.size, new Vector3(0.05f, 0.05f, 0.05f));
 
-            // The floating name label is the player's only on-screen ID for
-            // an interactable — InteractionRaycaster.cs deliberately has no
-            // separate look-prompt UI and says so in its own doc comment.
-            // Dropping it here would leave every prop unlabelled with
-            // nothing else picking up the slack, so it stays; shrunk now
-            // that a recognisable model sits under it instead of an
-            // anonymous coloured cube.
-            GameObject labelGo = new GameObject("Label", typeof(TextMesh));
-            labelGo.transform.SetParent(go.transform, false);
-            labelGo.transform.localPosition = new Vector3(0f, localBounds.max.y + 0.12f, 0f);
-            TextMesh label = labelGo.GetComponent<TextMesh>();
-            label.text = labelText;
-            label.characterSize = 0.08f;
-            label.fontSize = 32;
-            label.anchor = TextAnchor.LowerCenter;
-            label.alignment = TextAlignment.Center;
-            label.color = new Color(1f, 0.92f, 0.55f, 0.85f);
-
+            // Floating TextMesh name labels used to live here — the game's
+            // only on-screen identification for an interactable, per
+            // InteractionRaycaster's old doc comment. Removed per the user's
+            // explicit request ("remove all those placeholder assets that
+            // have text above"); UI.InteractionPromptUI now shows a
+            // centre-screen "[E] <prompt>" line driven by
+            // InteractionRaycaster.Current instead (Phase 3 of the Cabin_v2
+            // pass), and a MaterialPropertyBlock emissive tint on the looked-
+            // at renderer keeps props findable without a label. `labelText`
+            // is kept as a parameter for now (used in a couple of call sites'
+            // comments/debugging) but no longer produces on-screen text.
             T interactable = go.AddComponent<T>();
             SerializedObject so = new SerializedObject(interactable);
             so.FindProperty("lookPrompt").stringValue = lookPrompt;
@@ -246,6 +242,13 @@ namespace FalsePositive.Editor
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             Material material = new Material(shader) { color = color };
+            // UI.InteractionPromptUI drives a looked-at highlight purely via
+            // MaterialPropertyBlock (no per-instance material), which can
+            // only override an existing shader keyword's value, not enable
+            // the keyword itself — so _EMISSION must be on here, at the
+            // shared material, for the highlight to render at all.
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", Color.black);
             foreach (Renderer renderer in go.GetComponentsInChildren<Renderer>())
             {
                 Material[] shared = new Material[renderer.sharedMaterials.Length == 0 ? 1 : renderer.sharedMaterials.Length];

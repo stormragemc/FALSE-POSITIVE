@@ -24,6 +24,7 @@ namespace FalsePositive.Interaction
         public void Unlock()
         {
             IsLocked = false;
+            lookPrompt = "Open the door";
         }
 
         public override void OnInteract()

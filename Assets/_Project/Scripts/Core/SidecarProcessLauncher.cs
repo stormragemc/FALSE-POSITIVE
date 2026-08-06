@@ -25,6 +25,14 @@ namespace FalsePositive.Core
 
         private Process _process;
 
+        private void Awake()
+        {
+            // Same override as InterrogationSidecarClient — resolved
+            // independently here since this component reads config.backendBaseUrl
+            // and config.autoLaunchSidecar directly (not through the client).
+            config = BackendRuntimeOverride.Apply(config);
+        }
+
         public void Begin()
         {
             StartCoroutine(LaunchRoutine());
@@ -34,13 +42,23 @@ namespace FalsePositive.Core
         {
             OnStatus?.Invoke("Checking for voice services...");
 
-            bool? initialHealthy = null;
-            client.CheckHealth(r => initialHealthy = r);
-            yield return new WaitUntil(() => initialHealthy.HasValue);
+            InterrogationSidecarClient.BackendStatus? initialStatus = null;
+            client.CheckHealth(r => initialStatus = r);
+            yield return new WaitUntil(() => initialStatus.HasValue);
 
-            if (initialHealthy!.Value)
+            if (initialStatus!.Value.Ready)
             {
                 OnReady?.Invoke();
+                yield break;
+            }
+
+            if (initialStatus.Value.ServiceHealthy && !initialStatus.Value.KeyAuthorized)
+            {
+                // /health passed but the key didn't — auto-launching a local
+                // process would not fix this, it would just be misconfigured too.
+                OnFailed?.Invoke(
+                    "The interrogation service rejected the configured client key. " +
+                    "Check backendClientKey in Assets/StreamingAssets/backend.local.json.");
                 yield break;
             }
 
@@ -63,13 +81,21 @@ namespace FalsePositive.Core
             float elapsed = 0f;
             while (elapsed < config.sidecarLaunchTimeoutSeconds)
             {
-                bool? polled = null;
+                InterrogationSidecarClient.BackendStatus? polled = null;
                 client.CheckHealth(r => polled = r);
                 yield return new WaitUntil(() => polled.HasValue);
 
-                if (polled!.Value)
+                if (polled!.Value.Ready)
                 {
                     OnReady?.Invoke();
+                    yield break;
+                }
+
+                if (polled.Value.ServiceHealthy && !polled.Value.KeyAuthorized)
+                {
+                    OnFailed?.Invoke(
+                        "The interrogation service rejected the configured client key. " +
+                        "Check backendClientKey in Assets/StreamingAssets/backend.local.json.");
                     yield break;
                 }
 

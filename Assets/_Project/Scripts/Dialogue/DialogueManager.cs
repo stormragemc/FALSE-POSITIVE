@@ -320,14 +320,23 @@ namespace FalsePositive.Dialogue
             StopFiller();
 
             Debug.LogWarning($"[Dialogue] Turn failed: {error}");
-            TurnFailed?.Invoke(error);
 
             _consecutiveTurnFailures++;
             if (_consecutiveTurnFailures == 3)
             {
-                Debug.LogError("[Dialogue] Three consecutive turn failures — the interrogation service " +
-                    "appears unreachable. Return to the main menu and use \"Offline demo\" to play the " +
-                    "full story without it.");
+                // This used to be console-only (Debug.LogError), invisible in
+                // a shipped build. Fold it into the same TurnFailed event the
+                // debug overlay already renders, so a misconfigured key or a
+                // dead backend is visible without opening the console.
+                const string escalation = "The interrogation service appears unreachable after three " +
+                    "failed turns. Return to the main menu and use \"Offline demo\" to play the full " +
+                    "story without it.";
+                Debug.LogError($"[Dialogue] Three consecutive turn failures: {escalation}");
+                TurnFailed?.Invoke($"{error}\n{escalation}");
+            }
+            else
+            {
+                TurnFailed?.Invoke(error);
             }
 
             // Never hard-fail the conversation — just re-arm listening so

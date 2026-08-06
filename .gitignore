@@ -98,6 +98,12 @@ Sidecar/.env
 *.pem
 *.key
 
+# Unity runtime override for the hosted backend URL/client key (see
+# BackendRuntimeOverride.cs). Carries the shared X-FP-Client-Key secret —
+# must never be committed. Copy backend.local.example.json to create it.
+/[Aa]ssets/StreamingAssets/backend.local.json
+/[Aa]ssets/StreamingAssets/backend.local.json.meta
+
 # =============================================================================
 # Python / sidecar
 # =============================================================================

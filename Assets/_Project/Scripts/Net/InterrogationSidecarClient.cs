@@ -18,30 +18,115 @@ namespace FalsePositive.Net
     public sealed class InterrogationSidecarClient : MonoBehaviour
     {
         private const int BackendSampleRate = 16000;
+        // Mirrors Sidecar/config.py's SIDECAR_MAX_AUDIO_SECONDS default (20s).
+        // The server value is configurable; this is a client-side safety
+        // clamp against the documented default, not an attempt to mirror a
+        // runtime-configurable server setting exactly.
+        private const int MaxAudioSeconds = 20;
 
         [SerializeField] private InterrogationConfig config;
 
+        // Fixed session id used only to probe /session/reset for an
+        // authorized-key check during the health gate. /session/reset on an
+        // id with no active session is a cheap, side-effect-free no-op
+        // server-side (Sidecar/app.py:_session_store.reset et al.) — it
+        // never consumes turn budget and never evicts a real session.
+        private const string HealthProbeSessionId = "__health_probe__";
+
         public bool IsBusy { get; private set; }
 
+        /// <summary>Outcome of a health gate check. /health itself is
+        /// deliberately unauthenticated (Sidecar/app.py exempts it), so a
+        /// wrong or missing client key still returns 200 there — ServiceHealthy
+        /// can be true while KeyAuthorized is false. Both must be true before
+        /// gameplay proceeds.</summary>
+        public readonly struct BackendStatus
+        {
+            public readonly bool ServiceHealthy;
+            public readonly bool KeyAuthorized;
+
+            public BackendStatus(bool serviceHealthy, bool keyAuthorized)
+            {
+                ServiceHealthy = serviceHealthy;
+                KeyAuthorized = keyAuthorized;
+            }
+
+            public bool Ready => ServiceHealthy && KeyAuthorized;
+        }
+
+        private void Awake()
+        {
+            // Resolves the hosted URL/key from a gitignored StreamingAssets
+            // override if one is present, on a clone — never mutates the
+            // committed asset. See BackendRuntimeOverride for why.
+            config = BackendRuntimeOverride.Apply(config);
+        }
+
+        /// <summary>Convenience overload for callers that only care whether
+        /// the backend is fully usable (service warmed up AND key accepted).</summary>
         public void CheckHealth(Action<bool> onResult)
+        {
+            CheckHealth(status => onResult?.Invoke(status.Ready));
+        }
+
+        public void CheckHealth(Action<BackendStatus> onResult)
         {
             StartCoroutine(HealthRoutine(onResult));
         }
 
-        private IEnumerator HealthRoutine(Action<bool> onResult)
+        private IEnumerator HealthRoutine(Action<BackendStatus> onResult)
         {
             if (!config.IsBackendUrlAllowed)
             {
-                onResult?.Invoke(false);
+                onResult?.Invoke(new BackendStatus(false, false));
                 yield break;
             }
 
             string url = $"{config.SidecarBaseUrl}/health";
-            using UnityWebRequest req = UnityWebRequest.Get(url);
-            req.timeout = 5;
-            ApplyClientKey(req);
-            yield return req.SendWebRequest();
-            onResult?.Invoke(req.result == UnityWebRequest.Result.Success);
+            using UnityWebRequest healthReq = UnityWebRequest.Get(url);
+            healthReq.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
+            ApplyClientKey(healthReq);
+            yield return healthReq.SendWebRequest();
+
+            bool serviceHealthy = false;
+            if (healthReq.result == UnityWebRequest.Result.Success)
+            {
+                string body = healthReq.downloadHandler != null ? healthReq.downloadHandler.text : null;
+                if (!string.IsNullOrEmpty(body))
+                {
+                    try
+                    {
+                        SidecarHealthResponse health = JsonUtility.FromJson<SidecarHealthResponse>(body);
+                        serviceHealthy = health != null && health.status == "ok" && health.models_loaded;
+                    }
+                    catch (Exception)
+                    {
+                        serviceHealthy = false;
+                    }
+                }
+            }
+
+            if (!serviceHealthy)
+            {
+                onResult?.Invoke(new BackendStatus(false, false));
+                yield break;
+            }
+
+            // /health is auth-exempt (Sidecar/app.py), so a missing or wrong
+            // backendClientKey still gets here. /session/reset is the
+            // cheapest authenticated endpoint available to tell them apart.
+            var resetForm = new List<IMultipartFormSection>
+            {
+                new MultipartFormDataSection("session_id", HealthProbeSessionId),
+            };
+            string resetUrl = $"{config.SidecarBaseUrl}/session/reset";
+            using UnityWebRequest authReq = UnityWebRequest.Post(resetUrl, resetForm);
+            authReq.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
+            ApplyClientKey(authReq);
+            yield return authReq.SendWebRequest();
+
+            bool keyAuthorized = authReq.result == UnityWebRequest.Result.Success;
+            onResult?.Invoke(new BackendStatus(true, keyAuthorized));
         }
 
         /// <summary>
@@ -133,6 +218,17 @@ namespace FalsePositive.Net
                     onError?.Invoke("Microphone audio has an invalid sample rate.");
                     yield break;
                 }
+
+                // Sidecar/app.py rejects any payload strictly greater than
+                // SIDECAR_MAX_AUDIO_SECONDS (20s) * sample_rate * 2 bytes.
+                // VoiceActivityDetector's wall-clock timer is checked once per
+                // frame, so a maximal utterance can land one frame past the
+                // limit; clamp here rather than let that 400 the turn.
+                int maxUploadSamples = MaxAudioSeconds * uploadSampleRate;
+                if (uploadSamples.Length > maxUploadSamples)
+                {
+                    Array.Resize(ref uploadSamples, maxUploadSamples);
+                }
             }
 
             var form = new List<IMultipartFormSection>
@@ -174,7 +270,7 @@ namespace FalsePositive.Net
             {
                 string serverError = TryExtractError(bodyText);
                 onError?.Invoke(string.IsNullOrEmpty(serverError)
-                    ? $"Sidecar returned an error ({req.responseCode})."
+                    ? DescribeHttpStatus(req.responseCode)
                     : serverError);
                 yield break;
             }
@@ -219,11 +315,56 @@ namespace FalsePositive.Net
             try
             {
                 SidecarTurnResponse parsed = JsonUtility.FromJson<SidecarTurnResponse>(bodyText);
-                return parsed?.error;
+                if (!string.IsNullOrEmpty(parsed?.error))
+                {
+                    return parsed.error;
+                }
+            }
+            catch
+            {
+                // Not the standard _empty_response() shape — fall through and
+                // try FastAPI's own {"detail": ...} error envelope instead
+                // (returned for validation errors that never reach app.py's
+                // handlers, e.g. an unrecognised route).
+            }
+
+            try
+            {
+                ErrorDetailEnvelope detail = JsonUtility.FromJson<ErrorDetailEnvelope>(bodyText);
+                return string.IsNullOrEmpty(detail?.detail) ? null : detail.detail;
             }
             catch
             {
                 return null;
+            }
+        }
+
+        [Serializable]
+        private sealed class ErrorDetailEnvelope
+        {
+            public string detail;
+        }
+
+        /// <summary>Fallback message when the response body carried neither
+        /// SidecarTurnResponse's "error" nor FastAPI's "detail" field —
+        /// distinguishes the common failure modes for the player instead of
+        /// a bare status code.</summary>
+        private static string DescribeHttpStatus(long code)
+        {
+            switch (code)
+            {
+                case 401:
+                    return "The interrogation service rejected the configured client key.";
+                case 413:
+                    return "That recording was too large for the interrogation service to accept.";
+                case 429:
+                    return "The interrogation service has reached its usage limit for now.";
+                case 500:
+                    return "The interrogation service failed to process that turn. Try again.";
+                case 504:
+                    return "The interrogation service timed out on that turn. Try again.";
+                default:
+                    return $"Sidecar returned an error ({code}).";
             }
         }
     }

@@ -254,6 +254,9 @@ namespace FalsePositive.Editor
                 collider.center = new Vector3(0f, 0.86f, 0f);
                 CabinCharacterIdle idle = root.AddComponent<CabinCharacterIdle>();
                 idle.Configure(profile, Math.Abs(name.GetHashCode() % 1000) / 1000f);
+                // CutsceneStage (Phase 4) drives this NPC's movement/pose
+                // during cutscene beats — see Cutscene.ScriptedActor.
+                root.AddComponent<FalsePositive.Cutscene.ScriptedActor>();
             }
 
             return root;
@@ -438,77 +441,12 @@ namespace FalsePositive.Editor
             using HumanPoseHandler handler = new HumanPoseHandler(animator.avatar, animator.transform);
             HumanPose pose = new HumanPose();
             handler.GetHumanPose(ref pose);
-            Array.Clear(pose.muscles, 0, pose.muscles.Length);
-            SetMuscle(ref pose, "Left Arm Down-Up", -0.72f);
-            SetMuscle(ref pose, "Right Arm Down-Up", -0.72f);
-            SetMuscle(ref pose, "Left Forearm Stretch", -0.18f);
-            SetMuscle(ref pose, "Right Forearm Stretch", -0.18f);
-
-            switch (profile)
-            {
-                case CabinIdleProfile.Confrontational:
-                    SetMuscle(ref pose, "Spine Front-Back", -0.12f);
-                    SetMuscle(ref pose, "Chest Front-Back", -0.08f);
-                    SetMuscle(ref pose, "Left Forearm Stretch", -0.48f);
-                    SetMuscle(ref pose, "Left Arm Front-Back", -0.18f);
-                    SetMuscle(ref pose, "Right Arm Front-Back", 0.12f);
-                    SetMuscle(ref pose, "Head Turn Left-Right", -0.08f);
-                    break;
-                case CabinIdleProfile.Controlled:
-                    SetMuscle(ref pose, "Spine Front-Back", 0.05f);
-                    SetMuscle(ref pose, "Head Nod Down-Up", 0.08f);
-                    SetMuscle(ref pose, "Left Forearm Stretch", -0.32f);
-                    SetMuscle(ref pose, "Right Forearm Stretch", -0.32f);
-                    break;
-                case CabinIdleProfile.Guarded:
-                    SetMuscle(ref pose, "Left Arm Down-Up", -0.52f);
-                    SetMuscle(ref pose, "Right Arm Down-Up", -0.52f);
-                    SetMuscle(ref pose, "Left Arm Front-Back", 0.18f);
-                    SetMuscle(ref pose, "Right Arm Front-Back", 0.18f);
-                    SetMuscle(ref pose, "Left Forearm Stretch", -0.58f);
-                    SetMuscle(ref pose, "Right Forearm Stretch", -0.58f);
-                    SetMuscle(ref pose, "Spine Twist Left-Right", -0.08f);
-                    SetMuscle(ref pose, "Head Turn Left-Right", -0.12f);
-                    break;
-                case CabinIdleProfile.Panicked:
-                    SetMuscle(ref pose, "Spine Front-Back", 0.15f);
-                    SetMuscle(ref pose, "Chest Front-Back", 0.1f);
-                    SetMuscle(ref pose, "Left Arm Down-Up", -0.28f);
-                    SetMuscle(ref pose, "Right Arm Down-Up", -0.28f);
-                    SetMuscle(ref pose, "Left Forearm Stretch", -0.55f);
-                    SetMuscle(ref pose, "Right Forearm Stretch", -0.4f);
-                    SetMuscle(ref pose, "Head Nod Down-Up", 0.15f);
-                    break;
-                case CabinIdleProfile.Sleeping:
-                    pose.bodyPosition += new Vector3(0f, -0.12f, 0f);
-                    SetMuscle(ref pose, "Spine Front-Back", -0.42f);
-                    SetMuscle(ref pose, "Chest Front-Back", -0.34f);
-                    SetMuscle(ref pose, "Head Nod Down-Up", -0.35f);
-                    SetMuscle(ref pose, "Neck Nod Down-Up", -0.22f);
-                    SetMuscle(ref pose, "Left Upper Leg Front-Back", -0.62f);
-                    SetMuscle(ref pose, "Right Upper Leg Front-Back", -0.42f);
-                    SetMuscle(ref pose, "Left Lower Leg Stretch", -0.58f);
-                    SetMuscle(ref pose, "Right Lower Leg Stretch", -0.7f);
-                    SetMuscle(ref pose, "Left Arm Down-Up", -0.15f);
-                    SetMuscle(ref pose, "Right Arm Down-Up", -0.32f);
-                    SetMuscle(ref pose, "Left Forearm Stretch", -0.7f);
-                    SetMuscle(ref pose, "Right Forearm Stretch", -0.52f);
-                    break;
-            }
-
+            // Muscle tuning lives in CabinPoseLibrary (runtime assembly) so
+            // Cutscene.ScriptedActor can apply the same poses at Play-mode
+            // time for procedural cutscene staging, not just this one-shot
+            // Editor-time bake.
+            CabinPoseLibrary.Apply(ref pose, profile);
             handler.SetHumanPose(ref pose);
-        }
-
-        private static void SetMuscle(ref HumanPose pose, string muscleName, float value)
-        {
-            for (int index = 0; index < HumanTrait.MuscleName.Length; index++)
-            {
-                if (string.Equals(HumanTrait.MuscleName[index], muscleName, StringComparison.OrdinalIgnoreCase))
-                {
-                    pose.muscles[index] = value;
-                    return;
-                }
-            }
         }
 
         private static void SaveCharacter(GameObject character, string fileName)

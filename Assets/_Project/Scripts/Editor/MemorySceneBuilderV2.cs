@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using FalsePositive.CabinNight;
+using FalsePositive.Cutscene;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -84,7 +85,7 @@ namespace FalsePositive.Editor
             Transform characters = NewChild(null, "Characters").transform;
             NewChild(null, "Gameplay"); // reserved — Cabin_v2's own colliders (Phase 1) cover collision
             NewChild(null, "StoryProps"); // populated by MemorySceneDressing next step
-            NewChild(null, "Sequencing"); // populated by MemorySceneWiring next step
+            GameObject sequencing = NewChild(null, "Sequencing"); // M1NightController/M2MorningController populate this further via MemorySceneWiring
 
             BuildEnvironment(environment);
             GameObject door = BuildInterior(interior, isMorning);
@@ -96,6 +97,11 @@ namespace FalsePositive.Editor
             {
                 door.name = "Prop_FrontDoor_Locked"; // MemorySceneDressing/Wiring find it by this name
             }
+
+            // CutsceneStage (Phase 4) — procedural staging for the beats that
+            // need more than CutsceneDirector's default fade+VO.
+            CutsceneStage stage = sequencing.AddComponent<CutsceneStage>();
+            stage.Configure(isMorning);
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, path);

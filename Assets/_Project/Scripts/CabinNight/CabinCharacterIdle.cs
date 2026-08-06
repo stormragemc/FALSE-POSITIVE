@@ -10,7 +10,10 @@ namespace FalsePositive.CabinNight
         Controlled,
         Guarded,
         Sleeping,
-        Panicked
+        Panicked,
+        Walking,
+        Carrying,
+        Kneeling
     }
 
     /// <summary>
@@ -54,6 +57,9 @@ namespace FalsePositive.CabinNight
                 CabinIdleProfile.Guarded => 0.45f,
                 CabinIdleProfile.Sleeping => 1.1f,
                 CabinIdleProfile.Panicked => 1.4f,
+                CabinIdleProfile.Walking => 0.5f,
+                CabinIdleProfile.Carrying => 0.9f,
+                CabinIdleProfile.Kneeling => 0.6f,
                 _ => 0.4f
             };
 
@@ -64,6 +70,9 @@ namespace FalsePositive.CabinNight
                 CabinIdleProfile.Guarded => drift * 1.5f,
                 CabinIdleProfile.Sleeping => drift * 0.18f,
                 CabinIdleProfile.Panicked => drift * 2.2f,
+                CabinIdleProfile.Walking => drift * 0.4f,
+                CabinIdleProfile.Carrying => drift * 0.15f,
+                CabinIdleProfile.Kneeling => drift * 0.3f,
                 _ => 0f
             };
 

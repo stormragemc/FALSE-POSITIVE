@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 359372231370709628}
   - component: {fileID: 6325768979758282844}
   - component: {fileID: 5244969451475665650}
+  - component: {fileID: 3615933573478490555}
   m_Layer: 0
   m_Name: Nick_Vlahos
   m_TagString: Untagged
@@ -73,6 +74,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinCharacterIdle
   profile: 0
   seed: 0.462
+--- !u!114 &3615933573478490555
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1839652891799024951}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ad33fe6ece69a148881ce59900abecd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.ScriptedActor
 --- !u!1001 &6286025868781061469
 PrefabInstance:
   m_ObjectHideFlags: 0

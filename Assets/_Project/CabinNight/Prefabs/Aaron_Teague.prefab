@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 5407743779069565999}
   - component: {fileID: 8174859891232999301}
   - component: {fileID: 7781370570901010042}
+  - component: {fileID: 883241288722140370}
   m_Layer: 0
   m_Name: Aaron_Teague
   m_TagString: Untagged
@@ -74,6 +75,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinCharacterIdle
   profile: 1
   seed: 0.256
+--- !u!114 &883241288722140370
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 699878125506921541}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ad33fe6ece69a148881ce59900abecd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.ScriptedActor
 --- !u!1001 &1346801590675547438
 PrefabInstance:
   m_ObjectHideFlags: 0

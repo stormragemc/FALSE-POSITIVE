@@ -57,6 +57,17 @@ namespace FalsePositive.Cutscene
         public bool IsPlaying { get; private set; }
         public event Action<CutsceneId> Finished;
 
+        /// <summary>
+        /// Fires once the screen is fully faded to black, before any beats
+        /// play — the window Cutscene.CutsceneStage (Phase 4 of the Cabin_v2
+        /// pass) uses to move/pose cast members for a beat while the player
+        /// can't see it happen. Firing any earlier (e.g. before the fade
+        /// starts) would let staging changes be visible mid-fade; there is
+        /// no equivalent hook needed before Finished since that already
+        /// covers "the cutscene is fully over, fade back in complete."
+        /// </summary>
+        public event Action<CutsceneId> Started;
+
         private Dictionary<CutsceneId, CutsceneRecipe> _byId;
 
         private void Awake()
@@ -81,6 +92,7 @@ namespace FalsePositive.Cutscene
             _byId.TryGetValue(id, out CutsceneRecipe recipe);
 
             if (fader != null) yield return fader.FadeToBlack(recipe?.fadeOutSeconds ?? 0.3f);
+            Started?.Invoke(id);
 
             if (recipe != null)
             {

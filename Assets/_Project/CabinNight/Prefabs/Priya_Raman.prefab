@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 2470209813624042281}
   - component: {fileID: 6557970229746386188}
   - component: {fileID: 4202158969359096521}
+  - component: {fileID: 2611259723095439382}
   m_Layer: 0
   m_Name: Priya_Raman
   m_TagString: Untagged
@@ -74,6 +75,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinCharacterIdle
   profile: 4
   seed: 0.187
+--- !u!114 &2611259723095439382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2239191945839634920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ad33fe6ece69a148881ce59900abecd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.ScriptedActor
 --- !u!1001 &365699119243951337
 PrefabInstance:
   m_ObjectHideFlags: 0

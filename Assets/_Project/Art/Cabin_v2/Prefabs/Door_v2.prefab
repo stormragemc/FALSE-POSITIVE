@@ -1,0 +1,111 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &8701592211453089744
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071067
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 4f20da8a57bfa5546a2e231ef1bd516f, type: 2}
+    - target: {fileID: 919132149155446097, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      propertyPath: m_Name
+      value: Door_v2
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2262464938093780541}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1377189652750478806}
+  m_SourcePrefab: {fileID: 100100000, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+--- !u!1 &8359575715510397569 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 776e30f1ce570624984956c5ccf7d1c4, type: 3}
+  m_PrefabInstance: {fileID: 8701592211453089744}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &2262464938093780541
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8359575715510397569}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.7832719, y: 0.7832718, z: 2.1}
+  m_Center: {x: -0.3671298, y: -0.37533227, z: 1.05}
+--- !u!114 &1377189652750478806
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8359575715510397569}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08fe4e73c2e520e4aba99c82e27bf939, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Interaction.DoorInteractable
+  lookPrompt: 
+  memoryFlag: 
+  startsLocked: 0
+  lockedPrompt: It's locked.

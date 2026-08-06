@@ -193,6 +193,24 @@ namespace FalsePositive.Editor
             SetField(objectiveHud, "label", objectiveText);
             objectiveGo.SetActive(false);
 
+            // OfflineModeLabel — see docs/GAME_COMPLETION_PLAN.md §10, "never fake".
+            // The poller (OfflineModeLabel) lives on an always-active object —
+            // it must keep receiving Update() to ever turn "root" back on —
+            // and "root" is the separate child it shows/hides.
+            GameObject offlineLabelPoller = new GameObject("OfflineModeLabel", typeof(RectTransform));
+            offlineLabelPoller.transform.SetParent(hud.transform, false);
+            StretchFill(offlineLabelPoller);
+            GameObject offlineLabelRoot = new GameObject("Root", typeof(RectTransform));
+            offlineLabelRoot.transform.SetParent(offlineLabelPoller.transform, false);
+            AnchorTopLeft(offlineLabelRoot, new Vector2(40f, -90f), new Vector2(420f, 30f));
+            Text offlineLabelText = CreateText(offlineLabelRoot.transform, "Label", "OFFLINE — scripted interrogation", 18);
+            offlineLabelText.alignment = TextAnchor.MiddleLeft;
+            offlineLabelText.color = new Color(1f, 0.75f, 0.3f);
+            StretchFill(offlineLabelText.gameObject);
+            OfflineModeLabel offlineLabel = offlineLabelPoller.AddComponent<OfflineModeLabel>();
+            SetField(offlineLabel, "root", offlineLabelRoot);
+            offlineLabelRoot.SetActive(false);
+
             // ConsentPanel (MicConsentFlow)
             GameObject consentGo = BuildConsentPanel(hud.transform, mic, out MicConsentFlow consentFlow);
 
@@ -497,7 +515,7 @@ namespace FalsePositive.Editor
             GameObject canvasGo = CreateCanvasRoot("Canvas", 0);
             GameObject panel = new GameObject("MenuPanel", typeof(RectTransform), typeof(VerticalLayoutGroup));
             panel.transform.SetParent(canvasGo.transform, false);
-            AnchorCenter(panel, new Vector2(0f, -40f), new Vector2(420f, 320f));
+            AnchorCenter(panel, new Vector2(0f, -60f), new Vector2(420f, 460f));
             VerticalLayoutGroup layout = panel.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 24f;
             layout.childAlignment = TextAnchor.MiddleCenter;
@@ -513,6 +531,15 @@ namespace FalsePositive.Editor
 
             Button playButton = CreateButton(panel.transform, "PlayButton", "Play");
             SetLayoutHeight(playButton.gameObject, 64f);
+
+            Button offlineButton = CreateButton(panel.transform, "OfflineButton", "Offline demo");
+            SetLayoutHeight(offlineButton.gameObject, 64f);
+            Text offlineCaption = CreateText(panel.transform, "OfflineCaption",
+                "Plays the full story with a scripted interrogation — no voice service required.", 16);
+            offlineCaption.color = new Color(0.7f, 0.72f, 0.78f);
+            offlineCaption.fontStyle = FontStyle.Italic;
+            SetLayoutHeight(offlineCaption.gameObject, 40f);
+
             Button settingsButton = CreateButton(panel.transform, "SettingsButton", "Settings");
             SetLayoutHeight(settingsButton.gameObject, 64f);
             Button quitButton = CreateButton(panel.transform, "QuitButton", "Quit");
@@ -520,6 +547,7 @@ namespace FalsePositive.Editor
 
             MainMenuController controller = canvasGo.AddComponent<MainMenuController>();
             SetField(controller, "playButton", playButton);
+            SetField(controller, "offlineButton", offlineButton);
             SetField(controller, "settingsButton", settingsButton);
             SetField(controller, "quitButton", quitButton);
 
@@ -616,12 +644,19 @@ namespace FalsePositive.Editor
 
             PhasePromptSet prompts = AssetDatabase.LoadAssetAtPath<PhasePromptSet>(ConfigRoot + "PhasePromptSet.asset");
             TextAsset storyMarks = AssetDatabase.LoadAssetAtPath<TextAsset>(PromptsRoot + "story_marks.txt");
+            OfflineDialogueScript offlineScript = AssetDatabase.LoadAssetAtPath<OfflineDialogueScript>(ConfigRoot + "OfflineDialogueScript.asset");
+            if (offlineScript == null)
+            {
+                Debug.LogWarning("[ProjectBootstrapBuilder] OfflineDialogueScript.asset not found — run " +
+                    "Bootstrap step 10, then re-run this step, or Offline demo mode will have no lines.");
+            }
 
             GameObject phaseGo = GameObject.Find("PhaseDialogueController") ?? new GameObject("PhaseDialogueController");
             PhaseDialogueController phaseController = phaseGo.GetComponent<PhaseDialogueController>() ?? phaseGo.AddComponent<PhaseDialogueController>();
             SetField(phaseController, "prompts", prompts);
             SetField(phaseController, "storyMarksSource", storyMarks);
             SetField(phaseController, "binder", binder);
+            SetField(phaseController, "offlineScript", offlineScript);
 
             EditorSceneManager.MarkSceneDirty(scene);
             SaveScene(scene, InterrogationScenePath);

@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using FalsePositive.Audio;
 using FalsePositive.Cop;
 using FalsePositive.Net;
+using FalsePositive.UI;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -59,13 +61,26 @@ namespace FalsePositive.Dialogue
         public bool IsSuspended { get; private set; }
         public string SessionId { get; private set; }
 
+        /// <summary>Set true for the whole of a phase by
+        /// PhaseDialogueController when GameFlowDirector.OfflineMode is on —
+        /// see docs/GAME_COMPLETION_PLAN.md §10 and the offline-mode plan:
+        /// every officer turn plays a fixed authored line instead of
+        /// POSTing to the sidecar, so the full flow stays walkable with no
+        /// backend running.</summary>
+        public bool OfflineMode { get; set; }
+
         private InterrogationSidecarClient _sidecarClient;
         private VoiceActivityDetector _vad;
         private UtteranceRecorder _recorder;
+        private SubtitleUI _subtitles;
 
         private string _pendingSceneInstruction;
         private float _listeningStartedAt;
         private int _lastSpeechOnsetDelayMs;
+        private int _consecutiveTurnFailures;
+
+        private OfflineOfficerLine[] _offlineLines;
+        private int _offlineIndex;
 
         /// <summary>Called once by InterrogationSceneBinder, on first load only.
         /// Re-binding an already-bound manager (e.g. a defensive re-call) is
@@ -74,7 +89,8 @@ namespace FalsePositive.Dialogue
             InterrogationSidecarClient sidecarClient,
             VoiceActivityDetector vad,
             UtteranceRecorder recorder,
-            string sessionId)
+            string sessionId,
+            SubtitleUI subtitles = null)
         {
             if (IsBound) UnbindServicesInternal();
 
@@ -82,6 +98,7 @@ namespace FalsePositive.Dialogue
             _vad = vad;
             _recorder = recorder;
             SessionId = sessionId;
+            _subtitles = subtitles;
             IsBound = true;
 
             if (isActiveAndEnabled) SubscribeToServices();
@@ -145,6 +162,16 @@ namespace FalsePositive.Dialogue
             IsSuspended = false;
         }
 
+        /// <summary>Loads the fixed script for this phase and resets its
+        /// cursor. Called once per phase entry by PhaseDialogueController,
+        /// before OfflineMode's first RequestOfficerTurn — has no effect
+        /// unless OfflineMode is also true.</summary>
+        public void BeginOfflinePhase(OfflineOfficerLine[] lines)
+        {
+            _offlineLines = lines;
+            _offlineIndex = 0;
+        }
+
         /// <summary>Requests an audio-less turn — the officer speaks next with no
         /// witness utterance to react to. Used both for the true session opener
         /// (no prior history) and for every phase transition — the sidecar
@@ -160,6 +187,13 @@ namespace FalsePositive.Dialogue
             _vad.SetGated(true);
             string instruction = _pendingSceneInstruction;
             _pendingSceneInstruction = null;
+
+            if (OfflineMode)
+            {
+                PlayOfflineTurn();
+                return;
+            }
+
             _sidecarClient.PostTurn(SessionId, null, 16000, 0, instruction, OnTurnSuccess, OnTurnError);
         }
 
@@ -170,6 +204,15 @@ namespace FalsePositive.Dialogue
             PlayFiller();
             SetState(DialogueState.Uploading);
             _vad.SetGated(true);
+
+            if (OfflineMode)
+            {
+                StopFiller();
+                _pendingSceneInstruction = null;
+                PlayOfflineTurn();
+                return;
+            }
+
             string instruction = _pendingSceneInstruction;
             _pendingSceneInstruction = null;
             _sidecarClient.PostTurn(
@@ -182,6 +225,60 @@ namespace FalsePositive.Dialogue
                 OnTurnError);
         }
 
+        /// <summary>Offline-mode equivalent of a real turn: plays the next
+        /// authored line instead of asking the sidecar for one. Never
+        /// fabricates prosody — SessionScore.RecordTurn only counts
+        /// Composure from reliable turns, and marking these unreliable is
+        /// what keeps that honest (docs/GAME_COMPLETION_PLAN.md §10).</summary>
+        private void PlayOfflineTurn()
+        {
+            OfflineOfficerLine offlineLine = null;
+            if (_offlineLines != null && _offlineLines.Length > 0)
+            {
+                int index = Mathf.Min(_offlineIndex, _offlineLines.Length - 1);
+                offlineLine = _offlineLines[index];
+                _offlineIndex = index + 1;
+            }
+
+            string line = offlineLine != null ? offlineLine.line : string.Empty;
+            AudioClip clip = offlineLine != null ? offlineLine.voClip : null;
+            float holdSeconds = offlineLine != null ? offlineLine.holdSecondsIfNoClip : 3f;
+
+            var response = new SidecarTurnResponse
+            {
+                ok = true,
+                transcript = string.Empty,
+                reply_text = line,
+                prosody = new SidecarProsodySignal
+                {
+                    available = false,
+                    reliable = false,
+                    reliability_reason = "offline mode — no prosody analysis",
+                },
+            };
+
+            SetState(DialogueState.Speaking);
+            if (_subtitles != null) _subtitles.Show("SPASSKY", line, clip != null ? clip.length : holdSeconds);
+
+            if (clip != null)
+            {
+                copMouth.Begin(copVoice.Source);
+                copVoice.Play(clip);
+            }
+            else
+            {
+                StartCoroutine(HoldThenFinishOfflineTurn(holdSeconds));
+            }
+
+            TurnCompleted?.Invoke(response);
+        }
+
+        private IEnumerator HoldThenFinishOfflineTurn(float holdSeconds)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.1f, holdSeconds));
+            OnCopFinishedSpeaking();
+        }
+
         private void OnTurnSuccess(SidecarTurnResponse response)
         {
             // The filler clip plays to cover upload/inference latency —
@@ -189,6 +286,23 @@ namespace FalsePositive.Dialogue
             // the reply itself starts (it was previously never stopped on
             // either exit path from Uploading).
             StopFiller();
+            _consecutiveTurnFailures = 0;
+
+            // A backend response with no audio (empty/malformed audio_b64)
+            // must not throw inside this class — it is documented as never
+            // throwing into the game loop, but Convert.FromBase64String on
+            // an empty/null string previously did exactly that. Fall back
+            // to subtitling the reply text and holding, same shape as the
+            // offline no-clip path.
+            if (string.IsNullOrEmpty(response.audio_b64))
+            {
+                Debug.LogWarning("[Dialogue] Turn succeeded with no audio_b64 — subtitling reply_text instead.");
+                SetState(DialogueState.Speaking);
+                if (_subtitles != null) _subtitles.Show("SPASSKY", response.reply_text, 3.5f);
+                StartCoroutine(HoldThenFinishOfflineTurn(3.5f));
+                TurnCompleted?.Invoke(response);
+                return;
+            }
 
             byte[] pcmBytes = Convert.FromBase64String(response.audio_b64);
             int channels = Mathf.Max(response.audio_channels, 1);
@@ -207,6 +321,14 @@ namespace FalsePositive.Dialogue
 
             Debug.LogWarning($"[Dialogue] Turn failed: {error}");
             TurnFailed?.Invoke(error);
+
+            _consecutiveTurnFailures++;
+            if (_consecutiveTurnFailures == 3)
+            {
+                Debug.LogError("[Dialogue] Three consecutive turn failures — the interrogation service " +
+                    "appears unreachable. Return to the main menu and use \"Offline demo\" to play the " +
+                    "full story without it.");
+            }
 
             // Never hard-fail the conversation — just re-arm listening so
             // the player can try again, unless we've been suspended in the

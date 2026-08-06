@@ -36,7 +36,7 @@ namespace FalsePositive.Flow
                 return;
             }
 
-            dialogueManager.BindServices(flow.Sidecar, flow.Vad, flow.Recorder, flow.SessionId);
+            dialogueManager.BindServices(flow.Sidecar, flow.Vad, flow.Recorder, flow.SessionId, flow.Subtitles);
             playerState.SetFader(flow.Fader);
             // DebugOverlayUI lives in _Persistent too — reached through
             // GameFlowDirector rather than a serialized field, same reason

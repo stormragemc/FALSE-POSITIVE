@@ -17,6 +17,7 @@ namespace FalsePositive.Menu
     public sealed class MainMenuController : MonoBehaviour
     {
         [SerializeField] private Button playButton;
+        [SerializeField] private Button offlineButton;
         [SerializeField] private Button settingsButton;
         [SerializeField] private Button quitButton;
 
@@ -24,7 +25,8 @@ namespace FalsePositive.Menu
         {
             EnsureEventSystem();
 
-            if (playButton != null) playButton.onClick.AddListener(HandlePlay);
+            if (playButton != null) playButton.onClick.AddListener(() => HandlePlay(offline: false));
+            if (offlineButton != null) offlineButton.onClick.AddListener(() => HandlePlay(offline: true));
             if (settingsButton != null) settingsButton.onClick.AddListener(HandleSettings);
             if (quitButton != null) quitButton.onClick.AddListener(HandleQuit);
         }
@@ -46,7 +48,12 @@ namespace FalsePositive.Menu
             DontDestroyOnLoad(go);
         }
 
-        private void HandlePlay()
+        /// <summary>Offline demo runs the identical consent -> calibration -> P1
+        /// hand-off as normal Play — the mic is still required (P1's spoken
+        /// prompt and M1's yell gate are local-only and never touched the
+        /// backend either way). Only P2/P3's officer turns differ, via
+        /// GameFlowDirector.OfflineMode — see PhaseDialogueController.</summary>
+        private void HandlePlay(bool offline)
         {
             GameFlowDirector flow = GameFlowDirector.Instance;
             if (flow == null)
@@ -55,7 +62,7 @@ namespace FalsePositive.Menu
                 return;
             }
 
-            flow.StartNewPlaythrough();
+            flow.StartNewPlaythrough(offline);
             flow.ConsentFlow?.Show();
         }
 

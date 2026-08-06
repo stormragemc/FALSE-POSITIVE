@@ -70,6 +70,7 @@ namespace FalsePositive.Flow
         public SessionScore Score { get; } = new SessionScore();
         public string SessionId { get; private set; }
         public bool BackendReady { get; private set; }
+        public bool OfflineMode { get; private set; }
         public VoiceCalibrationState Calibration { get; } = new VoiceCalibrationState();
         public InterrogationConfig Config => config;
 
@@ -268,14 +269,19 @@ namespace FalsePositive.Flow
 
         /// <summary>Mints a fresh SessionId, clears flags/score/calibration, and asks
         /// the backend to drop any stale history for that id. Called once, from
-        /// the menu's Play button (A2), before the consent card ever shows.</summary>
-        public void StartNewPlaythrough()
+        /// the menu's Play/Offline demo button (A2), before the consent card ever
+        /// shows. `offline` is the Offline demo path — PhaseDialogueController
+        /// reads OfflineMode to swap P2/P3 onto the scripted officer instead of
+        /// the sidecar; when true this also skips the (doomed) /session/reset
+        /// call, since there is no backend to ask.</summary>
+        public void StartNewPlaythrough(bool offline = false)
         {
             SessionId = Guid.NewGuid().ToString("N");
+            OfflineMode = offline;
             Flags.Clear();
             Score.Reset();
 
-            if (sidecar != null)
+            if (sidecar != null && !offline)
             {
                 sidecar.ResetSession(SessionId, ok =>
                 {

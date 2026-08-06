@@ -33,6 +33,7 @@ namespace FalsePositive.Dialogue
         [SerializeField] private PhasePromptSet prompts;
         [SerializeField] private TextAsset storyMarksSource;
         [SerializeField] private InterrogationSceneBinder binder;
+        [SerializeField] private OfflineDialogueScript offlineScript;
         [SerializeField] private int p1NoSpeechNudgeSeconds = 15;
         [SerializeField] private int p2TurnCap = 14;
         [SerializeField] private int p3TurnCap = 8;
@@ -162,6 +163,32 @@ namespace FalsePositive.Dialogue
                 Debug.LogError("[PhaseDialogueController] No bound DialogueManager/GameFlowDirector — " +
                     "cannot start a live dialogue phase.");
                 return;
+            }
+
+            dialogue.OfflineMode = _flow.OfflineMode;
+            if (_flow.OfflineMode)
+            {
+                OfflineOfficerLine[] lines = offlineScript != null ? offlineScript.LinesFor(_currentPhase) : null;
+                dialogue.BeginOfflinePhase(lines);
+                if (lines != null && lines.Length >= 2)
+                {
+                    // The scripted script's last line is always the phase's
+                    // closing question. P2 additionally waits one more turn
+                    // after the cap for OnTurnCompleted's _awaitingClosingAnswer
+                    // hand-off (see the case above) before that closing line
+                    // plays; P3 has no such hand-off and finishes the moment
+                    // its last line plays. Deriving the cap from the actual
+                    // authored line count — rather than hard-coding it —
+                    // keeps this correct if the script is ever re-authored.
+                    _currentTurnCap = _currentPhase == GamePhase.P2_Recall
+                        ? lines.Length - 2
+                        : lines.Length - 1;
+                }
+                else if (offlineScript == null)
+                {
+                    Debug.LogError("[PhaseDialogueController] OfflineMode is on but no OfflineDialogueScript " +
+                        "is assigned — the officer will have nothing to say.");
+                }
             }
 
             dialogue.Resume();

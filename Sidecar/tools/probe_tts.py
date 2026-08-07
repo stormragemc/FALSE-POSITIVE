@@ -22,9 +22,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config
+import tts
 from elevenlabs.client import ElevenLabs
 
-_MODEL_ID = "eleven_flash_v2_5"
+# Deliberately reach into tts.py rather than restating the model and settings
+# here. This script's whole job is to answer "will this voice work in
+# production", and a second copy of those constants answers it for a
+# configuration production does not use — which is exactly what happened when
+# the officer moved to eleven_multilingual_v2 and this probe stayed on flash.
+_MODEL_ID = tts._MODEL_ID
+_VOICE_SETTINGS = tts._VOICE_SETTINGS
+
+# Maksim — the cast officer voice. See
+# docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md §2.3.
+_SPASSKY_VOICE_ID = "6sXsAlJKKBf265ucBSRt"
+
 _TEST_TEXT = "Testing one two."
 
 
@@ -52,6 +64,7 @@ def main() -> None:
                 text=_TEST_TEXT,
                 model_id=_MODEL_ID,
                 output_format="mp3_44100_128",
+                voice_settings=_VOICE_SETTINGS,
             )
             raw = b"".join(chunks)
             if raw:
@@ -67,17 +80,23 @@ def main() -> None:
     print()
     if usable:
         print(f"Branch A: {len(usable)} usable voice(s) over the API.")
-        # The officer character (COP_PERSONA in llm.py) is Detective Mara
-        # Voss, a woman — pick a female-labeled voice by default instead of
-        # just usable[0], so this script's own suggestion doesn't clash with
-        # the persona. Falls back to the first usable voice if no gender
-        # label is present (some accounts' voices simply don't have one).
-        female = [u for u in usable if u[3] == "female"]
-        vid, name, category, gender = female[0] if female else usable[0]
-        print(f"Recommended (matches the female Mara Voss persona in llm.py):")
+        # The officer (COP_PERSONA in llm.py) is Officer Spassky, cast as
+        # Maksim: male, Russian-accented, semi-deep and raspy. Prefer him by ID
+        # so this script agrees with config.py's committed default; fall back to
+        # any male-labeled voice, then to the first usable one, since some
+        # accounts' voices carry no gender label at all.
+        cast = [u for u in usable if u[0] == _SPASSKY_VOICE_ID]
+        male = [u for u in usable if u[3] == "male"]
+        vid, name, category, gender = (cast or male or usable)[0]
+        if cast:
+            print("Recommended (the cast Spassky voice — already the default in config.py):")
+        elif male:
+            print("Recommended (Maksim is NOT usable on this account; nearest male voice):")
+        else:
+            print("Recommended (no male-labeled voice was usable — first usable one; pick by ear):")
         print(f"  ELEVENLABS_VOICE_ID={vid}   ({name}, {category}, gender={gender})")
-        if not female:
-            print("  (no female-labeled voice was usable — this is just the first usable one; pick by ear.)")
+        if cast:
+            print("  Nothing to set — config.py already defaults to this. Only override to change voice.")
         if len(usable) > 1:
             print(f"All {len(usable)} usable voices are listed above (OK rows) — pick any by ear/label.")
     else:

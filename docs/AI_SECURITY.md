@@ -154,3 +154,37 @@ python -m unittest tests.test_no_deception_schema -v
 ### Testing results
 
 Done. Both S3 tests passed locally.
+
+## S5: Scan for secrets automatically
+
+### What is being protected and why
+
+The project needs Gemini, ElevenLabs, and Google Cloud credentials. A key accidentally committed
+to a source file, test fixture, or Git history can be copied by anyone with repository access and
+can create unexpected charges. `.gitignore` helps stop common mistakes, but it does not inspect
+every commit or older commits.
+
+### How we are going to do that
+
+`.github/workflows/ci.yml` runs on pushes to `main` and pull requests targeting `main`. It has two independent jobs:
+
+- `sidecar-tests` installs the Sidecar dependencies with Python 3.12 and runs the existing test
+  suite;
+- `secret-scan` checks out the complete Git history and uses Gitleaks to scan the current files
+  and past commits for credential patterns.
+
+The workflow has read-only repository permissions and does not pass project credentials to either
+job. GitHub provides the short-lived `GITHUB_TOKEN` used by the Gitleaks action. If the repository
+is owned by a GitHub organization, Gitleaks may additionally require the organization owner to add
+a `GITLEAKS_LICENSE` Actions secret; a personal repository does not need one.
+
+### How we are going to test that the safety filter works
+
+Push this workflow to GitHub and open the Actions tab. Confirm that both `Sidecar tests` and
+`Secret scan` pass on the same commit. Then create a throwaway branch containing a fake
+credential-shaped value, confirm that `Secret scan` fails, and delete the branch without merging
+it. Do not use a real credential for this test.
+
+### Testing results
+
+Not done. The workflow has been added locally but has not yet run in GitHub Actions.

@@ -187,4 +187,4 @@ it. Do not use a real credential for this test.
 
 ### Testing results
 
-Not done. The workflow has been added locally but has not yet run in GitHub Actions.
+Done. GitHub Actions run 31144715561 passed both `Sidecar tests` and `Secret scan` on 7 Aug 2026.

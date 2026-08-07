@@ -43,6 +43,7 @@ namespace FalsePositive.UI
             {
                 _dialogueManager.StateChanged += OnDialogueStateChanged;
                 _dialogueManager.TurnCompleted += OnTurnCompleted;
+                _dialogueManager.SessionEnded += OnSessionEnded;
                 _dialogueManager.TurnFailed += OnTurnFailed;
             }
         }
@@ -53,6 +54,7 @@ namespace FalsePositive.UI
             {
                 _dialogueManager.StateChanged -= OnDialogueStateChanged;
                 _dialogueManager.TurnCompleted -= OnTurnCompleted;
+                _dialogueManager.SessionEnded -= OnSessionEnded;
                 _dialogueManager.TurnFailed -= OnTurnFailed;
             }
             _dialogueManager = null;
@@ -123,6 +125,11 @@ namespace FalsePositive.UI
         private void OnTurnFailed(string error)
         {
             if (lastTurnText != null) lastTurnText.text = $"ERROR: {error}";
+        }
+
+        private void OnSessionEnded(string replyText)
+        {
+            if (lastTurnText != null) lastTurnText.text = $"SESSION ENDED: {replyText}";
         }
     }
 }

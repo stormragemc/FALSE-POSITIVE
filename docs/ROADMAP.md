@@ -1,6 +1,6 @@
 # FALSE POSITIVE — roadmap and live status
 
-**Last updated:** 4 Aug 2026 · **Deadline:** 9 Aug 2026 · **Days left:** 5
+**Last updated:** 7 Aug 2026 · **Deadline:** 9 Aug 2026 · **Days left:** 2
 
 This file answers one question: **what is actually built, and what is not.**
 
@@ -68,7 +68,7 @@ pitch is actually about — a detective that catches you contradicting yourself.
 | ☑ | STT and affect run **concurrently** on the same buffer | `asyncio.gather`, `app.py:266` |
 | ❌ | ~~STT: `faster-whisper small.en`, local, no key, audio never leaves the machine~~ | **Superseded 4 Aug** — STT is Google Cloud Speech-to-Text and player audio now leaves the machine. [§9](#9-distribution-hosted-backend-migration-record), [`PRIVACY.md`](PRIVACY.md). |
 | ☑ | TTS: ElevenLabs, PCM normalised to a canonical rate for Unity | `tts.py`, `audio_utils.py` |
-| ☑ | LLM: Gemini 3.6 Flash, thinking pinned `minimal`, thought parts stripped before TTS | `llm.py` |
+| ☑ | LLM: Gemini 3.6 Flash through Vertex AI, with thought parts stripped before TTS | `Sidecar/llm.py` |
 | ☑ | Fail-fast config validation naming the missing variable | `config.py:46` |
 | ☑ | Parent-PID watchdog so an Editor crash cannot orphan the port | `app.py:366` |
 | ☑ | Input bounds: session ID, sample rate, PCM alignment, 30 s audio cap, LRU session cap | `app.py:98-124`, `232-246` |
@@ -187,6 +187,25 @@ the brief scores exception handling and requires protecting personal information
 **Do first:** S1, then S2. S1 because an unfiltered path to a speaker in front of judges is the
 highest-consequence failure we have. S2 because it is the attack a curious judge performs
 without being asked.
+
+### Remaining owner actions
+
+- [ ] Push the current security changes and confirm the full Python 3.12 CI suite passes.
+- [ ] Set Unity's `backendClientKey` to the same value as the deployed `FP_CLIENT_KEY`.
+- [ ] After the project owner grants ADC quota-project permission, run
+  `cd Sidecar; python tools/red_team_llm.py --show-replies`. Review every reply for role
+  compliance and prompt or context leakage, then record the result here and in `AI_SECURITY.md`.
+- [ ] Test the deployed service with missing, invalid, and valid `X-FP-Client-Key` values. Confirm
+  protected paths reject unauthorized calls and no debug-transcript endpoint is public.
+- [ ] Have the Unity scene owner show the capped-session line in a normal end-of-session panel and
+  show the privacy notice before the first microphone capture.
+- [ ] Add a verified ElevenLabs SDK request deadline. Set or verify provider-side quotas, shutdown
+  procedures, and alerts for Google Speech-to-Text and ElevenLabs. Monitor spend and turn Cloud Run
+  off after judging.
+- [ ] Before allowing more than one Cloud Run instance, replace the in-memory session and admission
+  state with shared durable storage.
+- [ ] When `DetectiveAction` or a visible `internal_note` is added, apply the output-safety filter
+  to that text as well.
 
 ---
 

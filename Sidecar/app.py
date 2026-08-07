@@ -68,6 +68,11 @@ _active_session_turns: dict[str, int] = {}
 # `history` must maintain.
 _scene_instructions: dict[str, str] = {}
 
+_BUDGET_ENDINGS = {
+    "session_turn_limit_reached": "We're done for tonight. The station will follow up.",
+    "daily_turn_budget_exhausted": "We're done for tonight. The station will follow up.",
+}
+
 
 class ClientInputError(ValueError):
     """A validated request problem that is safe to return to the local client."""
@@ -167,10 +172,10 @@ async def _cache_bounded_request_body(request) -> bool:
     request._body = b"".join(chunks)
     return True
 
-
 def _empty_response() -> dict:
     return {
         "ok": False, "error": "",
+        "session_ended": False,
         "transcript": "", "emotion": "", "emotion_confidence": 0.0,
         "reply_text": "", "audio_b64": "",
         "audio_sample_rate": 0, "audio_channels": 0,
@@ -433,6 +438,11 @@ async def turn(
         admitted, limit_reason = _turn_limiter.admit(session_id)
         if not admitted:
             result["error"] = limit_reason
+            result["session_ended"] = True
+            result["reply_text"] = _BUDGET_ENDINGS.get(
+                limit_reason,
+                "We're done for tonight. The station will follow up.",
+            )
             return JSONResponse(status_code=429, content=result)
 
         tracked_session_id = session_id

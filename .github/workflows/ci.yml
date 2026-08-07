@@ -1,0 +1,38 @@
+name: CI
+
+on:
+    push:
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    sidecar-tests:
+        name: Sidecar tests
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.12"
+                  cache: pip
+                  cache-dependency-path: Sidecar/requirements.txt
+            - name: Install Sidecar dependencies
+              run: python -m pip install -r Sidecar/requirements.txt
+            - name: Run Sidecar tests
+              working-directory: Sidecar
+              run: python -m unittest discover -s tests -v
+
+    secret-scan:
+        name: Secret scan
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+            - name: Scan current files and Git history for secrets
+              uses: gitleaks/gitleaks-action@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

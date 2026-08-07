@@ -41,6 +41,7 @@ namespace FalsePositive.Dialogue
     ///   Speaking --(clip ends + tail)--> Listening [VAD armed]
     ///   Listening --(UtteranceCaptured)--> Uploading [VAD disarmed, filler plays]
     ///   Uploading --(response ok)--> Speaking
+    ///   Uploading --(session cap)--> Idle [+ SessionEnded for UI]
     ///   Uploading --(response error)--> Listening [+ TurnFailed for UI]
     /// Suspend/Resume gate the whole machine for memory scenes and
     /// cutscenes, where no turn may start regardless of what triggers it.
@@ -54,6 +55,7 @@ namespace FalsePositive.Dialogue
 
         public event Action<DialogueState> StateChanged;
         public event Action<SidecarTurnResponse> TurnCompleted;
+        public event Action<string> SessionEnded;
         public event Action<string> TurnFailed;
 
         public DialogueState State { get; private set; } = DialogueState.Idle;
@@ -194,7 +196,15 @@ namespace FalsePositive.Dialogue
                 return;
             }
 
-            _sidecarClient.PostTurn(SessionId, null, 16000, 0, instruction, OnTurnSuccess, OnTurnError);
+            _sidecarClient.PostTurn(
+                SessionId,
+                null,
+                16000,
+                0,
+                instruction,
+                OnTurnSuccess,
+                OnSessionEnded,
+                OnTurnError);
         }
 
         private void OnUtteranceCaptured(float[] samples, int sampleRate)
@@ -222,6 +232,7 @@ namespace FalsePositive.Dialogue
                 _lastSpeechOnsetDelayMs,
                 instruction,
                 OnTurnSuccess,
+                OnSessionEnded,
                 OnTurnError);
         }
 
@@ -351,6 +362,14 @@ namespace FalsePositive.Dialogue
             {
                 BeginListening();
             }
+        }
+
+        private void OnSessionEnded(SidecarTurnResponse response)
+        {
+            StopFiller();
+            if (_vad != null) _vad.SetGated(true);
+            SetState(DialogueState.Idle);
+            SessionEnded?.Invoke(response.reply_text);
         }
 
         private void OnCopFinishedSpeaking()

@@ -30,10 +30,12 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             SafetySetting=_ConfigValue,
             GenerateContentConfig=_ConfigValue,
             ThinkingConfig=_ConfigValue,
+            HttpOptions=_ConfigValue,
         )
 
         class FakeClient:
             def __init__(self, **kwargs):
+                self.kwargs = kwargs
                 captured_client_kwargs.append(kwargs)
 
         fake_genai = _module("google.genai", Client=FakeClient, types=fake_types)
@@ -42,7 +44,8 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             "config",
             GCP_PROJECT="test-project",
             GCP_LOCATION="global",
-            PROSODY_MIN_CONFIDENCE=0.40
+            PROSODY_MIN_CONFIDENCE=0.40,
+            SIDECAR_LLM_TIMEOUT_SECONDS=15.0,
         )
         stubs = {
             "config": fake_config,
@@ -65,10 +68,16 @@ class LlmPromptBoundaryTests(unittest.TestCase):
     def test_client_uses_vertex_project_and_location(self):
         self.llm._get_client()
 
-        self.assertEqual(
-            self.captured_client_kwargs,
-            [{"vertexai": True, "project": "test-project", "location": "global"}],
-        )
+        self.assertEqual(len(self.captured_client_kwargs), 1)
+        kwargs = self.captured_client_kwargs[0]
+        self.assertTrue(kwargs["vertexai"])
+        self.assertEqual(kwargs["project"], "test-project")
+        self.assertEqual(kwargs["location"], "global")
+
+    def test_vertex_client_sets_a_request_timeout(self):
+        client = self.llm._get_client()
+
+        self.assertEqual(client.kwargs["http_options"].timeout, 15000)
 
     def test_witness_marker_imitation_is_escaped_in_current_and_historical_turns(self):
         captured = {}

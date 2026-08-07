@@ -32,8 +32,8 @@ def _fake_speech_modules(recognize):
         def __init__(self, *_args, **_kwargs):
             pass
 
-        async def recognize(self, request):
-            return await recognize(request)
+        async def recognize(self, request, timeout=None):
+            return await recognize(request, timeout)
 
     speech_v2 = ModuleType("google.cloud.speech_v2")
     speech_v2.SpeechAsyncClient = _SpeechAsyncClient
@@ -72,6 +72,7 @@ def _load_stt(recognize):
     stubs["config"].GCP_LOCATION = "global"
     stubs["config"].STT_MODEL = "short"
     stubs["config"].STT_LANGUAGE = "en-US"
+    stubs["config"].SIDECAR_STT_TIMEOUT_SECONDS = 15.0
     with patch.dict(sys.modules, stubs):
         spec.loader.exec_module(module)
     return module
@@ -79,7 +80,7 @@ def _load_stt(recognize):
 
 class SttAdapterTests(unittest.TestCase):
     def test_joins_result_alternatives_into_one_transcript(self):
-        async def recognize(_request):
+        async def recognize(_request, _timeout):
             return SimpleNamespace(results=[_result(" I was "), _result("at home. ")])
 
         stt = _load_stt(recognize)
@@ -89,7 +90,7 @@ class SttAdapterTests(unittest.TestCase):
         self.assertGreaterEqual(elapsed_ms, 0)
 
     def test_silence_returns_empty_string_not_an_error(self):
-        async def recognize(_request):
+        async def recognize(_request, _timeout):
             return SimpleNamespace(results=[])
 
         stt = _load_stt(recognize)
@@ -98,7 +99,7 @@ class SttAdapterTests(unittest.TestCase):
         self.assertEqual(text, "")
 
     def test_results_without_alternatives_are_skipped(self):
-        async def recognize(_request):
+        async def recognize(_request, _timeout):
             return SimpleNamespace(results=[SimpleNamespace(alternatives=[]), _result("ok")])
 
         stt = _load_stt(recognize)
@@ -107,7 +108,7 @@ class SttAdapterTests(unittest.TestCase):
         self.assertEqual(text, "ok")
 
     def test_api_failure_propagates_so_the_turn_handler_can_catch_it(self):
-        async def recognize(_request):
+        async def recognize(_request, _timeout):
             raise RuntimeError("google says no")
 
         stt = _load_stt(recognize)
@@ -117,8 +118,9 @@ class SttAdapterTests(unittest.TestCase):
     def test_request_targets_the_configured_project_with_linear16_at_16k(self):
         captured = {}
 
-        async def recognize(request):
+        async def recognize(request, timeout):
             captured["request"] = request
+            captured["timeout"] = timeout
             return SimpleNamespace(results=[])
 
         stt = _load_stt(recognize)
@@ -134,6 +136,7 @@ class SttAdapterTests(unittest.TestCase):
         decoding = request.config.explicit_decoding_config
         self.assertEqual(decoding.kwargs["sample_rate_hertz"], 16000)
         self.assertEqual(decoding.kwargs["audio_channel_count"], 1)
+        self.assertEqual(captured["timeout"], 15.0)
 
 
 if __name__ == "__main__":

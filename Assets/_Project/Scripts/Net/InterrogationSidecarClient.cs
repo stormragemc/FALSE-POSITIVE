@@ -148,6 +148,7 @@ namespace FalsePositive.Net
             int onsetDelayMs,
             string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
+            Action<SidecarTurnResponse> onSessionEnded,
             Action<string> onError)
         {
             if (IsBusy)
@@ -155,7 +156,15 @@ namespace FalsePositive.Net
                 onError?.Invoke("A turn is already in flight.");
                 return;
             }
-            StartCoroutine(TurnRoutine(sessionId, pcmSamples, sampleRate, onsetDelayMs, sceneInstruction, onSuccess, onError));
+            StartCoroutine(TurnRoutine(
+                sessionId,
+                pcmSamples,
+                sampleRate,
+                onsetDelayMs,
+                sceneInstruction,
+                onSuccess,
+                onSessionEnded,
+                onError));
         }
 
         /// <summary>Requests a full server-side session reset — dialogue history and the
@@ -193,6 +202,7 @@ namespace FalsePositive.Net
             int onsetDelayMs,
             string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
+            Action<SidecarTurnResponse> onSessionEnded,
             Action<string> onError)
         {
             IsBusy = true;
@@ -268,7 +278,15 @@ namespace FalsePositive.Net
 
             if (req.result == UnityWebRequest.Result.ProtocolError)
             {
-                string serverError = TryExtractError(bodyText);
+                SidecarTurnResponse cappedResponse = TryParseResponse(bodyText);
+                if (cappedResponse != null && cappedResponse.session_ended)
+                {
+                    onSessionEnded?.Invoke(cappedResponse);
+                    yield break;
+                }
+                string serverError = !string.IsNullOrEmpty(cappedResponse?.error)
+                    ? cappedResponse.error
+                    : TryExtractError(bodyText);
                 onError?.Invoke(string.IsNullOrEmpty(serverError)
                     ? DescribeHttpStatus(req.responseCode)
                     : serverError);
@@ -306,6 +324,19 @@ namespace FalsePositive.Net
             if (!string.IsNullOrEmpty(config.backendClientKey))
             {
                 request.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);
+            }
+        }
+
+        private static SidecarTurnResponse TryParseResponse(string bodyText)
+        {
+            if (string.IsNullOrEmpty(bodyText)) return null;
+            try
+            {
+                return JsonUtility.FromJson<SidecarTurnResponse>(bodyText);
+            }
+            catch
+            {
+                return null;
             }
         }
 

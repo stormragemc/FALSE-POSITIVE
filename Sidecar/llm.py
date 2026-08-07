@@ -190,6 +190,9 @@ def _get_client() -> genai.Client:
             vertexai=True,
             project=config.GCP_PROJECT,
             location=config.GCP_LOCATION,
+            http_options=types.HttpOptions(
+                timeout=int(config.SIDECAR_LLM_TIMEOUT_SECONDS * 1000)
+            ),
         )
     return _client
 

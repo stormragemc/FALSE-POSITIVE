@@ -14,6 +14,12 @@ ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
 FP_CLIENT_KEY = os.environ.get("FP_CLIENT_KEY", "").strip()
 MAX_TURNS_PER_SESSION = max(1, int(os.environ.get("MAX_TURNS_PER_SESSION", "40")))
 MAX_TURNS_PER_DAY = max(1, int(os.environ.get("MAX_TURNS_PER_DAY", "2000")))
+SIDECAR_STT_TIMEOUT_SECONDS = max(
+    1.0, float(os.environ.get("SIDECAR_STT_TIMEOUT_SECONDS", "20"))
+)
+SIDECAR_LLM_TIMEOUT_SECONDS = max(
+    1.0, float(os.environ.get("SIDECAR_LLM_TIMEOUT_SECONDS", "20"))
+)
 
 HOST = os.environ.get("SIDECAR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", os.environ.get("SIDECAR_PORT", "8080")))

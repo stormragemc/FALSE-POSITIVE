@@ -219,10 +219,16 @@ to `Idle`, and exposes a `SessionEnded` event for the scene UI. The debug overla
 today. The game UI owner still needs to connect the event to an always-visible end-of-session
 panel before release.
 
+Google provider calls now have configurable deadlines. Vertex uses `SIDECAR_LLM_TIMEOUT_SECONDS`
+as its SDK HTTP timeout, and Speech-to-Text receives `SIDECAR_STT_TIMEOUT_SECONDS` as its RPC
+timeout. Both default to 20 seconds. The current ElevenLabs SDK setup has no verified timeout hook
+in this project, so an ElevenLabs-specific deadline remains open.
+
 `test_turn_limit_returns_a_structured_session_ending_without_tts` and
 `test_daily_limit_returns_a_structured_session_ending` cover the two cap paths. The focused
-auth, failure-isolation, and limiter suites passed 30 tests locally on 7 Aug 2026. The complete
-Sidecar suite must run in Python 3.12 CI because the local Python 3.14 installation lacks `torch`.
+auth, Speech-to-Text, LLM-boundary, failure-isolation, and limiter suites passed 40 tests locally
+on 7 Aug 2026. The complete Sidecar suite must run in Python 3.12 CI because the local Python 3.14
+installation lacks `torch`.
 
 ## S8: State the privacy boundary
 

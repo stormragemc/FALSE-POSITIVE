@@ -4,7 +4,8 @@ namespace FalsePositive.Core
 {
     /// <summary>
     /// All tunable numbers for the interrogation loop in one place. Contains
-    /// no secrets — safe to commit as normal asset YAML. See
+    /// no provider API credentials. The client key is an abuse deterrent that
+    /// ships with the build and is therefore not a protected secret. See
     /// Assets/_Project/Config/InterrogationConfig.asset for the instance
     /// used by the scene.
     /// </summary>

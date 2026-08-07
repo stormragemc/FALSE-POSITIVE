@@ -50,6 +50,12 @@ SIDECAR_MAX_AUDIO_SECONDS = max(
 SIDECAR_MAX_SESSIONS = max(1, int(os.environ.get("SIDECAR_MAX_SESSIONS", "32")))
 MAX_TURNS_PER_SESSION = max(1, int(os.environ.get("MAX_TURNS_PER_SESSION", "40")))
 MAX_TURNS_PER_DAY = max(1, int(os.environ.get("MAX_TURNS_PER_DAY", "2000")))
+SIDECAR_STT_TIMEOUT_SECONDS = max(
+    1.0, float(os.environ.get("SIDECAR_STT_TIMEOUT_SECONDS", "20"))
+)
+SIDECAR_LLM_TIMEOUT_SECONDS = max(
+    1.0, float(os.environ.get("SIDECAR_LLM_TIMEOUT_SECONDS", "20"))
+)
 
 
 def validate() -> None:

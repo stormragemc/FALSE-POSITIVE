@@ -58,7 +58,10 @@ async def transcribe(pcm16_le_bytes: bytes) -> tuple[str, int]:
         content=pcm16_le_bytes,
     )
 
-    response = await client.recognize(request=request)
+    response = await client.recognize(
+        request=request,
+        timeout=config.SIDECAR_STT_TIMEOUT_SECONDS,
+    )
 
     parts = [
         result.alternatives[0].transcript.strip()

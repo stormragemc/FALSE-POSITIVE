@@ -29,11 +29,12 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             SafetySetting=_ConfigValue,
             GenerateContentConfig=_ConfigValue,
             ThinkingConfig=_ConfigValue,
+            HttpOptions=_ConfigValue,
         )
 
         class FakeClient:
-            def __init__(self, **_kwargs):
-                pass
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
 
         fake_genai = _module("google.genai", Client=FakeClient, types=fake_types)
         fake_google = _module("google", genai=fake_genai)
@@ -41,7 +42,8 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             "config",
             GCP_PROJECT="test-project",
             GCP_LOCATION="global",
-            PROSODY_MIN_CONFIDENCE=0.40
+            PROSODY_MIN_CONFIDENCE=0.40,
+            SIDECAR_LLM_TIMEOUT_SECONDS=15.0,
         )
         stubs = {
             "config": fake_config,
@@ -55,6 +57,11 @@ class LlmPromptBoundaryTests(unittest.TestCase):
         with patch.dict(sys.modules, stubs):
             spec.loader.exec_module(module)
         cls.llm = module
+
+    def test_vertex_client_sets_a_request_timeout(self):
+        client = self.llm._get_client()
+
+        self.assertEqual(client.kwargs["http_options"].timeout, 15000)
 
     def test_witness_marker_imitation_is_escaped_in_current_and_historical_turns(self):
         captured = {}

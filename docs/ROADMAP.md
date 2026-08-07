@@ -178,7 +178,7 @@ the brief scores exception handling and requires protecting personal information
 | ☑ | **S3** | **No-deception schema test** | `test_no_deception_schema.py` rejects diagnostic field names in snake case and camel case. It checks the prosody payload, Python turn-response keys, and Unity DTO fields. |
 | ◐ | **S4** | **Client-key endpoint hardening** | All endpoints except `/health` require `X-FP-Client-Key`; `auth.py` fails closed and Unity sends the configured key on `/turn`. The legacy debug-transcript endpoint is absent. Deployed checks with absent, invalid, and valid keys remain. |
 | ☑ | **S5** | **Secret handling, automated** | `.github/workflows/ci.yml` runs the Sidecar tests and a full-history Gitleaks scan. GitHub Actions run 31144715561 passed both jobs on 7 Aug 2026. |
-| ◐ | **S6** | **Cost and abuse ceiling** | Per-session and daily admission caps are in `limits.py`. A cap now returns HTTP 429 with a machine-readable reason plus a structured in-fiction session-ending line, without calling TTS. Unity gates the microphone and enters `Idle`; the scene UI still needs to present the line outside the debug overlay. Full-suite CI is pending for this change. |
+| ◐ | **S6** | **Cost and abuse ceiling** | Per-session and daily admission caps are in `limits.py`. A cap returns HTTP 429 with a machine-readable reason plus a structured in-fiction session-ending line, without calling TTS. Vertex and Speech-to-Text use configurable 20-second provider deadlines. Unity gates the microphone and enters `Idle`; the scene UI still needs to present the line outside the debug overlay. Full-suite CI and an ElevenLabs-specific deadline remain. |
 | ☐ | **S7** | **Model supply chain** | HuBERT and Whisper weights download from the HF Hub at first run, unpinned. Pin revisions. The checkpoint label-contract check already exists (`ser.py:79`) — that is one third of this done. |
 | ◐ | **S8** | **Privacy boundary, stated and enforced** | `PRIVACY.md` now states the hosted flow: audio goes to Google Cloud Speech-to-Text, the transcript and bounded prosody context go to Vertex AI, and reply text goes to ElevenLabs. The app does not store audio, transcripts, or embeddings, and it does not detect lies. The Unity in-game notice still needs to appear before the first recording. |
 
@@ -197,8 +197,9 @@ without being asked.
   protected paths reject unauthorized calls and no debug-transcript endpoint is public.
 - [ ] Have the Unity scene owner show the capped-session line in a normal end-of-session panel and
   show the privacy notice before the first microphone capture.
-- [ ] Set or verify provider-side quotas, shutdown procedures, and alerts for Google Speech-to-Text
-  and ElevenLabs. Monitor spend and turn Cloud Run off after judging.
+- [ ] Add a verified ElevenLabs SDK request deadline. Set or verify provider-side quotas, shutdown
+  procedures, and alerts for Google Speech-to-Text and ElevenLabs. Monitor spend and turn Cloud Run
+  off after judging.
 - [ ] Before allowing more than one Cloud Run instance, replace the in-memory session and admission
   state with shared durable storage.
 - [ ] When `DetectiveAction` or a visible `internal_note` is added, apply the output-safety filter

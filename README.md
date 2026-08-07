@@ -132,9 +132,13 @@ Rows marked **⚠** still need their licence confirmed by the owner of that area
 
 ## Credentials
 
-No API keys, passwords, or `.env` files are ever committed — the brief prohibits it explicitly.
-Keys live only in `Sidecar/.env`, which is git-ignored. `Sidecar/.env.example` documents the
-required variable *names* only.
+Provider API keys, passwords, and `.env` files are never committed. Provider credentials live only
+in `Sidecar/.env`, which is git-ignored. `Sidecar/.env.example` documents the required variable
+names only.
+
+The Unity build also contains an `FP_CLIENT_KEY` value so it can call the public backend. Treat it
+as an abuse deterrent, not a protected secret: anyone who extracts the build can recover it. The
+server-side admission caps are the real protection against runaway spend.
 
 ## Voice data
 

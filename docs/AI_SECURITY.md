@@ -1,6 +1,6 @@
 # AI security
 
-This document records AI-security tasks only after they have been implemented.
+This document records implemented controls and the checks still needed before release.
 
 ## S1: Filter AI output before it is spoken
 
@@ -187,4 +187,50 @@ it. Do not use a real credential for this test.
 
 ### Testing results
 
-Not done. The workflow has been added locally but has not yet run in GitHub Actions.
+Verified in GitHub Actions on 7 Aug 2026. Run 31144715561 passed both `Sidecar tests` and
+`Secret scan` on commit `d556d76`.
+
+## S4: Require a client key on protected endpoints
+
+The public backend accepts `GET /health` without a key so Unity can check liveness. Every other
+endpoint requires `X-FP-Client-Key`. `auth.is_authorized()` uses a constant-time comparison and
+fails closed when `FP_CLIENT_KEY` is missing.
+
+Unity now sends `backendClientKey` from `InterrogationConfig` with each `/turn` request. The key
+discourages casual abuse, but it is not a strong identity boundary because a determined player can
+extract it from a shipped build. The turn limits remain the cost control.
+
+The server and Unity wiring are covered by `tests.test_auth`,
+`tests.test_app_failure_isolation`, and `tests.test_unity_contract`. A deployed endpoint still
+needs a manual check with missing, invalid, and valid keys. Confirm that no debug-transcript
+endpoint is public during the same check.
+
+## S6: End capped sessions safely
+
+`TurnLimiter` admits a turn before STT, Gemini, or ElevenLabs runs. It enforces both a per-session
+turn cap and a daily project cap. A rejected request remains an HTTP 429 with a machine-readable
+reason, but the JSON body now also has `session_ended: true` and an in-fiction `reply_text`:
+
+> We're done for tonight. The station will follow up.
+
+The response contains no audio. That avoids spending another TTS request after the cap has been
+reached. Unity recognizes the terminal response, gates the microphone, changes the dialogue state
+to `Idle`, and exposes a `SessionEnded` event for the scene UI. The debug overlay shows the line
+today. The game UI owner still needs to connect the event to an always-visible end-of-session
+panel before release.
+
+`test_turn_limit_returns_a_structured_session_ending_without_tts` and
+`test_daily_limit_returns_a_structured_session_ending` cover the two cap paths. The focused
+auth, failure-isolation, and limiter suites passed 30 tests locally on 7 Aug 2026. The complete
+Sidecar suite must run in Python 3.12 CI because the local Python 3.14 installation lacks `torch`.
+
+## S8: State the privacy boundary
+
+[`PRIVACY.md`](PRIVACY.md) records the hosted data flow, retention boundary, and the notice that
+must appear before the first microphone capture. Audio now goes to Google Cloud Speech-to-Text;
+the transcript and limited prosody context go to Vertex AI; and the detective reply goes to
+ElevenLabs. The application does not store player audio, transcripts, or embeddings in its own
+service. It does not detect lies.
+
+The in-game notice remains a release requirement. It must be shown before microphone recording,
+not buried in setup documentation.

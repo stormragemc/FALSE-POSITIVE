@@ -14,6 +14,10 @@ namespace FalsePositive.Core
         [Header("Sidecar connection")]
         public string sidecarHost = "127.0.0.1";
         public int sidecarPort = 8765;
+        [Tooltip("Optional HTTPS backend URL. Leave blank to use the local sidecar host and port.")]
+        public string backendBaseUrl = "";
+        [Tooltip("Must match FP_CLIENT_KEY on the sidecar. Treat this as an abuse deterrent, not a secret in a shipped build.")]
+        public string backendClientKey = "";
         [Tooltip("Per-request timeout. Generous because first-run model loading on the sidecar is slow.")]
         public float requestTimeoutSeconds = 60f;
 
@@ -43,6 +47,8 @@ namespace FalsePositive.Core
         [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         public float ttsEchoGateTailSeconds = 0.25f;
 
-        public string SidecarBaseUrl => $"http://{sidecarHost}:{sidecarPort}";
+        public string SidecarBaseUrl => string.IsNullOrWhiteSpace(backendBaseUrl)
+            ? $"http://{sidecarHost}:{sidecarPort}"
+            : backendBaseUrl.TrimEnd('/');
     }
 }

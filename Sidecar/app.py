@@ -55,6 +55,11 @@ _prosody_model_available = False
 _prosody_load_error = "loading" if config.PROSODY_ENABLED else "disabled"
 _session_reset_epoch = 0
 
+_BUDGET_ENDINGS = {
+    "session_turn_limit_reached": "We're done for tonight. The station will follow up.",
+    "daily_turn_budget_exhausted": "We're done for tonight. The station will follow up.",
+}
+
 
 class ClientInputError(ValueError):
     """A validated request problem that is safe to return to the local client."""
@@ -111,6 +116,7 @@ async def require_client_key(request, call_next):
 def _empty_response() -> dict:
     return {
         "ok": False, "error": "",
+        "session_ended": False,
         "transcript": "", "emotion": "", "emotion_confidence": 0.0,
         "reply_text": "", "audio_b64": "",
         "audio_sample_rate": 0, "audio_channels": 0,
@@ -385,6 +391,11 @@ async def turn(
             result["error"] = str(e)
         else:
             result["error"] = "turn pipeline failed; retry the utterance"
+        if is_budget_error:
+            result["session_ended"] = True
+            result["reply_text"] = _BUDGET_ENDINGS.get(
+                str(e), "We're done for tonight. The station will follow up."
+            )
         status_code = 429 if is_budget_error else (400 if is_input_error else 500)
         return JSONResponse(status_code=status_code, content=result)
 

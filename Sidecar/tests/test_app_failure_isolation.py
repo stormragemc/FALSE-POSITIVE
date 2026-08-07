@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 import importlib.util
 import io
 from pathlib import Path
+import re
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
@@ -13,7 +14,32 @@ from unittest.mock import patch
 
 import numpy as np
 
-from tests.test_unity_contract import DTO_PATH, _class_fields
+DTO_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Scripts/Net/SidecarDtos.cs"
+)
+
+
+def _class_fields(source: str, class_name: str) -> dict[str, str]:
+    match = re.search(rf"public\s+sealed\s+class\s+{re.escape(class_name)}\b", source)
+    if match is None:
+        raise AssertionError(f"missing C# DTO class {class_name}")
+    opening = source.find("{", match.end())
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                body = source[opening + 1:index]
+                return {
+                    field_name: field_type
+                    for field_type, field_name in re.findall(
+                        r"public\s+([A-Za-z0-9_\[\]]+)\s+([A-Za-z0-9_]+)\s*;", body
+                    )
+                }
+    raise AssertionError(f"unbalanced C# DTO class {class_name}")
 
 
 class _FakeFastAPI:
@@ -154,6 +180,33 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(4, 3, 0.4)
         self.app._session_reset_epoch = 0
         self.captured_signals.clear()
+
+    def test_turn_limit_returns_a_structured_session_ending_without_tts(self):
+        limiter = self.app.limits.TurnLimiter(max_per_session=1, max_per_day=10)
+        with patch.object(self.app, "_turn_limiter", limiter):
+            first = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+            capped = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+
+        self.assertTrue(first["ok"])
+        self.assertEqual(capped.status_code, 429)
+        self.assertEqual(capped.content["error"], "session_turn_limit_reached")
+        self.assertTrue(capped.content["session_ended"])
+        self.assertEqual(
+            capped.content["reply_text"],
+            "We're done for tonight. The station will follow up.",
+        )
+        self.assertEqual(capped.content["audio_b64"], "")
+
+    def test_daily_limit_returns_a_structured_session_ending(self):
+        limiter = self.app.limits.TurnLimiter(max_per_session=10, max_per_day=1)
+        with patch.object(self.app, "_turn_limiter", limiter):
+            first = asyncio.run(self.app.turn("session-a", 16000, 0, None))
+            capped = asyncio.run(self.app.turn("session-b", 16000, 0, None))
+
+        self.assertTrue(first["ok"])
+        self.assertEqual(capped.status_code, 429)
+        self.assertEqual(capped.content["error"], "daily_turn_budget_exhausted")
+        self.assertTrue(capped.content["session_ended"])
 
     def test_hubert_exception_degrades_to_transcript_only_turn(self):
         sample_count = 16000 * 2

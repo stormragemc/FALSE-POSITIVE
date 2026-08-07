@@ -11,6 +11,7 @@ DTO_PATH = (
     Path(__file__).resolve().parents[2]
     / "Assets/_Project/Scripts/Net/SidecarDtos.cs"
 )
+CLIENT_PATH = DTO_PATH.parent / "InterrogationSidecarClient.cs"
 
 
 def _class_fields(source: str, class_name: str) -> dict[str, str]:
@@ -74,6 +75,19 @@ class UnityContractTests(unittest.TestCase):
     def test_turn_response_explicitly_nests_prosody_dto(self):
         response_fields = _class_fields(self.source, "SidecarTurnResponse")
         self.assertEqual(response_fields.get("prosody"), "SidecarProsodySignal")
+
+    def test_turn_response_exposes_the_terminal_session_signal(self):
+        self.assertEqual(
+            _class_fields(self.source, "SidecarTurnResponse").get("session_ended"),
+            "bool",
+        )
+
+    def test_unity_sends_the_configured_client_key_on_turn_requests(self):
+        client_source = CLIENT_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            'req.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);',
+            client_source,
+        )
 
     def test_unity_probability_dto_covers_checkpoint_labels_with_float_types(self):
         self.assertEqual(

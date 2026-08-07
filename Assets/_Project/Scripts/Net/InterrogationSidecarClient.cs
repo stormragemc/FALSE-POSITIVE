@@ -46,6 +46,7 @@ namespace FalsePositive.Net
             int sampleRate,
             int onsetDelayMs,
             Action<SidecarTurnResponse> onSuccess,
+            Action<SidecarTurnResponse> onSessionEnded,
             Action<string> onError)
         {
             if (IsBusy)
@@ -53,7 +54,14 @@ namespace FalsePositive.Net
                 onError?.Invoke("A turn is already in flight.");
                 return;
             }
-            StartCoroutine(TurnRoutine(sessionId, pcmSamples, sampleRate, onsetDelayMs, onSuccess, onError));
+            StartCoroutine(TurnRoutine(
+                sessionId,
+                pcmSamples,
+                sampleRate,
+                onsetDelayMs,
+                onSuccess,
+                onSessionEnded,
+                onError));
         }
 
         private IEnumerator TurnRoutine(
@@ -62,6 +70,7 @@ namespace FalsePositive.Net
             int sampleRate,
             int onsetDelayMs,
             Action<SidecarTurnResponse> onSuccess,
+            Action<SidecarTurnResponse> onSessionEnded,
             Action<string> onError)
         {
             IsBusy = true;
@@ -81,6 +90,7 @@ namespace FalsePositive.Net
 
             string url = $"{config.SidecarBaseUrl}/turn";
             using UnityWebRequest req = UnityWebRequest.Post(url, form);
+            req.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);
             req.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
 
             yield return req.SendWebRequest();
@@ -97,7 +107,13 @@ namespace FalsePositive.Net
 
             if (req.result == UnityWebRequest.Result.ProtocolError)
             {
-                string serverError = TryExtractError(bodyText);
+                SidecarTurnResponse cappedResponse = TryParseResponse(bodyText);
+                if (cappedResponse != null && cappedResponse.session_ended)
+                {
+                    onSessionEnded?.Invoke(cappedResponse);
+                    yield break;
+                }
+                string serverError = cappedResponse?.error;
                 onError?.Invoke(string.IsNullOrEmpty(serverError)
                     ? $"Sidecar returned an error ({req.responseCode})."
                     : serverError);
@@ -130,13 +146,12 @@ namespace FalsePositive.Net
             onSuccess?.Invoke(response);
         }
 
-        private static string TryExtractError(string bodyText)
+        private static SidecarTurnResponse TryParseResponse(string bodyText)
         {
             if (string.IsNullOrEmpty(bodyText)) return null;
             try
             {
-                SidecarTurnResponse parsed = JsonUtility.FromJson<SidecarTurnResponse>(bodyText);
-                return parsed?.error;
+                return JsonUtility.FromJson<SidecarTurnResponse>(bodyText);
             }
             catch
             {

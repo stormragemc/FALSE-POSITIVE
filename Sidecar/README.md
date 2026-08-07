@@ -113,7 +113,7 @@ python tools/probe_stt_ser.py tools/sample.pcm
 ```
 curl http://127.0.0.1:8765/health
 
-curl -F "audio=@sample.pcm" -F "sample_rate=16000" -F "session_id=test" ^
+curl -H "X-FP-Client-Key: YOUR_FP_CLIENT_KEY" -F "audio=@sample.pcm" -F "sample_rate=16000" -F "session_id=test" ^
      http://127.0.0.1:8765/turn
 ```
 
@@ -139,7 +139,10 @@ start.
 | `GET` | `/health` | Launch status plus nested HuBERT availability/model/device |
 | `POST` | `/turn` | Main pipeline; accepts optional `onset_delay_ms`, returns additive `prosody` |
 | `POST` | `/session/reset` | Clears conversation history and the prosody reference together |
-| `GET` | `/debug/last_turn` | Dumps the last `/turn` response, for curl debugging |
+
+`/health` is open for the Unity launch check. `/turn` and `/session/reset` require an
+`X-FP-Client-Key` header that matches `FP_CLIENT_KEY` in the sidecar environment. A missing or
+wrong key receives `401`. The service has no debug-transcript endpoint.
 
 A reset also invalidates state commits from any turn that was already in
 flight, so an old history/reference cannot reappear after the reset completes.

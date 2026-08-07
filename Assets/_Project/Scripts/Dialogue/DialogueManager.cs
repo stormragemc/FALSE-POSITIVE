@@ -28,6 +28,7 @@ namespace FalsePositive.Dialogue
     ///   Speaking --(clip ends + tail)--> Listening [VAD armed]
     ///   Listening --(UtteranceCaptured)--> Uploading [VAD disarmed, filler plays]
     ///   Uploading --(response ok)--> Speaking
+    ///   Uploading --(session cap)--> Idle [+ SessionEnded for UI]
     ///   Uploading --(response error)--> Listening [+ TurnFailed for UI]
     /// </summary>
     public sealed class DialogueManager : MonoBehaviour
@@ -42,6 +43,7 @@ namespace FalsePositive.Dialogue
 
         public event Action<DialogueState> StateChanged;
         public event Action<SidecarTurnResponse> TurnCompleted;
+        public event Action<string> SessionEnded;
         public event Action<string> TurnFailed;
 
         public DialogueState State { get; private set; } = DialogueState.Idle;
@@ -74,7 +76,14 @@ namespace FalsePositive.Dialogue
         {
             SetState(DialogueState.Uploading);
             vad.SetGated(true);
-            sidecarClient.PostTurn(_sessionId, null, 16000, 0, OnTurnSuccess, OnTurnError);
+            sidecarClient.PostTurn(
+                _sessionId,
+                null,
+                16000,
+                0,
+                OnTurnSuccess,
+                OnSessionEnded,
+                OnTurnError);
         }
 
         private void OnUtteranceCaptured(float[] samples, int sampleRate)
@@ -90,6 +99,7 @@ namespace FalsePositive.Dialogue
                 sampleRate,
                 _lastSpeechOnsetDelayMs,
                 OnTurnSuccess,
+                OnSessionEnded,
                 OnTurnError);
         }
 
@@ -122,6 +132,14 @@ namespace FalsePositive.Dialogue
             // Never hard-fail the conversation — just re-arm listening so
             // the player can try again.
             BeginListening();
+        }
+
+        private void OnSessionEnded(SidecarTurnResponse response)
+        {
+            StopFiller();
+            vad.SetGated(true);
+            SetState(DialogueState.Idle);
+            SessionEnded?.Invoke(response.reply_text);
         }
 
         private void OnCopFinishedSpeaking()

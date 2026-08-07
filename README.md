@@ -138,9 +138,8 @@ required variable *names* only.
 
 ## Voice data
 
-The player's microphone audio is processed **entirely on the local machine** — Whisper and HuBERT
-both run inside the sidecar, and the audio itself is never uploaded. Only the resulting *text*
-transcript and a bounded derived affect impression leave the machine, sent to the Gemini API to
-generate the detective's reply; raw class vectors, embeddings, and the early-session reference stay
-local. The reply text is then sent to ElevenLabs to be spoken. Audio is held in memory for the
-duration of a turn and is not written to disk.
+The hosted voice service sends microphone audio to Google Cloud Speech-to-Text. It sends the
+resulting transcript and bounded prosody context to Vertex AI to generate the detective's reply,
+then sends that reply text to ElevenLabs for speech synthesis. The application does not store
+player audio, transcripts, or embeddings. It does not detect lies. See
+[`docs/PRIVACY.md`](docs/PRIVACY.md) for the full player-facing notice.

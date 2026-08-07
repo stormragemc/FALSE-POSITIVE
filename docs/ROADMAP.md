@@ -1,6 +1,6 @@
 # FALSE POSITIVE — roadmap and live status
 
-**Last updated:** 4 Aug 2026 · **Deadline:** 9 Aug 2026 · **Days left:** 5
+**Last updated:** 7 Aug 2026 · **Deadline:** 9 Aug 2026 · **Days left:** 2
 
 This file answers one question: **what is actually built, and what is not.**
 
@@ -62,11 +62,11 @@ pitch is actually about — a detective that catches you contradicting yourself.
 | ☑ | Item | Evidence |
 |---|---|---|
 | ☑ | FastAPI sidecar, loopback only, one endpoint per turn | `Sidecar/app.py` |
-| ☑ | `GET /health`, `POST /turn`, `POST /session/reset`, `GET /debug/last_turn` | `app.py:183-363` |
+| ☑ | `GET /health`, `POST /turn`, `POST /session/reset` | `Sidecar/app.py` |
 | ☑ | STT and affect run **concurrently** on the same buffer | `asyncio.gather`, `app.py:266` |
-| ☑ | STT: `faster-whisper small.en`, local, no key, audio never leaves the machine | `stt.py` |
+| ☑ | STT: Google Cloud Speech-to-Text v2, authenticated with the runtime service account | `Sidecar/stt.py` |
 | ☑ | TTS: ElevenLabs, PCM normalised to a canonical rate for Unity | `tts.py`, `audio_utils.py` |
-| ☑ | LLM: Gemini 3.6 Flash, thinking pinned `minimal`, thought parts stripped before TTS | `llm.py` |
+| ☑ | LLM: Gemini 3.6 Flash through Vertex AI, with thought parts stripped before TTS | `Sidecar/llm.py` |
 | ☑ | Fail-fast config validation naming the missing variable | `config.py:46` |
 | ☑ | Parent-PID watchdog so an Editor crash cannot orphan the port | `app.py:366` |
 | ☑ | Input bounds: session ID, sample rate, PCM alignment, 30 s audio cap, LRU session cap | `app.py:98-124`, `232-246` |
@@ -176,15 +176,33 @@ the brief scores exception handling and requires protecting personal information
 | ☑ | **S1** | **Output filter between the LLM and the speaker** | `output_safety.py` now runs after Gemini produces non-thought text and before TTS. It rejects lie/truth claims, voice-as-proof claims, diagnostic/internal leaks, empty output, and replies over 480 characters; rejected replies use the safe fallback. Unit and LLM-boundary tests pass. Apply the same filter to `internal_note` when `DetectiveAction` exists. |
 | ◐ | **S2** | **Voice prompt-injection red-team suite** | Offline corpus and boundary tests cover direct overrides, role changes, prompt requests, forged tags, affect-marker imitation, and malicious history. The opt-in real-Gemini probe exists at `tools/red_team_llm.py`, but has not run because the ADC account lacks the quota-project permission. |
 | ☑ | **S3** | **No-deception schema test** | `test_no_deception_schema.py` rejects diagnostic field names in snake case and camel case. It checks the prosody payload, Python turn-response keys, and Unity DTO fields. |
-| ☐ | **S4** | **Local endpoint hardening** | The sidecar binds `127.0.0.1` (good) but has **no authentication**. Any local process can `POST /turn` and burn paid credits, and `GET /debug/last_turn` returns the last transcript to any local reader. Fix: a per-launch shared token minted by `SidecarProcessLauncher` and required on every endpoint. |
-| ◐ | **S5** | **Secret handling, automated** | `.github/workflows/ci.yml` now runs the Sidecar tests and a full-history Gitleaks scan on every push and pull request. It is not verified until the workflow is pushed and passes in GitHub Actions. Folds A13. |
-| ☐ | **S6** | **Cost and abuse ceiling** | A runaway loop burns Gemini and ElevenLabs credits with nothing to stop it. Hard per-session cap that ends the session in-fiction. Folds A11. |
+| ◐ | **S4** | **Client-key endpoint hardening** | All endpoints except `/health` require `X-FP-Client-Key`; `auth.py` fails closed and Unity sends the configured key on `/turn`. The legacy debug-transcript endpoint is absent. Deployed checks with absent, invalid, and valid keys remain. |
+| ☑ | **S5** | **Secret handling, automated** | `.github/workflows/ci.yml` runs the Sidecar tests and a full-history Gitleaks scan. GitHub Actions run 31144715561 passed both jobs on 7 Aug 2026. |
+| ◐ | **S6** | **Cost and abuse ceiling** | Per-session and daily admission caps are in `limits.py`. A cap now returns HTTP 429 with a machine-readable reason plus a structured in-fiction session-ending line, without calling TTS. Unity gates the microphone and enters `Idle`; the scene UI still needs to present the line outside the debug overlay. Full-suite CI is pending for this change. |
 | ☐ | **S7** | **Model supply chain** | HuBERT and Whisper weights download from the HF Hub at first run, unpinned. Pin revisions. The checkpoint label-contract check already exists (`ser.py:79`) — that is one third of this done. |
-| ☐ | **S8** | **Privacy boundary, stated and enforced** | Player audio and embeddings never leave the machine; only a short derived text impression reaches Gemini. This is a genuine strength and it is currently **undocumented**. Needs `PRIVACY.md`, an in-game notice before the first recording, and telemetry that defaults to no transcripts. |
+| ◐ | **S8** | **Privacy boundary, stated and enforced** | `PRIVACY.md` now states the hosted flow: audio goes to Google Cloud Speech-to-Text, the transcript and bounded prosody context go to Vertex AI, and reply text goes to ElevenLabs. The app does not store audio, transcripts, or embeddings, and it does not detect lies. The Unity in-game notice still needs to appear before the first recording. |
 
 **Do first:** S1, then S2. S1 because an unfiltered path to a speaker in front of judges is the
 highest-consequence failure we have. S2 because it is the attack a curious judge performs
 without being asked.
+
+### Remaining owner actions
+
+- [ ] Push the current security changes and confirm the full Python 3.12 CI suite passes.
+- [ ] Set Unity's `backendClientKey` to the same value as the deployed `FP_CLIENT_KEY`.
+- [ ] After the project owner grants ADC quota-project permission, run
+  `cd Sidecar; python tools/red_team_llm.py --show-replies`. Review every reply for role
+  compliance and prompt or context leakage, then record the result here and in `AI_SECURITY.md`.
+- [ ] Test the deployed service with missing, invalid, and valid `X-FP-Client-Key` values. Confirm
+  protected paths reject unauthorized calls and no debug-transcript endpoint is public.
+- [ ] Have the Unity scene owner show the capped-session line in a normal end-of-session panel and
+  show the privacy notice before the first microphone capture.
+- [ ] Set or verify provider-side quotas, shutdown procedures, and alerts for Google Speech-to-Text
+  and ElevenLabs. Monitor spend and turn Cloud Run off after judging.
+- [ ] Before allowing more than one Cloud Run instance, replace the in-memory session and admission
+  state with shared durable storage.
+- [ ] When `DetectiveAction` or a visible `internal_note` is added, apply the output-safety filter
+  to that text as well.
 
 ---
 

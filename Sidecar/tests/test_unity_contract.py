@@ -98,7 +98,7 @@ class UnityContractTests(unittest.TestCase):
         )
 
     def test_unity_sends_the_configured_client_key_on_turn_requests(self):
-        client_source = CLIENT_PATH.read_text(encoding="utf-8")
+        client_source = UNITY_CLIENT_PATH.read_text(encoding="utf-8")
         self.assertIn(
             'req.SetRequestHeader("X-FP-Client-Key", config.backendClientKey);',
             client_source,

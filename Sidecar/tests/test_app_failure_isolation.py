@@ -143,6 +143,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         llm = _module(
             "llm",
             OPENING_KICKOFF_TEXT="opening",
+            PHASE_CONTINUATION_TEXT="phase continuation",
             HISTORY_KIND_SCENE="scene_instruction",
             HISTORY_KIND_WITNESS="witness_transcript",
             generate_reply=generate_reply,
@@ -210,6 +211,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(4, 3, 0.4)
         self.app._session_reset_generations.clear()
         self.app._active_session_turns.clear()
+        self.app._scene_instructions.clear()
         if hasattr(self.app, "limits"):
             self.app._turn_limiter = self.app.limits.TurnLimiter(40, 2000)
         self.captured_signals.clear()

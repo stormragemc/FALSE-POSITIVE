@@ -32,4 +32,5 @@ MonoBehaviour:
   vadMinUtteranceSeconds: 0.3
   vadSilenceTimeoutSeconds: 0.7
   vadMaxUtteranceSeconds: 20
+  micTooLoudRms: 0.25
   ttsEchoGateTailSeconds: 0.25

@@ -130,6 +130,7 @@ GameObject:
   - component: {fileID: 130416884}
   - component: {fileID: 130416886}
   - component: {fileID: 130416885}
+  - component: {fileID: 130416887}
   m_Layer: 0
   m_Name: MainCamera
   m_TagString: MainCamera
@@ -160,6 +161,33 @@ AudioListener:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 130416883}
   m_Enabled: 1
+--- !u!114 &130416887
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 130416883}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d995679856d48c98114604652532d2d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Player.FirstPersonCameraMotion
+  referenceWalkSpeed: 3.2
+  walkFrequency: 1.7
+  sprintFrequency: 2.35
+  verticalAmplitude: 0.032
+  lateralAmplitude: 0.012
+  pitchAmplitude: 0.18
+  rollAmplitude: 0.4
+  startSmoothTime: 0.12
+  stopSmoothTime: 0.28
+  idleFrequency: 0.085
+  idleVerticalAmplitude: 0.003
+  idleLateralAmplitude: 0.004
+  idlePitchAmplitude: 0.1
+  idleRollAmplitude: 0.14
+  idleSmoothTime: 0.8
 --- !u!20 &130416886
 Camera:
   m_ObjectHideFlags: 0

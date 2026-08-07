@@ -212,6 +212,7 @@ namespace FalsePositive.Editor
                 cameraDataType.GetProperty("renderPostProcessing")?.SetValue(cameraData, true);
             }
             view.AddComponent<AudioListener>();
+            view.AddComponent<FirstPersonCameraMotion>();
             view.tag = "MainCamera";
 
             CabinFirstPersonController movement = player.AddComponent<CabinFirstPersonController>();

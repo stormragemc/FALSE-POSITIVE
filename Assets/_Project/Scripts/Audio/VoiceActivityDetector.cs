@@ -41,6 +41,11 @@ namespace FalsePositive.Audio
         public bool Gated { get; private set; }
         public float DisplayRms => Gated ? 0f : mic.CurrentRms;
         public float NoiseFloor => _noiseFloor;
+        /// <summary>Live RMS required to begin an utterance. UI uses the same
+        /// value as the detector, so its quiet/accepted indication is honest.</summary>
+        public float SpeechThresholdRms => IsCalibrated
+            ? _noiseFloor * config.vadEnterMultiplier
+            : float.PositiveInfinity;
         public bool IsCalibrated { get; private set; }
 
         private readonly List<float> _readScratch = new List<float>();

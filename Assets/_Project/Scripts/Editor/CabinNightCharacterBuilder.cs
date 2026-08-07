@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using FalsePositive.CabinNight;
 using FalsePositive.Core;
+using FalsePositive.Interaction;
 using FalsePositive.Player;
 using UnityEditor;
 using UnityEngine;
@@ -11,13 +12,19 @@ namespace FalsePositive.Editor
 {
     /// <summary>
     /// Rebuilds the authored cast for Nobody Went Out's 00:50 cabin scene.
-    /// The imported o3n bodies are used directly so the level remains usable
-    /// when the optional UMA package is not installed.
+    /// Named NPCs use the staged Avaturn FBXs in Art/Characters; the invisible
+    /// first-person player keeps the lightweight o3n body used for shadows.
     /// </summary>
     public static class CabinNightCharacterBuilder
     {
         private const string MaterialRoot = "Assets/_Project/CabinNight/Materials/";
         private const string PrefabRoot = "Assets/_Project/CabinNight/Prefabs/";
+
+        private const string CharacterModelRoot = "Assets/_Project/Art/Characters/";
+        private const string AaronModel = CharacterModelRoot + "Aaron.fbx";
+        private const string IvyModel = CharacterModelRoot + "Ivy.fbx";
+        private const string NickModel = CharacterModelRoot + "Nick.fbx";
+        private const string PriyaModel = CharacterModelRoot + "Priya.fbx";
 
         private const string MaleBody = "Assets/o3n/o3nBaseUMARaces/Races/o3nMaleRace/FBX/o3nMale_unified.fbx";
         private const string FemaleBody = "Assets/o3n/o3nBaseUMARaces/Races/o3nFemaleRace/FBX/o3nFemale_unified.fbx";
@@ -62,40 +69,35 @@ namespace FalsePositive.Editor
                     Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null);
             ConfigurePlayer(player);
             ConvertToRouterRig(player);
+            ConfigureInteraction(player);
             SaveCharacter(player, "Player_FirstPerson");
 
-            GameObject nick = BuildCharacter(charactersRoot, "Nick Vlahos (Male)", false,
+            GameObject nick = BuildNamedCharacter(charactersRoot, "Nick Vlahos (Male)", NickModel,
                 new Vector3(2.3f, 0f, -6.3f), new Vector3(0f, 20f, 0f), 0.98f,
-                Material("MaleBodyJeansShirt"), CabinIdleProfile.Confrontational,
-                null, null, MaleHair, Material("HairBrown"), MaleShoes);
+                CabinIdleProfile.Confrontational);
             SaveCharacter(nick, "Nick_Vlahos");
 
             GameObject aaron = isMorning
-                ? BuildCharacter(charactersRoot, "Aaron Teague (Male)", false,
+                ? BuildNamedCharacter(charactersRoot, "Aaron Teague (Male)", AaronModel,
                     new Vector3(4.3f, 2.7f, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
-                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled,
-                    MaleHoodie, Material("HoodieGray"), MaleMilitaryHair, Material("HairDark"), MaleShoes)
-                : BuildCharacter(charactersRoot, "Aaron Teague (Male)", false,
+                    CabinIdleProfile.Controlled)
+                : BuildNamedCharacter(charactersRoot, "Aaron Teague (Male)", AaronModel,
                     new Vector3(4.3f, 2.7f, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
-                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled,
-                    MaleHoodie, Material("HoodieGray"), MaleMilitaryHair, Material("HairDark"), MaleShoes);
+                    CabinIdleProfile.Controlled);
             SaveCharacter(aaron, "Aaron_Teague");
 
-            GameObject ivy = BuildCharacter(charactersRoot, "Ivy Teague (Female)", true,
+            GameObject ivy = BuildNamedCharacter(charactersRoot, "Ivy Teague (Female)", IvyModel,
                 new Vector3(4.6f, 2.7f, 3.0f), new Vector3(0f, 248f, 0f), 0.98f,
-                Material("FemaleBodyJeans"), CabinIdleProfile.Guarded,
-                FemaleShirt, Material("IvyYellowShirt"), FemaleLongHair, Material("HairBlack"), FemaleShoes);
+                CabinIdleProfile.Guarded);
             SaveCharacter(ivy, "Ivy_Teague");
 
             GameObject priya = isMorning
-                ? BuildCharacter(charactersRoot, "Priya Raman (Female)", true,
+                ? BuildNamedCharacter(charactersRoot, "Priya Raman (Female)", PriyaModel,
                     new Vector3(2.3f, 0f, -4.4f), new Vector3(0f, 0f, 0f), 0.96f,
-                    Material("FemaleBodyJeans"), CabinIdleProfile.Panicked,
-                    FemaleDress, Material("PriyaDress"), FemalePonytail, Material("HairBlack"), FemaleShoes)
-                : BuildCharacter(charactersRoot, "Priya Raman (Female)", true,
+                    CabinIdleProfile.Panicked)
+                : BuildNamedCharacter(charactersRoot, "Priya Raman (Female)", PriyaModel,
                     new Vector3(0.75f, 0f, -0.5f), new Vector3(0f, 30f, 0f), 0.96f,
-                    Material("FemaleBodyJeans"), CabinIdleProfile.Sleeping,
-                    FemaleDress, Material("PriyaDress"), FemalePonytail, Material("HairBlack"), FemaleShoes);
+                    CabinIdleProfile.Sleeping);
             SaveCharacter(priya, "Priya_Raman");
 
             if (!isMorning)
@@ -182,6 +184,41 @@ namespace FalsePositive.Editor
             return root;
         }
 
+        private static GameObject BuildNamedCharacter(
+            Transform parent,
+            string name,
+            string modelPath,
+            Vector3 position,
+            Vector3 eulerAngles,
+            float scale,
+            CabinIdleProfile profile)
+        {
+            GameObject root = new GameObject(name);
+            root.transform.SetParent(parent);
+            root.transform.position = position;
+            root.transform.eulerAngles = eulerAngles;
+            root.transform.localScale = Vector3.one * scale;
+
+            GameObject body = InstantiateAsset(modelPath);
+            body.name = "Body";
+            body.transform.SetParent(root.transform, false);
+            ApplyPose(body, profile);
+
+            CabinAnimatorDriver driver = root.AddComponent<CabinAnimatorDriver>();
+            driver.Configure(profile);
+
+            CapsuleCollider collider = root.AddComponent<CapsuleCollider>();
+            collider.height = 1.72f;
+            collider.radius = 0.27f;
+            collider.center = new Vector3(0f, 0.86f, 0f);
+
+            CabinCharacterIdle idle = root.AddComponent<CabinCharacterIdle>();
+            idle.Configure(profile, Math.Abs(name.GetHashCode() % 1000) / 1000f);
+            root.AddComponent<FalsePositive.Cutscene.ScriptedActor>();
+
+            return root;
+        }
+
         private static void ConfigurePlayer(GameObject player)
         {
             foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true))
@@ -251,6 +288,35 @@ namespace FalsePositive.Editor
             SetField(rig, "input", router);
             SetField(rig, "playerCamera", view);
             SetField(rig, "config", config);
+        }
+
+        /// <summary>
+        /// Keeps the player's E-interaction consumer on the generated prefab.
+        /// MemorySceneWiring historically added this component only to scene
+        /// instances, so rebuilding the Characters root silently removed it.
+        /// Putting the same-scene camera/router references on the prefab makes
+        /// every rebuild retain a complete input-to-interaction path.
+        /// </summary>
+        private static void ConfigureInteraction(GameObject player)
+        {
+            Transform view = player.transform.Find("FirstPersonView");
+            if (view == null)
+            {
+                throw new InvalidOperationException("[CabinNightCharacterBuilder] FirstPersonView child not found on Player.");
+            }
+
+            Camera camera = view.GetComponent<Camera>();
+            PlayerInputRouter router = player.GetComponent<PlayerInputRouter>();
+            if (camera == null || router == null)
+            {
+                throw new InvalidOperationException(
+                    "[CabinNightCharacterBuilder] Player interaction requires a Camera and PlayerInputRouter.");
+            }
+
+            InteractionRaycaster raycaster = player.GetComponent<InteractionRaycaster>();
+            if (raycaster == null) raycaster = player.AddComponent<InteractionRaycaster>();
+            SetField(raycaster, "raycastCamera", camera);
+            SetField(raycaster, "input", router);
         }
 
         private static void SetField(object target, string fieldName, object value)

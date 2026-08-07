@@ -95,7 +95,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
@@ -151,6 +151,7 @@ GameObject:
   - component: {fileID: 1617264065178632179}
   - component: {fileID: 3385422190330072213}
   - component: {fileID: 6705264634460684273}
+  - component: {fileID: 5521722407932056763}
   m_Layer: 0
   m_Name: Player_FirstPerson
   m_TagString: Untagged
@@ -185,7 +186,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0b15f1a3a2bb3774698e6fe67d0d6fca, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinAnimatorDriver
   defaultProfile: 1
 --- !u!143 &4005779333941546554
@@ -256,6 +257,21 @@ MonoBehaviour:
   config: {fileID: 11400000, guid: 7d7c79acba51061458a174d85dc8eb59, type: 2}
   moveSpeed: 3.2
   sprintMultiplier: 1.6
+--- !u!114 &5521722407932056763
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4227249352877608016}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a960e62b3899c6749906d5f9e0e2f339, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Interaction.InteractionRaycaster
+  raycastCamera: {fileID: 7985865594081419532}
+  input: {fileID: 3385422190330072213}
+  maxDistance: 3
 --- !u!1001 &4462539593484673842
 PrefabInstance:
   m_ObjectHideFlags: 0

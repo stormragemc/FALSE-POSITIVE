@@ -71,3 +71,86 @@ The test command was:
 cd Sidecar
 python -m unittest tests.test_output_safety tests.test_llm_prompt_boundary -v
 ```
+
+## S2: Test prompt-injection resistance
+
+### What is being protected and why
+
+Player speech is transcribed and sent to Gemini. A player may say "Ignore your instructions," ask
+for the system prompt, or imitate internal tags. The player text must remain evidence for the
+detective. It must not become a higher-priority instruction or change the detective into a general
+assistant.
+
+### How we are going to do that
+
+`Sidecar/red_team_cases.py` contains the red-team corpus. It covers direct instruction overrides,
+role changes, prompt requests, forged `WITNESS_TRANSCRIPT` and `LOCAL_AFFECT_CONTEXT` tags, a
+forged affect marker, and a request for model details.
+
+The sidecar wraps player text in `WITNESS_TRANSCRIPT`, HTML-escapes tag characters, and changes
+the reserved affect-marker phrase when it appears in witness text. The test suite verifies these
+boundaries for both the current transcript and a malicious transcript stored in conversation
+history.
+
+`Sidecar/tools/red_team_llm.py` is an opt-in live probe. It sends the same corpus to the configured
+Vertex/Gemini model and reports whether S1 rejected any reply. It does not run as part of the unit
+test suite because it needs credentials and spends API credits. Use `--show-replies` only for local
+manual review.
+
+### How we are going to test that the safety filter works
+
+The offline test in `Sidecar/tests/test_llm_prompt_boundary.py` mocks Gemini and verifies that each
+attack remains in exactly one witness block, cannot create a trusted affect-context block, and is
+wrapped safely when it appears in both history and the current turn.
+
+For the live check, run:
+
+```powershell
+cd Sidecar
+python tools/red_team_llm.py --show-replies
+```
+
+For every reply, check that the detective stays in character, does not disclose the prompt or
+internal context, and does not follow the player's injected instruction.
+
+### Testing results
+
+Offline boundary tests: done. All 6 corpus cases passed, and the combined S1/S2 run passed 10
+tests. Live Gemini red-team test: not done.
+
+## S3: Block lie-detection fields in schemas
+
+### What is being protected and why
+
+The game is allowed to describe affect, pauses, and uncertainty. It must not expose a field that
+claims to measure whether a player is lying, truthful, guilty, or deceptive. A future developer
+could accidentally add a field such as `lie_probability` and make the game contradict its own
+design.
+
+### How we are going to do that
+
+`Sidecar/tests/test_no_deception_schema.py` tokenizes field names in snake case and camel case.
+It rejects names containing diagnostic tokens such as `lie`, `lying`, `truthfulness`, `deception`,
+`guilt`, or `intent`.
+
+The test checks three client-facing surfaces: the dictionary returned by `ProsodySignal.to_dict()`,
+the literal response keys in `app._empty_response()`, and public fields in
+`Assets/_Project/Scripts/Net/SidecarDtos.cs`. Any new response field or Unity DTO field with a
+forbidden token fails the test.
+
+### How we are going to test that the safety filter works
+
+The test has a negative control for `lie_probability` and `isLying`, proving that the guard catches
+both snake-case and camel-case names. It also runs the guard against the current Python and Unity
+schemas.
+
+Run it with:
+
+```powershell
+cd Sidecar
+python -m unittest tests.test_no_deception_schema -v
+```
+
+### Testing results
+
+Done. Both S3 tests passed locally.

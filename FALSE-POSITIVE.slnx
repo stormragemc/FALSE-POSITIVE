@@ -1,0 +1,7 @@
+﻿<Solution>
+  <Project Path="FalsePositive.Runtime.csproj" />
+  <Project Path="FalsePositive.Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="FalsePositive.Tests.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+</Solution>

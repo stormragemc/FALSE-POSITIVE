@@ -59,8 +59,11 @@ namespace FalsePositive.Editor
             "SM_Cabin_Floor", "SM_Cabin_Walls", "SM_Cabin_Ceiling", "SM_Cabin_Roof",
             "SM_Cabin_Stairs", "SM_Cabin_StairRailing", "SM_Table",
             "SM_Chair_01", "SM_Chair_02", "SM_Chair_03", "SM_Chair_04", "SM_Chair_05", "SM_Chair_06",
+            "SM_Fireplace_Wood",
         };
-        private static readonly string[] BrickObjects = { "BO_Fireplace" };
+        private static readonly string[] BrickObjects = { "SM_Fireplace_Brick" };
+        private static readonly string[] StoneObjects = { "SM_Fireplace_Stone" };
+        private static readonly string[] FirewoodObjects = { "SM_Fireplace_Firewood" };
         private static readonly string[] MetalObjects =
         {
             "BO_WindowGrille", "BO_CoatHanger",
@@ -70,10 +73,15 @@ namespace FalsePositive.Editor
 
         // MeshCollider for large static structural pieces, BoxCollider
         // (cheaper, and fine for convex-enough furniture) for everything else.
+        // The firewood pile is a single joined, non-convex mesh (13 jumbled
+        // logs) sitting on the hearth with no Rigidbody, so a concave
+        // MeshCollider is valid here (Unity only requires "Convex" for
+        // MeshColliders paired with a non-kinematic Rigidbody).
         private static readonly string[] MeshColliderObjects =
         {
             "SM_Cabin_Floor", "SM_Cabin_Walls", "SM_Cabin_Ceiling",
-            "SM_Cabin_Stairs", "SM_Cabin_StairRailing", "BO_Fireplace",
+            "SM_Cabin_Stairs", "SM_Cabin_StairRailing",
+            "SM_Fireplace_Brick", "SM_Fireplace_Stone", "SM_Fireplace_Wood", "SM_Fireplace_Firewood",
         };
         private static readonly string[] BoxColliderObjects =
         {
@@ -94,7 +102,11 @@ namespace FalsePositive.Editor
 
         private static void SetupNormalMapImportSettings()
         {
-            string[] normalMaps = { "Cabin_Normal.png", "Brick_Normal.png", "Metal_Normal.png" };
+            string[] normalMaps =
+            {
+                "Cabin_Normal.png", "Brick_Normal.png", "Metal_Normal.png",
+                "Stone_Normal.png", "Firewood_Normal.png",
+            };
             foreach (string fileName in normalMaps)
             {
                 string path = TextureRoot + fileName;
@@ -126,6 +138,14 @@ namespace FalsePositive.Editor
             CreateTexturedMaterial("M_Metal_BluePlate",
                 TextureRoot + "blue_metal_plate_diff_4k.jpg",
                 TextureRoot + "Metal_Normal.png", smoothness: 0.55f);
+
+            CreateTexturedMaterial("M_Stone_CastleWall",
+                TextureRoot + "castle_wall_slates_diff_4k.jpg",
+                TextureRoot + "Stone_Normal.png", smoothness: 0.2f);
+
+            CreateTexturedMaterial("M_Bark_Brown",
+                TextureRoot + "bark_brown_02_diff_4k.jpg",
+                TextureRoot + "Firewood_Normal.png", smoothness: 0.1f);
 
             CreateFlatMaterial("M_Blockout_Grey", new Color(0.55f, 0.55f, 0.55f), smoothness: 0.2f);
         }
@@ -196,11 +216,15 @@ namespace FalsePositive.Editor
             Material wood = LoadMaterial("M_Wood_WeatheredPlank");
             Material brick = LoadMaterial("M_Brick_Red");
             Material metal = LoadMaterial("M_Metal_BluePlate");
+            Material stone = LoadMaterial("M_Stone_CastleWall");
+            Material bark = LoadMaterial("M_Bark_Brown");
             Material blockout = LoadMaterial("M_Blockout_Grey");
 
             AssignMaterial(instance, WoodObjects, wood);
             AssignMaterial(instance, BrickObjects, brick);
             AssignMaterial(instance, MetalObjects, metal);
+            AssignMaterial(instance, StoneObjects, stone);
+            AssignMaterial(instance, FirewoodObjects, bark);
             AssignMaterial(instance, BlockoutObjects, blockout);
 
             AddColliders(instance, MeshColliderObjects, useMeshCollider: true);

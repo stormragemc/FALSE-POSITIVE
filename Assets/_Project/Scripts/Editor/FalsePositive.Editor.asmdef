@@ -3,7 +3,8 @@
     "rootNamespace": "FalsePositive.EditorTools",
     "references": [
         "FalsePositive.Runtime",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [
         "Editor"

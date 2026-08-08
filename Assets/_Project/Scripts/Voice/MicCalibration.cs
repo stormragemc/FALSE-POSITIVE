@@ -140,5 +140,25 @@ namespace FalsePositive.Voice
             var result = new CalibrationResult(vad.NoiseFloor, percentileRms, peakRms, mic.ActiveDevice);
             Completed?.Invoke(result);
         }
+
+        /// <summary>Offline-demo test hook — force-completes calibration with a
+        /// synthetic result, standing in for "speak normally" when no one is
+        /// at the mic. No-op outside SamplingRoom/SamplingVoice. Applies the
+        /// VAD's noise floor directly if calibration hadn't reached that yet,
+        /// so it doesn't get left stuck in its own calibrating state.</summary>
+        public void SimulateVoice()
+        {
+            if (Stage != CalibrationStage.SamplingRoom && Stage != CalibrationStage.SamplingVoice) return;
+
+            if (_routine != null) StopCoroutine(_routine);
+            _routine = null;
+
+            if (!vad.IsCalibrated) vad.ApplyCalibration(vad.NoiseFloor);
+
+            Stage = CalibrationStage.Done;
+            Progress01 = 1f;
+            var result = new CalibrationResult(vad.NoiseFloor, 0.05f, 0.1f, mic.ActiveDevice);
+            Completed?.Invoke(result);
+        }
     }
 }

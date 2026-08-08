@@ -38,10 +38,12 @@ namespace FalsePositive.Flow
 
             dialogueManager.BindServices(flow.Sidecar, flow.Vad, flow.Recorder, flow.SessionId, flow.Subtitles);
             playerState.SetFader(flow.Fader);
-            // DebugOverlayUI lives in _Persistent too — reached through
-            // GameFlowDirector rather than a serialized field, same reason
-            // as everything else in this method.
+            // DebugOverlayUI and SimulatedSpeechButton both live in
+            // _Persistent too — reached through GameFlowDirector rather than
+            // a serialized field, same reason as everything else in this
+            // method.
             flow.DebugOverlay?.Bind(flow.Vad, dialogueManager);
+            flow.SimulatedSpeech?.Bind(dialogueManager);
 
             IsBound = true;
         }

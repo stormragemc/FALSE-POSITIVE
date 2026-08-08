@@ -6,9 +6,10 @@ duplicate model alongside `Cabin.fbx`).
 
 Built from scratch to a **10 × 10 m interior footprint, 2.7 m ceiling**,
 textured with the Poly Haven `weathered_plank_siding_4k` PBR set (wood),
-`red_brick_4k` (fireplace) and `blue_metal_plate_4k` (grille/hanger/shoes).
-Second floor is out of scope — only the ceiling slab and stair opening are
-built.
+`red_brick_4k` (fireplace body), `castle_wall_slates_4k` (fireplace bevels/
+rim/mantel/hearth), `bark_brown_02_4k` (firewood logs) and
+`blue_metal_plate_4k` (grille/hanger/shoes). Second floor is out of scope —
+only the ceiling slab and stair opening are built.
 
 **Revision note:** this is a shrink of an earlier 12 × 12 m / 3.0 m-ceiling
 build. Every item kept its designated place in the layout; only the room and
@@ -31,7 +32,10 @@ for the exact deltas if you need to reconcile against old notes.
 | `SM_Table` | Dining table, (+3.0, −2.3) |
 | `SM_Chair_01`…`06` | Dining chairs around the table, facing inward with ±3° yaw jitter |
 | `BO_Sofa` | Untextured grey blockout, 5-seater, 3.5 × 1.0 m, (−0.75, −0.25), facing +X |
-| `BO_Fireplace` | **Red brick** (`M_Brick_Red`), centred on the South wall at (0, ~−4.3), chimney breast runs to the new ceiling (z = 2.7) |
+| `SM_Fireplace_Brick` | **Red brick** (`M_Brick_Red`), centred on the South wall at (0, ~−4.3): lower block + chimney breast running to the ceiling (z = 2.7), with the firebox opening boolean-cut through the front face |
+| `SM_Fireplace_Stone` | **Castle wall slates** (`M_Stone_CastleWall`), single joined object: mantel shelf, hearth slab, and the beveled rim/surround frame around the firebox opening |
+| `SM_Fireplace_Wood` | **Weathered plank** (`M_Wood_WeatheredPlank`, reused), 4-panel interior liner (back/left/right/floor) lining the firebox cavity behind the opening |
+| `SM_Fireplace_Firewood` | **Bark, brown** (`M_Bark_Brown`), 13 randomly-oriented log cylinders piled messily on the hearth, visible through the open firebox — the fireplace is open at floor level, no bottom lip/threshold |
 | `BO_WindowGrille` | **Blue metal plate** (`M_Metal_BluePlate`), inset in the North window reveal at x = −2.3, 15 vertical + 8 horizontal bars, ≤ 0.12 m clear gaps — too tight to pass a person through |
 | `BO_CoatHanger` | **Blue metal plate**, free-standing hall tree (disc base + pole + 6 angled pegs, 1.8 m tall) at (+1.4, +4.5), off the North wall |
 | `BO_Shoes_01`…`04` | **Blue metal plate**, pairs along the East wall at x = +4.6, y = 2.4/1.7/1.0/0.3 |
@@ -64,6 +68,32 @@ floor-to-floor)** — the riser height (0.18125 m) is re-derived so
 headroom the same way as before: it starts where clearance over a tread first
 drops under 2.0 m (now tread 4, `y = +0.35`) and runs to `y = −3.95`, just
 past the top landing.
+
+## Fireplace rebuild — `BO_Fireplace` replaced with 4 game-ready objects
+
+The original `BO_Fireplace` was a single untextured brick block-out with no
+opening. It was deleted and rebuilt as four objects sharing the same
+footprint against the South wall (brick lower block `x∈[−0.9,0.9]`,
+`y∈[−5.0,−4.0]`, `z∈[0,1.3]`, chimney breast `x∈[−0.5,0.5]`, `y∈[−5.0,−4.3]`,
+`z∈[1.3,2.7]`):
+
+- `SM_Fireplace_Brick` — the block-out shell above, with the firebox opening
+  cut through the front face via a boolean modifier (baked, not left live)
+  against a cutter box roughly `x∈[−0.56,0.56]`, `z∈[−0.02,0.95]`.
+- `SM_Fireplace_Stone` — mantel shelf, hearth slab, and a beveled rim frame
+  (`bevel width=0.018`, 2 segments, angle-limited) built around the firebox
+  opening, all joined into one object.
+- `SM_Fireplace_Wood` — 4 flat panels (back/left/right/floor) lining the
+  firebox cavity, positioned just inside the opening so they're visible
+  through it but don't clip the stone rim.
+- `SM_Fireplace_Firewood` — 13 log cylinders (8-sided, radius 0.035–0.065 m,
+  length 0.30–0.52 m), randomized position/rotation (`random.seed(42)` for
+  reproducibility) and piled on the hearth, growing in height with index plus
+  jitter to read as a messy stack rather than a grid.
+
+The firebox is open at floor level by design — there's no bottom lip or
+threshold on the cutter or the stone rim, so the opening is flush with the
+hearth slab and the firewood pile sits directly in view from outside.
 
 ## Door hinge — placement instructions for Unity
 
@@ -115,8 +145,10 @@ is Unity-implementation-defined and can't be verified from inside Blender.
 
 | Material | Objects | Source (Poly Haven) |
 |---|---|---|
-| `M_Wood_WeatheredPlank` | Floor, walls, ceiling, roof, stairs, railing, table, chairs, door | `weathered_plank_siding_4k` |
-| `M_Brick_Red` | `BO_Fireplace` | `red_brick_4k` |
+| `M_Wood_WeatheredPlank` | Floor, walls, ceiling, roof, stairs, railing, table, chairs, door, `SM_Fireplace_Wood` | `weathered_plank_siding_4k` |
+| `M_Brick_Red` | `SM_Fireplace_Brick` | `red_brick_4k` |
+| `M_Stone_CastleWall` | `SM_Fireplace_Stone` | `castle_wall_slates_4k` |
+| `M_Bark_Brown` | `SM_Fireplace_Firewood` | `bark_brown_02_4k` |
 | `M_Metal_BluePlate` | `BO_WindowGrille`, `BO_CoatHanger`, `BO_Shoes_01`…`04` | `blue_metal_plate_4k` |
 | `M_Blockout_Grey` | `BO_Sofa` only | none — flat colour, untextured by explicit request |
 
@@ -137,10 +169,16 @@ world axes) were unwrapped on an axis-aligned duplicate and had their UVs
 transferred back — a plain cube projection on those faces would otherwise
 compress the texture ~1.41× relative to everything else.
 
-`BO_Fireplace` uses `cube_size=1.5` for brick — matched to the object's own
-scale (roughly a dozen brick courses across the 1.4 m firebox) rather than
+`SM_Fireplace_Brick` uses `cube_size=1.5` for brick — matched to the object's
+own scale (roughly a dozen brick courses across the 1.4 m firebox) rather than
 the wood rule, since 2.0 m would make the bricks read oversized on an object
-this small.
+this small. `SM_Fireplace_Stone` uses `cube_size=1.0` for the mantel, hearth,
+and bevel/rim frame — slate stones read too large at the brick's 1.5 scale on
+these narrower surfaces. `SM_Fireplace_Wood` reuses the standard `cube_size=2.0`
+wood rule for its interior liner panels. `SM_Fireplace_Firewood` uses a much
+smaller `cube_size=0.3` for the bark texture, since each log is only
+0.035–0.065 m in radius — anything near the wood/stone scale would sample a
+near-featureless crop of bark per log.
 
 `BO_CoatHanger` and `BO_Shoes_01`…`04` use `cube_size=1.0` for blue metal.
 `BO_WindowGrille` uses its own smaller `cube_size=0.25`, because its bar
@@ -160,20 +198,25 @@ primary `UVMap`.
 sources, which ship oversized/wrong-format files for a Unity asset):
 
 - `weathered_plank_siding_diff_4k.jpg`, `red_brick_diff_4k.jpg`,
-  `blue_metal_plate_diff_4k.jpg` — copied as-is (Base Color, sRGB)
+  `blue_metal_plate_diff_4k.jpg`, `castle_wall_slates_diff_4k.jpg`,
+  `bark_brown_02_diff_4k.jpg` — copied as-is (Base Color, sRGB)
 - `Cabin_Normal.png` — wood normal map, converted from the source EXR at
   **16-bit** (62 MB — 3× larger than the EXR it replaces; kept from the
   previous revision, not touched here). Re-export at 8-bit if file size
   matters more than precision.
-- `Brick_Normal.png`, `Metal_Normal.png` — normal maps for the new materials,
-  converted at **8-bit** deliberately (unlike the wood one above) to avoid
-  repeating that size tradeoff twice more; still tens of MB each because PNG
-  compresses noisy normal-map detail poorly, but roughly half the size a
-  16-bit version would have been.
-- `Cabin_Rough.png`, `Brick_Rough.png`, `Metal_Rough.png` — 8-bit greyscale
-  roughness maps (Non-Color). **Invert into the Smoothness channel** when the
-  URP/Lit materials are authored in Unity — these are Roughness, not
-  Smoothness.
+- `Brick_Normal.png`, `Metal_Normal.png`, `Stone_Normal.png`,
+  `Firewood_Normal.png` — normal maps for the non-wood materials, converted
+  at **8-bit** deliberately (unlike the wood one above) to avoid repeating
+  that size tradeoff again; still tens of MB each because PNG compresses
+  noisy normal-map detail poorly, but roughly half the size a 16-bit version
+  would have been.
+- `Cabin_Rough.png`, `Brick_Rough.png`, `Metal_Rough.png`, `Stone_Rough.png`,
+  `Firewood_Rough.png` — 8-bit greyscale roughness maps (Non-Color). **Invert
+  into the Smoothness channel** if a future pass wires per-pixel roughness
+  into the URP/Lit materials — these are Roughness, not Smoothness.
+  `CabinV2Builder.cs` currently uses a flat `_Smoothness` scalar per material
+  instead of reading these (see "Outstanding work"), so they aren't consumed
+  yet.
 - `disp_4k.png` files — **not copied** for any material; this is a game
   asset, no displacement/tessellation pipeline.
 

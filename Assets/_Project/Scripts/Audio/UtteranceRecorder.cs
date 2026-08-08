@@ -60,5 +60,20 @@ namespace FalsePositive.Audio
             }
             _buffer.Clear();
         }
+
+        /// <summary>Offline-demo test hook — fires UtteranceCaptured with a
+        /// synthetic loud "utterance", standing in for the player actually
+        /// speaking at any gate that listens for one (DialogueManager,
+        /// GameFlowDirector.RequestSpokenPrompt, LoudnessGate all subscribe
+        /// to this same event). Clears any in-flight real buffer first so
+        /// the next real utterance can't double-fire on top of this one.</summary>
+        public void SimulateUtterance()
+        {
+            _buffer.Clear();
+            int sampleRate = _sampleRate > 0 ? _sampleRate : 16000;
+            float[] samples = new float[sampleRate]; // 1s
+            for (int i = 0; i < samples.Length; i++) samples[i] = 0.9f;
+            UtteranceCaptured?.Invoke(samples, sampleRate);
+        }
     }
 }

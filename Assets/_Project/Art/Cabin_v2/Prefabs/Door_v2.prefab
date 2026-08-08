@@ -111,3 +111,5 @@ MonoBehaviour:
   lockedPrompt: It's locked.
   audioSource: {fileID: 0}
   openClip: {fileID: 0}
+  lockedClip: {fileID: 0}
+  unlockClip: {fileID: 0}

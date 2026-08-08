@@ -1,6 +1,8 @@
 using FalsePositive.Flow;
+using FalsePositive.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
@@ -13,6 +15,12 @@ namespace FalsePositive.Menu
     /// is reached through GameFlowDirector rather than a scene-local
     /// reference — see docs/GAME_COMPLETION_PLAN.md A0 on why a cross-scene
     /// reference cannot be a plain [SerializeField] here.
+    ///
+    /// Quit confirmation, Credits and How-to-play are scene-local windows
+    /// (MainMenu/MenuOverlay) reachable only from here, so this stays a plain
+    /// router over them: this class owns none of MenuWindow's fade/focus/
+    /// escape logic, just the buttons that open each window and the one
+    /// Update() poll that dispatches Escape to whichever window is topmost.
     /// </summary>
     public sealed class MainMenuController : MonoBehaviour
     {
@@ -20,6 +28,11 @@ namespace FalsePositive.Menu
         [SerializeField] private Button offlineButton;
         [SerializeField] private Button settingsButton;
         [SerializeField] private Button quitButton;
+        [SerializeField] private Button controlsButton;
+        [SerializeField] private Button creditsButton;
+        [SerializeField] private QuitConfirmWindow quitConfirm;
+        [SerializeField] private MenuWindow creditsWindow;
+        [SerializeField] private MenuWindow controlsWindow;
 
         private void Awake()
         {
@@ -29,6 +42,28 @@ namespace FalsePositive.Menu
             if (offlineButton != null) offlineButton.onClick.AddListener(() => HandlePlay(offline: true));
             if (settingsButton != null) settingsButton.onClick.AddListener(HandleSettings);
             if (quitButton != null) quitButton.onClick.AddListener(HandleQuit);
+            if (controlsButton != null && controlsWindow != null) controlsButton.onClick.AddListener(controlsWindow.Open);
+            if (creditsButton != null && creditsWindow != null) creditsButton.onClick.AddListener(creditsWindow.Open);
+        }
+
+        /// <summary>One Escape poller for every open MenuWindow, rather than
+        /// each window polling for itself and racing to close two at once —
+        /// see MenuWindowStack's own doc comment for why. Settings is not a
+        /// MenuWindow (it predates that system and is reused as the Day-2
+        /// pause menu — see SettingsPanel's class doc), so it needs its own
+        /// fallthrough once the stack reports nothing else open.</summary>
+        private void Update()
+        {
+            if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame) return;
+
+            if (MenuWindowStack.AnyOpen)
+            {
+                MenuWindowStack.CloseTop();
+                return;
+            }
+
+            SettingsPanel settings = GameFlowDirector.Instance?.SettingsPanel;
+            if (settings != null && settings.IsOpen) settings.Hide();
         }
 
         /// <summary>Backstop for the case where this scene is played on its
@@ -73,6 +108,13 @@ namespace FalsePositive.Menu
 
         private void HandleQuit()
         {
+            if (quitConfirm != null)
+            {
+                quitConfirm.Open();
+                return;
+            }
+
+            Debug.LogWarning("[MainMenuController] No QuitConfirmWindow wired — quitting immediately with no confirmation.");
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

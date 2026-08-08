@@ -71,6 +71,18 @@ namespace FalsePositive.Flow
         public string SessionId { get; private set; }
         public bool BackendReady { get; private set; }
         public bool OfflineMode { get; private set; }
+
+        /// <summary>True from RequestSpokenPrompt until the qualifying utterance
+        /// (or a phase change that abandons it) — see CancelSpokenPrompt. The
+        /// simulate-speech test button uses this to know a press would actually
+        /// be consumed here, rather than guessing from VAD gating state.</summary>
+        public bool AwaitingSpokenPrompt { get; private set; }
+
+        /// <summary>True for the whole fade-out/scene-swap/fade-in of
+        /// TransitionRoutine. Phase itself flips partway through (:368-ish),
+        /// a full fade before PhaseChanged fires, so callers that need "is a
+        /// transition actually settled right now" must use this, not Phase.</summary>
+        public bool IsTransitioning => _transitioning;
         public VoiceCalibrationState Calibration { get; } = new VoiceCalibrationState();
         public InterrogationConfig Config => config;
 
@@ -89,6 +101,13 @@ namespace FalsePositive.Flow
         public SettingsPanel SettingsPanel => settingsPanel;
         public OutcomeScreen OutcomeScreen => outcomeScreen;
 
+        /// <summary>Self-registered by SimulatedSpeechButton.Start, same shape as
+        /// RegisterCutscenePlayer — the button lives in _Persistent but needs
+        /// Interrogation's DialogueManager, so InterrogationSceneBinder binds it
+        /// here once that scene loads.</summary>
+        public SimulatedSpeechButton SimulatedSpeech { get; private set; }
+        public void RegisterSimulatedSpeechButton(SimulatedSpeechButton button) => SimulatedSpeech = button;
+
         public event Action<GamePhase> PhaseExiting;
         public event Action<GamePhase> PhaseChanged;
         public event Action<string> BackendFault;
@@ -97,6 +116,7 @@ namespace FalsePositive.Flow
 
         private ICutscenePlayer _cutscenePlayer;
         private bool _transitioning;
+        private Action _cancelSpokenPrompt;
 
         private void Awake()
         {
@@ -121,10 +141,15 @@ namespace FalsePositive.Flow
             if (consentFlow != null)
             {
                 consentFlow.Accepted += HandleConsentAccepted;
+                consentFlow.Declined += HandleAbortRequested;
             }
             if (calibration != null)
             {
                 calibration.Completed += HandleCalibrationCompleted;
+            }
+            if (calibrationPanel != null)
+            {
+                calibrationPanel.Cancelled += HandleAbortRequested;
             }
 
             // The menu itself does not need the backend to be reachable —
@@ -138,19 +163,48 @@ namespace FalsePositive.Flow
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
-            if (consentFlow != null) consentFlow.Accepted -= HandleConsentAccepted;
+            if (consentFlow != null)
+            {
+                consentFlow.Accepted -= HandleConsentAccepted;
+                consentFlow.Declined -= HandleAbortRequested;
+            }
             if (calibration != null) calibration.Completed -= HandleCalibrationCompleted;
+            if (calibrationPanel != null) calibrationPanel.Cancelled -= HandleAbortRequested;
         }
 
         private void HandleConsentAccepted()
         {
-            consentFlow?.Hide();
             if (sceneRouter != null && !string.IsNullOrEmpty(interrogationSceneName))
             {
                 StartCoroutine(sceneRouter.EnsureLoaded(interrogationSceneName));
             }
+            StartCoroutine(ConsentToCalibrationHandoff());
+        }
+
+        /// <summary>Waits for the consent card's own fade-out to finish
+        /// before showing the calibration card, rather than Show()ing it
+        /// immediately — the two cards' backdrop scrims are independent
+        /// CanvasGroups, so overlapping their fades stacks two translucent
+        /// scrims into a visible flash instead of a clean crossfade.</summary>
+        private IEnumerator ConsentToCalibrationHandoff()
+        {
+            consentFlow?.Hide();
+            if (consentFlow != null) yield return new WaitForSecondsRealtime(consentFlow.FadeDuration);
             calibrationPanel?.Show();
             calibration?.Begin();
+        }
+
+        /// <summary>Shared by the consent card's Back button and the
+        /// calibration failure card's Cancel button — both strand the
+        /// player identically if left unhandled. Guarded because
+        /// GoToPhase/TransitionRoutine always runs its full fade cycle even
+        /// when the target phase already equals the current one: Declined
+        /// fires with Phase already Menu on the normal consent-Back path, so
+        /// an unconditional AbortToMenu() would fade to black and back for
+        /// no reason on every Back click.</summary>
+        private void HandleAbortRequested()
+        {
+            if (Phase != GamePhase.Menu) AbortToMenu();
         }
 
         private void HandleCalibrationCompleted(CalibrationResult result)
@@ -225,21 +279,41 @@ namespace FalsePositive.Flow
         /// <summary>Shows a prompt and waits for a qualifying utterance, entirely
         /// client-side — never routed through DialogueManager/the backend. See
         /// A6's LoudnessGate for the requireLoud path and STORY_SCRIPT.md §4
-        /// for both call sites.</summary>
+        /// for both call sites.
+        ///
+        /// Phase-scoped: captures the requesting phase and only ever finishes
+        /// while still in it. Without this, a phase abandoned mid-prompt (e.g.
+        /// the dev F2 phase-skip) left its handler subscribed to the shared
+        /// _Persistent recorder/gate, so it could fire from a *later* phase and
+        /// run the old phase's onSatisfied — including its cutscene chain and a
+        /// stray AdvancePhase() — out from under the player.</summary>
         public void RequestSpokenPrompt(string promptText, bool requireLoud, Action onSatisfied)
         {
+            CancelSpokenPrompt(); // tear down anything a previous phase left pending
             prompt?.Show(promptText);
             vad.SetGated(false);
+            AwaitingSpokenPrompt = true;
+            GamePhase requestedIn = Phase;
 
             if (requireLoud && loudnessGate != null)
             {
                 Action handleSatisfied = null;
-                Action handleTooQuiet = () => prompt?.SetHint("Louder — the storm is taking your voice.");
+                Action handleTooQuiet = () =>
+                {
+                    if (Phase != requestedIn) return;
+                    prompt?.SetHint("Louder — the storm is taking your voice.");
+                };
                 handleSatisfied = () =>
+                {
+                    if (Phase != requestedIn) return;
+                    CancelSpokenPrompt();
+                    FinishSpokenPrompt(onSatisfied);
+                };
+                _cancelSpokenPrompt = () =>
                 {
                     loudnessGate.Satisfied -= handleSatisfied;
                     loudnessGate.TooQuiet -= handleTooQuiet;
-                    FinishSpokenPrompt(onSatisfied);
+                    loudnessGate.Disarm();
                 };
                 loudnessGate.Satisfied += handleSatisfied;
                 loudnessGate.TooQuiet += handleTooQuiet;
@@ -250,11 +324,28 @@ namespace FalsePositive.Flow
                 Action<float[], int> handleUtterance = null;
                 handleUtterance = (samples, sampleRate) =>
                 {
-                    recorder.UtteranceCaptured -= handleUtterance;
+                    if (Phase != requestedIn) return;
+                    CancelSpokenPrompt();
                     FinishSpokenPrompt(onSatisfied);
                 };
+                _cancelSpokenPrompt = () => recorder.UtteranceCaptured -= handleUtterance;
                 recorder.UtteranceCaptured += handleUtterance;
             }
+        }
+
+        /// <summary>Unsubscribes whatever RequestSpokenPrompt last registered and
+        /// clears the prompt UI. Safe to call when nothing is pending. Called from
+        /// TransitionRoutine on every phase exit, so a prompt can never outlive
+        /// the phase that asked for it.</summary>
+        public void CancelSpokenPrompt()
+        {
+            AwaitingSpokenPrompt = false;
+            Action cancel = _cancelSpokenPrompt;
+            if (cancel == null) return;
+            _cancelSpokenPrompt = null;
+            cancel.Invoke();
+            prompt?.ClearHint();
+            prompt?.Hide();
         }
 
         private void FinishSpokenPrompt(Action onSatisfied)
@@ -319,6 +410,7 @@ namespace FalsePositive.Flow
         {
             _transitioning = true;
             PhaseExiting?.Invoke(Phase);
+            CancelSpokenPrompt(); // a phase can never leave a spoken prompt pending for the next one
 
             float fadeDuration = config != null ? config.fadeDurationSeconds : 0.25f;
             if (fader != null) yield return fader.FadeToBlack(fadeDuration);

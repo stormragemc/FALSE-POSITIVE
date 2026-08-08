@@ -280,13 +280,13 @@ Use these details when selecting or generating character voices. The listed race
 a name. He looks down at the folder, turns one page, then slides a printed group
 photograph across the table — all five of them, drunk and smiling, earlier that
 night. **The microphone is inactive for everything in this section** until
-[SPASSKY-042]; these are scripted beats, not live conversation.*
+[SPASSKY-061]; these are scripted beats, not live conversation.*
 
-**[SPASSKY-038] OFFICER SPASSKY:** That's what I don't understand.
+**[SPASSKY-057] OFFICER SPASSKY:** That's what I don't understand.
 
-**[SPASSKY-039] OFFICER SPASSKY:** Old friends. An anniversary. Drinks. From the way they tell it, things were going well.
+**[SPASSKY-058] OFFICER SPASSKY:** Old friends. An anniversary. Drinks. From the way they tell it, things were going well.
 
-**[SPASSKY-040] OFFICER SPASSKY:** So when did it all go wrong?
+**[SPASSKY-059] OFFICER SPASSKY:** So when did it all go wrong?
 
 #### Memory fragment A — the good years
 
@@ -325,11 +325,11 @@ with exaggerated pride. An ordinary best-friend joke — and the reason Nick is
 underdressed later. Hard cut back to the interrogation room on the sound of the
 glasses touching.*
 
-**[SPASSKY-041] OFFICER SPASSKY:** And somewhere between that photograph and sunrise, Nick ended up dead.
+**[SPASSKY-060] OFFICER SPASSKY:** And somewhere between that photograph and sunrise, Nick ended up dead.
 
 *He pulls the photograph back into the folder.*
 
-**[SPASSKY-042] OFFICER SPASSKY:** If it wasn't you, David — who killed Nick?
+**[SPASSKY-061] OFFICER SPASSKY:** If it wasn't you, David — who killed Nick?
 
 #### Memory fragment B — when it went wrong
 
@@ -372,7 +372,7 @@ and turns toward the front door — still wearing David's thin jacket.*
 *The door slams. Hard return to the interrogation room on the slam. Spassky has
 not moved. One beat.*
 
-**[SPASSKY-043] OFFICER SPASSKY:** Who, David?
+**[SPASSKY-062] OFFICER SPASSKY:** Who, David?
 
 ***The microphone activates here.*** *Everything below this line is live
 conversation again.*

@@ -67,7 +67,7 @@ blackout, not an alibi.
 > voice on a fresh machine — only `ELEVENLABS_API_KEY`. `GAME_COMPLETION_PLAN.md` §7 B0 is closed;
 > its fallback (keep the female voice, rename the character) is dead. Casting rationale, the
 > delivery settings, and the latency this model costs are in
-> `docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md`.
+> `Artifacts/voice_guide/Spassky.md`.
 >
 > The earlier claim that `llm.py` hardcodes *Detective Mara Voss* was stale: `llm.py:55` has read
 > `You are Officer Spassky` since the rename. Only the voice ID was ever wrong.

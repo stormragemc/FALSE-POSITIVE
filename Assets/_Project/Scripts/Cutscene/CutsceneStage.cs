@@ -1038,10 +1038,18 @@ namespace FalsePositive.Cutscene
 
         /// <summary>CS-16B — when it went wrong, ~13 s. Same room and cast as
         /// CS-16A so the difference is carried by blocking and performance, per
-        /// §5's memory-pair rule. Two staged moments separated by a hard blink:
-        /// the table with everyone still present, then David and Nick alone at
-        /// the fire. Ends with Nick out through the front door and the scene
-        /// handed back exactly as M1_Night left it.</summary>
+        /// §5's memory-pair rule. Two staged moments: the table with everyone
+        /// still present, then David and Nick alone at the fire. Ends with Nick
+        /// out through the front door and the scene handed back exactly as
+        /// M1_Night left it.
+        ///
+        /// The room swap between those two moments used to hide under a 0.12s
+        /// hard blink (this recipe plays screen-lit, so that was its own local
+        /// cover, not CutsceneDirector's). Removed along with every other
+        /// cutscene's black cover -- the room now visibly re-arranges itself
+        /// rather than cutting under black. If that reads as a jump cut rather
+        /// than a transition, the fix is staging Ivy/Aaron's exit and Nick's
+        /// walk to the fire as a move, not this blink coming back.</summary>
         private IEnumerator WhenItWentWrong()
         {
             Vector3 table = TableCentre();
@@ -1073,11 +1081,9 @@ namespace FalsePositive.Cutscene
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
             yield return new WaitForSeconds(2.4f);
 
-            // Hard blink into the second moment. §4 jumps forward without
-            // anyone leaving the room, so the room has to change under a cut
-            // rather than have Ivy and Aaron walk out in front of the player.
-            if (fader != null) yield return fader.FadeToBlack(0.12f);
-
+            // §4 jumps forward without anyone leaving the room -- Ivy and Aaron
+            // pop out and Nick repositions to the fire in one frame, visibly now
+            // that this recipe has no cover to cut under (see class doc above).
             if (ivy != null) ivy.SetActive(false);
             if (aaron != null) aaron.SetActive(false);
 
@@ -1105,6 +1111,7 @@ namespace FalsePositive.Cutscene
             yield return new WaitForSeconds(0.3f);
             if (nick != null) PlantFeet(nick);
             if (fader != null) yield return fader.FadeFromBlack(0.12f);
+            yield return null;
 
             // 5-11s — the argument, David and Nick alone at the fire.
             yield return new WaitForSeconds(3.4f);

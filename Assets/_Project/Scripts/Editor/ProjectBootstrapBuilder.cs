@@ -12,6 +12,7 @@ using FalsePositive.Flow;
 using FalsePositive.Menu;
 using FalsePositive.Net;
 using FalsePositive.Player;
+using FalsePositive.Rendering;
 using FalsePositive.UI;
 using FalsePositive.Voice;
 using TMPro;
@@ -386,6 +387,16 @@ namespace FalsePositive.Editor
             SetField(cutsceneDirector, "subtitles", subtitleUi);
             SetField(cutsceneDirector, "voSource", cutsceneVoSource);
             SetField(cutsceneDirector, "voSourceLipSync", cutsceneVoLipSync);
+
+            // DrunkEffectController + DrunkCutsceneBinder — drives the URP drunk
+            // post-process across CutsceneId.Wake (waking up at the interrogation
+            // table). Sibling of CutsceneDirector for the same reason: one
+            // instance for the whole game, in _Persistent.
+            GameObject drunkGo = new GameObject("DrunkEffectController");
+            drunkGo.transform.SetParent(cutsceneGo.transform, false);
+            DrunkEffectController drunkEffect = drunkGo.AddComponent<DrunkEffectController>();
+            DrunkCutsceneBinder drunkBinder = drunkGo.AddComponent<DrunkCutsceneBinder>();
+            SetField(drunkBinder, "effect", drunkEffect);
 
             // EventSystem — the project uses the new Input System exclusively
             // (Active Input Handling = Input System Package), so this must be

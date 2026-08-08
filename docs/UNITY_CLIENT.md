@@ -169,6 +169,67 @@ the talk gesture both run straight through `SpasskyAnswer` uninterrupted.
 `CopAnimationBuilder.cs` and its baked assets are left on disk unreferenced,
 matching this project's convention for the superseded T1 cop assets.
 
+## Cutscenes: screen cover and the drunk effect
+
+`UI/ScreenFader.cs` is the only full-screen black cover in the game — a
+`CanvasGroup` faded by `GameFlowDirector.TransitionRoutine` (every phase
+change), `Flow/GameFlowDirector.MemoryInterludeRoutine` (P3's memory pair,
+now fading the same way rather than the hard cut it used to be), and
+`Cutscene/CutsceneDirector.PlayRoutine` per-recipe. A recipe's
+`keepScreenLit` flag (authored in `Editor/CutsceneRecipeBuilder.cs` via
+`Recipe(...)` vs `VisibleRecipe(...)`) decides whether that cutscene fades to
+black or plays over the live scene:
+
+- **Screen-lit** (no black): `Wake`, `SpasskyAnswer`, `StandFromChair`,
+  `RadioClears`, `SomeoneLeft`, `CallForNick`, `PriyaScreams`,
+  `TheyComeDown`, `OutIntoTheSnow`, `TheCarry`, `TheSofa`, `P3Photograph`,
+  `P3AfterGoodYears`, `P3WhoDavid`, `GoodYears`, `WhenItWentWrong`.
+- **Fades to black** — these *are* scene transitions, not cutscenes to be
+  watched: `FuzzyToNight`, `FuzzyToInterrogation`, `FuzzyToMorning`,
+  `FuzzyToVerdict`.
+- **Stays black by design** — a held black frame with one diegetic sound or
+  an ending card, not something to watch: `FlashbackAaron/Ivy/Priya`,
+  `EndingDavid/Aaron/Ivy/Priya`.
+
+Going screen-lit exposes whatever `Cutscene/CutsceneStage.cs` stages while
+the beat plays (actors teleporting into position, doors swinging) — it used
+to happen invisibly under the fade. `StandFromChair`, `SomeoneLeft`,
+`PriyaScreams`, `TheyComeDown`, and the mid-cutscene room swap inside
+`WhenItWentWrong` (previously hidden by a local 0.12s blink, now removed)
+are the ones where this is visible. If a specific beat reads as a jump cut
+rather than a transition, fix that beat's staging to happen off-camera
+rather than re-adding a black cover.
+
+**Drunk post-process** (`Rendering/DrunkColorPulseFeature.cs`) — a URP
+`ScriptableRendererFeature` registered in `Assets/Settings/PC_Renderer.asset`,
+implementing `RecordRenderGraph` (this project runs URP with RenderGraph
+active; a pass that only implements the legacy `Execute(CommandBuffer)`
+silently never runs). Composites a persistent previous-frame RTHandle for a
+motion-trail smear plus a colour lerp that can pulse, ported from an
+Asset-Store PPv2 package that could not run under URP at all (PPv2 and URP
+don't coexist) — the original `Assets/DrunkColorPulse/` and
+`Assets/Resources/DrunkColorPulse.shader` are deleted.
+`Rendering/DrunkEffectController.cs` (one instance in `_Persistent`, sibling
+to `CutsceneDirector`) is the only thing gameplay code should call —
+`RampTo(intensity, seconds)` / `SetImmediate` / `Clear()`. It publishes a
+static `CurrentSettings` struct the render pass reads fresh every frame; the
+pass skips entirely when nothing is active, so it costs nothing outside a
+cutscene using it. `Cutscene/DrunkCutsceneBinder.cs` is the only caller
+today — it ramps the effect up on `CutsceneDirector.Started(CutsceneId.Wake)`
+and back down on `Finished`, so it's active only across the player waking up
+at the interrogation table.
+
+**Known pre-existing bug, not touched by the above:** `CutsceneStage.GoodYears()`'s
+staging coroutine runs on its own hardcoded `WaitForSeconds` schedule
+(~13s), independent of the `GoodYears` recipe's actual VO clip lengths.
+When the recipe finishes first, `CutsceneDirector.Finished` fires and the
+memory scene gets deactivated before the staging coroutine reaches
+`ReturnBorrowed()`, leaving Nick/Aaron/Ivy active afterward (caught by
+`Tools ▸ Debug ▸ Check M1 staging was restored`). Confirmed via `git stash`
+A/B testing to reproduce identically on an unmodified checkout — it predates
+this fade/screen-lit work and is not something to fix by adding cover back.
+Needs `GoodYears()`'s staging waits re-timed against the real clip lengths.
+
 ## Running it
 
 1. One-time sidecar setup — see `Sidecar/README.md` §"One-time setup"
@@ -268,9 +329,13 @@ verified through workarounds:
   pressing Play, without ever clicking through the main menu) — otherwise the
   jump binds a null session id and every backend turn fails. Memory flags and
   session score are empty on this path; use the F1 overlay's flag toggles if
-  the officer's questions need them. `Editor/P3MemoryPairDebugMenu.cs` keeps
-  the P3-memory-pair-specific items (playing CS-16A/CS-16B in isolation, and
-  asserting M1's borrowed cast was handed back).
+  the officer's questions need them. Also auto-grants mic consent and starts
+  VAD calibration for the debug jump (editor/play-mode only) — without this a
+  jump straight into P1 leaves the mic never opened, so the "Who are you?
+  Where am I?" prompt can never be satisfied by real speech and
+  `CutsceneId.SpasskyAnswer` never fires. `Editor/P3MemoryPairDebugMenu.cs`
+  keeps the P3-memory-pair-specific items (playing CS-16A/CS-16B in
+  isolation, and asserting M1's borrowed cast was handed back).
 - `Tools ▸ Interrogation ▸ Start Sidecar` in the Unity Editor menu for
   iterating on the Python side without restarting Play mode each time.
   **`Stop Sidecar` doesn't actually stop it** — the launcher spawns

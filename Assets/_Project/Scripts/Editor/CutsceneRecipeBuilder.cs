@@ -246,7 +246,14 @@ namespace FalsePositive.Editor
         {
             CutsceneRecipe[] recipes =
             {
-                Recipe(CutsceneId.Wake, 0f, 0.6f,
+                // Screen-lit rather than the old instant-black form -- this is
+                // what the player actually watches when the drunk post-process
+                // (Rendering/DrunkColorPulseFeature) ramps up as they come to at
+                // the interrogation table, driven by Cutscene/DrunkCutsceneBinder
+                // off this recipe's Started/Finished. See
+                // PhaseDialogueController.EnterP1 for where it's now requested --
+                // it used to be authored with no call site at all.
+                VisibleRecipe(CutsceneId.Wake,
                     Beat("???", "David.", 1.2f),
                     Beat("???", "David.", 1.0f),
                     Beat("???", "David!", 1.0f)),
@@ -268,31 +275,39 @@ namespace FalsePositive.Editor
                 // other three are the forward return (shorter, snappier).
                 Recipe(CutsceneId.FuzzyToNight, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 1.4f)),
-                Recipe(CutsceneId.StandFromChair, 0.2f, 0.4f,
+                // Screen-lit -- CutsceneStage stages this one (chair/actor pose)
+                // while the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.StandFromChair,
                     SfxBeat("chair_creak", 0.6f)),
 
-                Recipe(CutsceneId.RadioClears, 0.2f, 0.3f,
+                VisibleRecipe(CutsceneId.RadioClears,
                     Beat("RADIO", "…a snow storm. Please stay indoors during these times.", 3f,
                         MemoryFlagIds.HeardRadioWarning)),
 
-                Recipe(CutsceneId.SomeoneLeft, 0.3f, 0.3f,
+                // Screen-lit -- CutsceneStage stages this one (door swing) while
+                // the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.SomeoneLeft,
                     SfxBeat("door_latch_close", 1.5f, MemoryFlagIds.SawDoorClose)),
 
                 // Never actually raised by M1NightController.cs (the call-for-Nick
                 // beat is a RequestSpokenPrompt, not a cutscene) — filled anyway so
                 // a future direct call never hits an empty stub.
-                Recipe(CutsceneId.CallForNick, 0.2f, 0.3f,
+                VisibleRecipe(CutsceneId.CallForNick,
                     SfxBeat("wind_gust_roar", 1.8f)),
                 Recipe(CutsceneId.FuzzyToInterrogation, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
                 Recipe(CutsceneId.FuzzyToMorning, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
-                Recipe(CutsceneId.PriyaScreams, 0.3f, 0.5f,
+                // Screen-lit -- CutsceneStage stages this one (actor poses) while
+                // the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.PriyaScreams,
                     Beat("PRIYA", "GUYS! GUYS! HELP! WHAT HAPPENED TO NICK? IVY! AARON! DAVID! GUYS, COME HERE PLEASE!", 4f,
                         MemoryFlagIds.SawBody)),
 
-                Recipe(CutsceneId.TheyComeDown, 0.2f, 0.3f,
+                // Screen-lit -- CutsceneStage walks actors down for this one while
+                // the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.TheyComeDown,
                     SfxBeat("footsteps_stairs", 1.6f)),
 
                 // These three beats used to be fade-to-black+VO like everything

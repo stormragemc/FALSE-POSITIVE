@@ -429,8 +429,12 @@ namespace FalsePositive.Flow
         /// itself, and its own coroutine would stop, halfway through. This
         /// component lives in _Persistent and survives the swap.
         ///
-        /// No fade: §4 asks for a hard cut in and a hard cut back. The scene is
-        /// loaded additively first (invisible — additive loading does not touch
+        /// Both scene swaps now fade to/from black, same shape as
+        /// TransitionRoutine below (one full black frame before the swap, so
+        /// nothing ever pops mid-fade). This used to be a hard cut by design --
+        /// section 4 originally asked for one -- until every scene transition
+        /// was made to fade consistently; a hard cut here would have been the
+        /// one exception left. The scene is loaded additively first (invisible — additive loading does not touch
         /// the scene on screen) so that Activate is an instant swap rather than
         /// a hitch. By P3 the memory scene is normally already loaded from M1,
         /// which makes EnsureLoaded a no-op.</summary>
@@ -442,6 +446,10 @@ namespace FalsePositive.Flow
         private IEnumerator MemoryInterludeRoutine(GamePhase memoryPhase, CutsceneId id, Action onComplete)
         {
             string memoryScene = SceneNameFor(memoryPhase);
+            float fadeDuration = config != null ? config.fadeDurationSeconds : 0.25f;
+
+            if (fader != null) yield return fader.FadeToBlack(fadeDuration);
+            yield return null; // one full frame fully black before swapping, same as TransitionRoutine
 
             if (sceneRouter != null && !string.IsNullOrEmpty(memoryScene))
             {
@@ -450,14 +458,21 @@ namespace FalsePositive.Flow
                 yield return sceneRouter.Activate(memoryScene);
             }
 
+            if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
+
             bool finished = false;
             RequestCutscene(id, () => finished = true);
             while (!finished) yield return null;
+
+            if (fader != null) yield return fader.FadeToBlack(fadeDuration);
+            yield return null;
 
             if (sceneRouter != null && !string.IsNullOrEmpty(interrogationSceneName))
             {
                 yield return sceneRouter.Activate(interrogationSceneName);
             }
+
+            if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
 
             // Invoked only after Interrogation's roots are live again, so a
             // caller that lives in that scene (PhaseDialogueController) is

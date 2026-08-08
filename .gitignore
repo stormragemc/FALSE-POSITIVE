@@ -149,6 +149,9 @@ recordings/
 !Assets/**/*.wav
 !Assets/**/*.mp3
 !docs/assets/**
+!/Artifacts/voice-lines/
+!/Artifacts/voice-lines/*/
+!/Artifacts/voice-lines/**/*.wav
 
 # =============================================================================
 # Editors & OS

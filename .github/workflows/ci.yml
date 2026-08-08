@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-  workflow_dispatch:
 
 # A newer push to the same ref makes the in-flight run irrelevant.
 concurrency:

@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+  workflow_dispatch:
 
 # A newer push to the same ref makes the in-flight run irrelevant.
 concurrency:
@@ -63,3 +65,83 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Deploys only after both gates above are green, so a commit whose tests fail
+  # can never reach Cloud Run. Runs Sidecar/deploy.sh rather than reimplementing
+  # the build: keeping one script means a CI deploy and a laptop deploy produce
+  # byte-identical images, which is the whole point of the git-SHA tagging.
+  deploy:
+    name: Deploy to Cloud Run
+    needs: [sidecar, secret-scan]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      id-token: write # required to mint the OIDC token that GCP trusts
+
+    steps:
+      # deploy.sh calls `git rev-parse --short HEAD` for the image tag, and
+      # `git status` for its dirty check. fetch-depth 0 because the gate below
+      # diffs against the previous head, which a shallow clone would not contain.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Most pushes to main here are Unity art (.fbx/.jpg), which cannot change
+      # the container. Rebuilding a multi-gigabyte torch image for those would
+      # waste ~10 minutes per push, so skip unless the backend actually moved.
+      # A manual dispatch always deploys.
+      - name: Decide whether the backend changed
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch - deploying."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif ! CHANGED="$(git diff --name-only '${{ github.event.before }}' '${{ github.sha }}' 2>/dev/null)"; then
+            # Force-push or a first push: the old head is unreachable, so we
+            # cannot tell what moved. Deploy rather than risk leaving Cloud Run
+            # stale -- a redundant deploy is cheap, a silently stale one is the
+            # exact failure this pipeline exists to prevent.
+            echo "Cannot resolve previous head - deploying to be safe."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif echo "$CHANGED" | grep -qE '^(Sidecar/|\.github/workflows/ci\.yml)'; then
+            echo "Backend files changed - deploying."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No backend changes - skipping deploy."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # deploy.sh's verification step pipes the /turn reply through `python`.
+      # ubuntu-latest ships python3 but not always a bare `python`.
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.deploy == 'true'
+        with:
+          python-version: "3.12"
+
+      # Keyless: GitHub mints a short-lived OIDC token, GCP exchanges it for
+      # credentials scoped to this repo. No service-account JSON is stored.
+      - name: Authenticate to Google Cloud
+        if: steps.gate.outputs.deploy == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: false-positive-504516
+          workload_identity_provider: projects/465469192069/locations/global/workloadIdentityPools/github/providers/github
+          service_account: gh-deployer@false-positive-504516.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        if: steps.gate.outputs.deploy == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Let docker push to Artifact Registry
+        if: steps.gate.outputs.deploy == 'true'
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      # Same script you run locally. It builds, pushes the immutable SHA tag,
+      # deploys by digest, then probes /health and /turn and fails the run if
+      # the live container is still serving the pre-Cabin_v2 persona.
+      - name: Build, push, deploy and verify
+        if: steps.gate.outputs.deploy == 'true'
+        run: bash Sidecar/deploy.sh

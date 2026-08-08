@@ -5,6 +5,24 @@
 # Usage:   ./Sidecar/deploy.sh            # deploy current HEAD
 #          MIN_INSTANCES=0 ./deploy.sh    # allow scale-to-zero (see below)
 #          ALLOW_DIRTY=1 ./deploy.sh      # deploy with uncommitted changes
+#          REGION=asia-southeast1 ./deploy.sh   # deploy nearer the player
+#
+# Moving REGION: measured 8 Aug from Jakarta, round-trip to us-central1 was
+# ~250ms, and because TCP slow-start needs several round trips to open the
+# window for a 300KB upload and a 216KB reply, that RTT is paid many times —
+# ~1.5s of the turn was transport, not work. A region close to the players is
+# the single largest remaining win and needs no code change.
+#
+# It does mint a NEW service URL. After the first deploy to a new region:
+#   1. read the URL this script prints at the end;
+#   2. set it as `sidecarBaseUrl` on the InterrogationConfig asset in Unity;
+#   3. re-run Sidecar/tools/measure_turn_latency.py --url <new-url> to confirm;
+#   4. delete the old service once the new one is verified, or it keeps billing
+#      a warm min-instances container:
+#      gcloud run services delete false-positive-backend --region us-central1
+# Artifact Registry deliberately does NOT move with it — the image is pulled
+# once per cold start, which min-instances 1 makes rare, and a second registry
+# is another thing to keep in sync.
 #
 # Why this exists: the service was deployed for two days against the mutable
 # tag ":v1", so "what is actually running?" was unanswerable — and the running
@@ -17,7 +35,9 @@ set -euo pipefail
 PROJECT="${PROJECT:-false-positive-504516}"
 REGION="${REGION:-us-central1}"
 SERVICE="${SERVICE:-false-positive-backend}"
-REPO="us-central1-docker.pkg.dev/${PROJECT}/false-positive/backend"
+# Pinned to where the repository actually exists, independent of REGION above.
+AR_LOCATION="${AR_LOCATION:-us-central1}"
+REPO="${AR_LOCATION}-docker.pkg.dev/${PROJECT}/false-positive/backend"
 
 # min-instances 1 keeps one container warm. Cold starts on this image take
 # longer than a request timeout (torch + HuBERT load), so scale-to-zero
@@ -25,6 +45,18 @@ REPO="us-central1-docker.pkg.dev/${PROJECT}/false-positive/backend"
 # an always-on instance billed against the $300 credit — set MIN_INSTANCES=0
 # between demos if that matters more than the first-request failure.
 MIN_INSTANCES="${MIN_INSTANCES:-1}"
+
+# Cloud Run throttles a warm instance's CPU to near zero between requests, so
+# the first moments of a turn run while the container is still ramping back up.
+# NO_CPU_THROTTLING=1 keeps the CPU allocated always, which removes that ramp —
+# but it also switches the instance to instance-based billing, i.e. paying for
+# an idle container around the clock instead of only while it works. Opt-in
+# rather than default because that is a real bill against the $300 credit, and
+# worth turning on for a demo day.
+THROTTLE_FLAG="--cpu-throttling"
+if [ "${NO_CPU_THROTTLING:-0}" = "1" ]; then
+  THROTTLE_FLAG="--no-cpu-throttling"
+fi
 
 cd "$(dirname "$0")"
 
@@ -64,6 +96,7 @@ gcloud run deploy "${SERVICE}" \
   --cpu 2 \
   --memory 4Gi \
   --timeout 60 \
+  "${THROTTLE_FLAG}" \
   --labels "git-sha=${SHA//[^a-z0-9_-]/-}" \
   --set-env-vars "GCP_PROJECT=${PROJECT},GCP_LOCATION=global,SIDECAR_MAX_SESSIONS=200" \
   --set-secrets "ELEVENLABS_API_KEY=elevenlabs-api-key:latest,ELEVENLABS_VOICE_ID=elevenlabs-voice-id:latest,FP_CLIENT_KEY=fp-client-key:latest"

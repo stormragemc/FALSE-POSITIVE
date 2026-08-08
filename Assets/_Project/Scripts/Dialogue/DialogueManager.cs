@@ -81,6 +81,18 @@ namespace FalsePositive.Dialogue
         private int _lastSpeechOnsetDelayMs;
         private int _consecutiveTurnFailures;
 
+        // Turn-latency marks. _turnCapturedAt is the instant the recorder handed
+        // over a finished utterance, which is already _turnVadWaitMs after the
+        // player actually stopped talking — both are needed to report the span
+        // the player experiences rather than the one the server can see.
+        private float _turnCapturedAt;
+        private int _turnVadWaitMs;
+
+        /// <summary>Breakdown of the last completed turn. Also published to
+        /// <see cref="TurnLatency.Last"/> so the debug overlay can read it
+        /// without a reference to this component.</summary>
+        public TurnLatency LastTurnLatency { get; private set; }
+
         private OfflineOfficerLine[] _offlineLines;
         private int _offlineIndex;
 
@@ -185,6 +197,13 @@ namespace FalsePositive.Dialogue
             if (!IsBound || IsSuspended) return;
             if (!string.IsNullOrEmpty(sceneInstruction)) QueueSceneInstruction(sceneInstruction);
 
+            // No utterance and therefore no VAD wait, but the marks still have
+            // to be re-stamped: OnTurnSuccess is shared with the spoken path,
+            // and a stale _turnCapturedAt would report this turn's latency as
+            // however long ago the player last finished a sentence.
+            _turnCapturedAt = Time.realtimeSinceStartup;
+            _turnVadWaitMs = 0;
+
             SetState(DialogueState.Uploading);
             _vad.SetGated(true);
             string instruction = _pendingSceneInstruction;
@@ -210,6 +229,11 @@ namespace FalsePositive.Dialogue
         private void OnUtteranceCaptured(float[] samples, int sampleRate)
         {
             if (!IsBound || IsSuspended || State != DialogueState.Listening) return;
+
+            _turnCapturedAt = Time.realtimeSinceStartup;
+            _turnVadWaitMs = _vad != null
+                ? Mathf.RoundToInt(_vad.LastSilenceHeldSeconds * 1000f)
+                : 0;
 
             PlayFiller();
             SetState(DialogueState.Uploading);
@@ -290,6 +314,27 @@ namespace FalsePositive.Dialogue
             OnCopFinishedSpeaking();
         }
 
+        /// <summary>Called once the officer's voice has actually started, which
+        /// is the only moment the wait is genuinely over from the player's side.
+        /// The VAD silence is added back in because it elapsed before the turn
+        /// began: leaving it out would report a number the player never felt.
+        /// </summary>
+        private void RecordTurnLatency(int decodeMs)
+        {
+            var latency = new TurnLatency
+            {
+                vadWaitMs = _turnVadWaitMs,
+                wireMs = _sidecarClient != null ? _sidecarClient.LastWireMs : 0,
+                serverMs = _sidecarClient != null ? _sidecarClient.LastServerMs : 0,
+                decodeMs = decodeMs,
+                totalMs = _turnVadWaitMs
+                    + Mathf.RoundToInt((Time.realtimeSinceStartup - _turnCapturedAt) * 1000f),
+            };
+
+            LastTurnLatency = latency;
+            TurnLatency.Publish(latency);
+        }
+
         private void OnTurnSuccess(SidecarTurnResponse response)
         {
             // The filler clip plays to cover upload/inference latency —
@@ -315,14 +360,17 @@ namespace FalsePositive.Dialogue
                 return;
             }
 
+            float decodeStart = Time.realtimeSinceStartup;
             byte[] pcmBytes = Convert.FromBase64String(response.audio_b64);
             int channels = Mathf.Max(response.audio_channels, 1);
             AudioClip clip = PcmUtility.ToAudioClip(pcmBytes, response.audio_sample_rate, channels, "CopReply");
+            int decodeMs = Mathf.RoundToInt((Time.realtimeSinceStartup - decodeStart) * 1000f);
 
             SetState(DialogueState.Speaking);
             copMouth.Begin(copVoice.Source);
             copVoice.Play(clip);
 
+            RecordTurnLatency(decodeMs);
             TurnCompleted?.Invoke(response);
         }
 

@@ -114,12 +114,18 @@ namespace FalsePositive.UI
             string emotion = hasProsody && !p.reliable
                 ? $"emotion: raw {r.emotion} ({r.emotion_confidence:F2}) [suppressed]"
                 : $"emotion: {r.emotion} ({r.emotion_confidence:F2})";
+            // Two lines on purpose. The server line breaks down total_ms, which
+            // is only the middle of the turn; the client line is what the player
+            // actually waited, and the gap between total= and TOTAL= is the
+            // upload, the download and the silence the VAD held. Reading only
+            // the server line is what made the wait look shorter than it is.
             lastTurnText.text =
                 $"transcript: {r.transcript}\n" +
                 $"{emotion}\n" +
                 $"{affect}\n" +
                 $"reply: {r.reply_text}\n" +
-                $"stt={r.stt_ms}ms ser={r.ser_ms}ms llm={r.llm_ms}ms tts={r.tts_ms}ms total={r.total_ms}ms";
+                $"stt={r.stt_ms}ms ser={r.ser_ms}ms llm={r.llm_ms}ms tts={r.tts_ms}ms total={r.total_ms}ms\n" +
+                $"{TurnLatency.Last}";
         }
 
         private void OnTurnFailed(string error)

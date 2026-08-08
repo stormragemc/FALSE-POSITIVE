@@ -35,6 +35,17 @@ namespace FalsePositive.Net
 
         public bool IsBusy { get; private set; }
 
+        /// <summary>Wall-clock of the last /turn SendWebRequest — upload, server
+        /// work and download together. Measured here because this is the only
+        /// place that sees the request as the player's machine sees it; the
+        /// server's own total_ms cannot include either transfer.</summary>
+        public int LastWireMs { get; private set; }
+
+        /// <summary>total_ms from the last successful /turn, kept alongside
+        /// LastWireMs so the difference between them — the transport cost — is
+        /// available without the caller having to hold on to the response.</summary>
+        public int LastServerMs { get; private set; }
+
         /// <summary>Outcome of a health gate check. /health itself is
         /// deliberately unauthenticated (Sidecar/app.py exempts it), so a
         /// wrong or missing client key still returns 200 there — ServiceHealthy
@@ -264,7 +275,11 @@ namespace FalsePositive.Net
             req.timeout = Mathf.CeilToInt(config.requestTimeoutSeconds);
             ApplyClientKey(req);
 
+            // Realtime rather than Time.time: this must stay honest under a
+            // paused or time-scaled game, and a turn can straddle both.
+            float wireStart = Time.realtimeSinceStartup;
             yield return req.SendWebRequest();
+            LastWireMs = Mathf.RoundToInt((Time.realtimeSinceStartup - wireStart) * 1000f);
 
             IsBusy = false;
 
@@ -316,6 +331,7 @@ namespace FalsePositive.Net
                 yield break;
             }
 
+            LastServerMs = response.total_ms;
             onSuccess?.Invoke(response);
         }
 

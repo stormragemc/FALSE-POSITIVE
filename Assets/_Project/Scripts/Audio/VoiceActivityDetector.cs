@@ -39,6 +39,12 @@ namespace FalsePositive.Audio
 
         public bool IsSpeaking { get; private set; }
         public bool Gated { get; private set; }
+
+        /// <summary>Silence actually held before the last utterance was closed.
+        /// Read by DialogueManager for the turn-latency breakdown: this span is
+        /// pure waiting, it happens before any work starts, and it is invisible
+        /// to the backend's own timings.</summary>
+        public float LastSilenceHeldSeconds { get; private set; }
         public float DisplayRms => Gated ? 0f : mic.CurrentRms;
         public float NoiseFloor => _noiseFloor;
         /// <summary>Live RMS required to begin an utterance. UI uses the same
@@ -129,6 +135,13 @@ namespace FalsePositive.Audio
                 if (_silenceTimer >= config.vadSilenceTimeoutSeconds ||
                     _speakingTimer >= config.vadMaxUtteranceSeconds)
                 {
+                    // Captured before the reset in SetSpeaking. This is the real
+                    // elapsed silence, not config.vadSilenceTimeoutSeconds: the
+                    // timer is checked once per frame and the max-utterance cap
+                    // can end a turn with almost no silence at all, so the two
+                    // are only equal by coincidence. TurnLatency reports it as
+                    // dead time the player waited through.
+                    LastSilenceHeldSeconds = _silenceTimer;
                     SetSpeaking(false);
                 }
             }

@@ -46,8 +46,8 @@ namespace FalsePositive.Core
         public int micTargetSampleRate = 16000;
         public int micRingBufferLengthSeconds = 10;
         public float noiseFloorCalibrationSeconds = 1.0f;
-        public float vadEnterMultiplier = 3.0f;
-        public float vadExitMultiplier = 1.8f;
+        public float vadEnterMultiplier = 2.0f;
+        public float vadExitMultiplier = 1.2f;
         public float vadMinUtteranceSeconds = 0.3f;
         public float vadSilenceTimeoutSeconds = 0.7f;
         public float vadMaxUtteranceSeconds = 20f;

@@ -3,7 +3,9 @@
     "rootNamespace": "FalsePositive.EditorTools",
     "references": [
         "FalsePositive.Runtime",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.Timeline",
+        "uLipSync.Runtime"
     ],
     "includePlatforms": [
         "Editor"

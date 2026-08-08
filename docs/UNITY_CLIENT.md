@@ -64,70 +64,99 @@ One conversational turn, in order:
 5. **TTS**: ElevenLabs synthesizes the reply as PCM audio.
 6. **Playback + lip sync** (Unity) — the reply plays through `CopVoicePlayback`
    while `CopMouthController` drives whichever `ICopMouth` tier is active
-   (currently `JawBoneCopMouth` — see "Cop character" below) off the
-   playback's live amplitude.
+   (currently `BlendShapeCopMouth`, real audio-driven visemes — see "Cop
+   character" below) off the playback.
 
 ## Cop character
 
-`Assets/_Project/Art/cop.glb` is an **Avaturn T1** export. Per Avaturn's own
-docs, T1 avatars *"cannot use face bones or blendshapes to animate the
-face"* — confirmed directly on this file too: 0 morph targets, 0 animation
-clips, no jaw bone, and a fully sealed mouth (no boundary edges at the lips
-at all). None of the three `ICopMouth` tiers this project ships had anything
-to work with out of the box.
+`Assets/_Project/Art/NewCop.glb` is the active model — an **Avaturn T2**
+export (54-joint Mixamo-style skeleton, 73 real morph targets on
+`Head_Mesh` including a full Oculus-viseme set, no jaw bone). Unity 6000.5
+still has no built-in glTF importer (glTFast's importer also has no
+Humanoid Avatar option), so it's staged through Blender the same way the
+original model was: `Tools/blender/rig_newcop.py` bakes a seated rest pose
+and exports `Assets/_Project/Art/NewCop_rigged.fbx`, a normal FBX using
+Unity's usual Humanoid `ModelImporter` path. Unlike the original pass, this
+one ran live through the Blender MCP addon rather than a headless
+`--background` CLI call, and needed none of the jaw-bone/mouth-dimple
+surgery the T1 model required — the mouth is entirely blendshape-driven.
 
-Unity 6000.5 has no built-in glTF importer (and glTFast wasn't installed),
-so `cop.glb` is staged through Blender instead: `Tools/blender/rig_cop.py`
-(headless, `blender --background --python`) adds a `Jaw` bone with
-geometry-measured placement and weighting, pushes the sealed lip-seam region
-back with a dark interior material so a jaw-open reads as a shadowed recess
-rather than stretched skin, bakes a seated pose (hips at the room's 0.45m
-seat height) as the new rest pose, and exports
-`Assets/_Project/Art/cop_rigged.fbx` — a normal FBX with Unity's usual
-Humanoid `ModelImporter` path (the skeleton uses Mixamo-standard bone names
-and auto-maps).
+The original model (`Assets/_Project/Art/cop.glb`/`cop_rigged.fbx`, an
+**Avaturn T1** export — 0 morph targets, no jaw bone, sealed mouth
+topology, needed a hand-added `Jaw` bone and a carved mouth-dimple to
+animate at all) is kept on disk for reference but no longer referenced by
+the scene. See `Assets/_Project/ASSETS_TODO.md` §1 for the full T1 build
+history if you need it (jaw hinge placement, mouth-dimple carve, tear
+thresholds).
 
-In the scene: `Cop` keeps its original `AudioSource`/`CopVoicePlayback`/
-`CopMouthController` components; `cop_rigged` is a child instance of the
-FBX. `CopMouthController.mouthImplementation` points at a `JawBoneCopMouth`
-— amplitude-driven jaw rotation tracking the reply audio's volume, tuned to
-a 10° max open angle. What's actually verified: 10° renders cleanly in
-Blender with proper lighting; a much larger angle (22°) visibly tore the
-sealed mesh in an earlier test. The true tear threshold in between was
-never found (not worth chasing for a 10° runtime value), so don't read
-"10°" as "right at the edge of safe" — it's an angle confirmed to look
-right, with headroom above it that wasn't measured.
+**Mouth / lip sync — real, audio-driven.** `Cop/BlendShapeCopMouth.cs`
+(written earlier, unused until this model existed) wraps `uLipSync` +
+`uLipSyncBlendShape`, both on the `Cop` GameObject.
+`uLipSyncBlendShape.skinnedMeshRenderer` points at `Head_Mesh`; its
+Phoneme→BlendShape table maps `uLipSync-Profile-Sample-Male`'s phoneme set
+(`A/I/U/E/O/-/S`) to this model's `viseme_aa/I/U/E/O/sil/SS` shapes. The
+profile is copied into `Assets/_Project/Config/uLipSyncProfile.asset`
+rather than referenced out of `Library/PackageCache` directly.
+`CopMouthController.mouthImplementation` now points at `BlendShapeCopMouth`
+(the `JawBoneCopMouth` tier is unused — no jaw bone on this rig to drive).
 
-`JawBoneCopMouth.closedLocalEuler`/`openLocalEuler` are offsets from the
-jaw bone's own rest rotation (captured at `Awake`), not absolute values —
-this matters because an FBX-imported bone's rest local rotation is almost
-never identity (this one sits at roughly `(56, 180, 180)` Euler, a Blender
-bone-roll artifact carried through export). One thing this project could
-**not** verify: which sign (`+10°` vs `-10°`) actually opens the jaw
-on-screen in Unity. The Editor's player loop never ticks in this dev
-environment (`Time.frameCount` stays at 1 through a real Play session —
-confirmed via script, not assumed), and `SkinnedMeshRenderer` bone
-deformation (both GPU rendering and `BakeMesh`) depends on that loop
-running at least once, so no scripted render or bake reflects a live jaw
-rotation change here. The Blender-side pose test used `-10°` in the same
-rest-relative convention and rendered a clean opening, but Blender→FBX
-axis conversion can flip a per-bone sign, so that isn't proof either way
-for Unity. **First real Play session, watch the jaw**: if it rotates up
-into the skull instead of down/open, negate `openLocalEuler`'s X value.
-Body animation — breathing, idle head drift, an occasional glance,
-a lean-forward "considering" beat while the sidecar is thinking — is
-procedural (`Cop/CopIdleAnimator.cs`), because the GLB ships zero animation
-clips and Mixamo retargeting needs an interactive login this pipeline
-doesn't have.
+uLipSync only analyzes an `AudioSource` on its own GameObject by default —
+the Cop's own — so **live dialogue turns need no extra wiring**. The one
+gap is `CutsceneId.SpasskyAnswer`'s VO, which plays through `_Persistent`'s
+`CutsceneVoSource`, a different scene's AudioSource: that GameObject now
+also carries a `uLipSyncAudioSource` proxy component, exposed via
+`CutsceneDirector.VoSourceLipSync`, and `CutsceneAnimationDirector` points
+`uLipSync.audioSourceProxy` at it for the cutscene's duration only.
 
-**Upgrading to real visemes**: if the officer is re-exported from
-avaturn.me as a **T2** avatar (mouth hole + ARKit blendshapes/visemes), the
-tier this codebase was originally built around lights up with much less
-Blender work — no jaw bone or mouth-dimple hack needed. `uLipSync` +
-`uLipSyncBlendShape` components already sit on `Cop`, added but inert (no
-profile, no phoneme table, not the active `mouthImplementation`) — see
-`Assets/_Project/ASSETS_TODO.md` for the exact steps to wire them up once a
-T2 file exists.
+**Root-motion sink bug, found and fixed.** Assigning the Animator a real
+`AnimatorController` for the first time (an earlier pass) exposed that
+Unity humanoid prefabs default to `applyRootMotion: 1`; a muscle-only clip
+with no `RootT`/`RootQ` curves then drives the GameObject's own transform
+from the clip's implied per-frame delta — a continuous drift into the
+floor. Fixed by always setting `applyRootMotion = false`, and more
+fundamentally, as of the talking-body rewrite below, **nothing drives this
+Animator's muscles at all any more** — no `RuntimeAnimatorController`, no
+`PlayableDirector` either. `Cop/CopIdleAnimator.cs` and
+`Cop/CopTalkGestureAnimator.cs` both work by writing bone
+`Transform.localRotation` directly, bypassing Mecanim evaluation entirely.
+
+**Head-detach bug, found and fixed.** After the T2 swap, the cop's head
+would teleport ~0.5m and appear to detach from the body the instant any
+mouth blendshape activated. Root cause: `Tools/blender/rig_newcop.py`'s
+seated-pose bake rewrote the mesh Basis to the posed/seated shape but left
+every other shape-key block (the 72 blendshape targets on `Head_Mesh`, plus
+the equivalents on 5 other meshes) in the original *standing* frame — so
+every exported blendshape's delta came out as a rigid translation by the
+full seat-height drop (~0.53m), identical across every vertex, for every
+shape. Fixed by offsetting every shape-key block (including Basis) by the
+same per-vertex displacement the bake applies — exact, since the
+corruption was a pure translation. See `Assets/_Project/ASSETS_TODO.md` §1
+for the full diagnostic (before/after blendshape-delta numbers).
+
+**Talking body — procedural, driven by uLipSync's own volume.**
+`Cop/CopTalkGestureAnimator.cs` writes shoulder/upper-arm/forearm/hand
+`Transform.localRotation` in `LateUpdate` (same mechanism as
+`CopIdleAnimator`, plus a small `Spine1` accent layered on top of its
+breathing curve — script execution order is pinned so
+`CopTalkGestureAnimator` runs after `CopIdleAnimator` each frame). Gesture
+amplitude comes from `uLipSync.result.volume` through an attack/release
+envelope, so the arms rise into a talking sway while he's actually speaking
+and settle back to rest in silence — for **every** dialogue turn, live or
+cutscene, off one signal.
+
+This replaced an earlier Timeline-based pass:
+`Editor/CopAnimationBuilder.cs` used to bake a keyframed `Cop_Talk` clip
+played by a one-track Timeline asset
+(`Art/Timelines/Cutscene_SpasskyAnswer.playable`) only during
+`CutsceneId.SpasskyAnswer`. Retired — it only ever covered that one
+cutscene (every live dialogue turn had a static body), and its scene
+binding went null on every bootstrap re-run since `BuildTimeline`
+recreates the `TrackAsset` each time. `Cutscene/CutsceneAnimationDirector.cs`
+is now scoped to only its cross-scene uLipSync audio-proxy redirect (see
+above) — no `Play()`/`Stop()`, no `CopIdleAnimator` suppression, so idle and
+the talk gesture both run straight through `SpasskyAnswer` uninterrupted.
+`CopAnimationBuilder.cs` and its baked assets are left on disk unreferenced,
+matching this project's convention for the superseded T1 cop assets.
 
 ## Running it
 

@@ -44,7 +44,12 @@ namespace FalsePositive.Cutscene
     /// back — never a Timeline asset. That is a Day-1 scope decision, not a
     /// placeholder: docs/GAME_COMPLETION_PLAN.md §10 explicitly sanctions this
     /// as the shipped form for every cutscene, and the honesty ledger commits
-    /// to saying so.
+    /// to saying so. This class's own job (subtitles, VO, fades) still never
+    /// touches Timeline. The one deliberate exception is character animation:
+    /// Scripts/Cutscene/CutsceneAnimationDirector.cs listens to this class's
+    /// Started/Finished events and plays a Timeline clip on the cop during
+    /// SpasskyAnswer — a second, independent system layered on top, not a
+    /// reversal of this one's scope.
     ///
     /// Deliberately reaches only same-scene _Persistent services (fader,
     /// subtitles, its own VO AudioSource) — never a camera or object in
@@ -61,10 +66,19 @@ namespace FalsePositive.Cutscene
         [SerializeField] private ScreenFader fader;
         [SerializeField] private SubtitleUI subtitles;
         [SerializeField] private AudioSource voSource;
+        [SerializeField] private uLipSync.uLipSyncAudioSource voSourceLipSync;
         [SerializeField] private CutsceneRecipe[] recipes = Array.Empty<CutsceneRecipe>();
 
         public bool IsPlaying { get; private set; }
         public event Action<CutsceneId> Finished;
+
+        /// <summary>Lets Cutscene.CutsceneAnimationDirector point the Cop's
+        /// uLipSync at this beat's actual VO — see that class for why:
+        /// uLipSync only analyzes an AudioSource living on its own
+        /// GameObject by default, and this cutscene's VO plays through
+        /// voSource here in _Persistent, not the Cop's own AudioSource in
+        /// whichever scene is active.</summary>
+        public uLipSync.uLipSyncAudioSource VoSourceLipSync => voSourceLipSync;
 
         /// <summary>
         /// Fires once the screen is fully faded to black, before any beats

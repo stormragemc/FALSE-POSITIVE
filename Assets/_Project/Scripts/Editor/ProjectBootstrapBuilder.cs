@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using FalsePositive.Audio;
+using FalsePositive.Cop;
 using FalsePositive.Core;
 using FalsePositive.Cutscene;
 using FalsePositive.Dialogue;
@@ -14,10 +15,15 @@ using FalsePositive.Player;
 using FalsePositive.UI;
 using FalsePositive.Voice;
 using UnityEditor;
+using UnityEditor.Animations;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
+using UnityEngine.Timeline;
 using UnityEngine.UI;
+using ULS = uLipSync;
 
 namespace FalsePositive.Editor
 {
@@ -287,10 +293,18 @@ namespace FalsePositive.Editor
             GameObject voSourceGo = new GameObject("CutsceneVoSource", typeof(AudioSource));
             voSourceGo.transform.SetParent(cutsceneGo.transform, false);
             AudioSource cutsceneVoSource = voSourceGo.GetComponent<AudioSource>();
+            // uLipSyncAudioSource ([RequireComponent(typeof(AudioSource))]) lets
+            // uLipSync.audioSourceProxy analyze THIS AudioSource's playback
+            // instead of only the GameObject its own uLipSync component lives
+            // on — see Cutscene.CutsceneAnimationDirector, which points the
+            // Cop's uLipSync at this during CutsceneId.SpasskyAnswer so the
+            // mouth syncs to the real cutscene VO, not just live dialogue turns.
+            ULS.uLipSyncAudioSource cutsceneVoLipSync = voSourceGo.AddComponent<ULS.uLipSyncAudioSource>();
             CutsceneDirector cutsceneDirector = cutsceneGo.AddComponent<CutsceneDirector>();
             SetField(cutsceneDirector, "fader", fader);
             SetField(cutsceneDirector, "subtitles", subtitleUi);
             SetField(cutsceneDirector, "voSource", cutsceneVoSource);
+            SetField(cutsceneDirector, "voSourceLipSync", cutsceneVoLipSync);
 
             // EventSystem — the project uses the new Input System exclusively
             // (Active Input Handling = Input System Package), so this must be
@@ -707,9 +721,369 @@ namespace FalsePositive.Editor
             SetField(phaseController, "binder", binder);
             SetField(phaseController, "offlineScript", offlineScript);
 
+            WireCopModel();
+            WireAnimationDirector();
+
             EditorSceneManager.MarkSceneDirty(scene);
             SaveScene(scene, InterrogationScenePath);
             Debug.Log("[ProjectBootstrapBuilder] Interrogation.unity fixed up.");
+        }
+
+        /// <summary>Verification helper — logs the cross-scene uLipSync
+        /// proxy wiring (CutsceneDirector.VoSourceLipSync, CutsceneVoSource's
+        /// uLipSyncAudioSource, CutsceneAnimationDirector.lipSync). Not part
+        /// of the bootstrap pipeline; same rationale as
+        /// LogCopModelWiringDiagnostics.</summary>
+        public static void LogCutsceneLipSyncWiringDiagnostics()
+        {
+            Scene persistent = EditorSceneManager.OpenScene(PersistentScenePath, OpenSceneMode.Single);
+            GameObject cutsceneGo = GameObject.Find("CutsceneDirector");
+            CutsceneDirector director = cutsceneGo.GetComponent<CutsceneDirector>();
+            Debug.Log($"[Diag] CutsceneDirector.VoSourceLipSync: {(director.VoSourceLipSync == null ? "NULL" : director.VoSourceLipSync.gameObject.name)}");
+
+            GameObject voSourceGo = GameObject.Find("CutsceneVoSource");
+            ULS.uLipSyncAudioSource proxy = voSourceGo.GetComponent<ULS.uLipSyncAudioSource>();
+            Debug.Log($"[Diag] CutsceneVoSource has uLipSyncAudioSource: {proxy != null}");
+
+            Scene interrogation = EditorSceneManager.OpenScene(InterrogationScenePath, OpenSceneMode.Single);
+            GameObject animGo = GameObject.Find("AnimationDirector");
+            CutsceneAnimationDirector animDir = animGo.GetComponent<CutsceneAnimationDirector>();
+            SerializedObject so = new SerializedObject(animDir);
+            SerializedProperty lipSyncProp = so.FindProperty("lipSync");
+            Debug.Log($"[Diag] CutsceneAnimationDirector.lipSync: {(lipSyncProp.objectReferenceValue == null ? "NULL" : lipSyncProp.objectReferenceValue.name)}");
+            SerializedProperty jawProp = so.FindProperty("jawMouth");
+            Debug.Log($"[Diag] stale jawMouth field still present: {jawProp != null}");
+        }
+
+        /// <summary>Verification helper — logs the cop model wiring state.
+        /// Not part of the bootstrap pipeline; exists so RunCommand-driven
+        /// checks don't need a direct uLipSync assembly reference of their
+        /// own (the ephemeral script-compile context used by that tool
+        /// doesn't have one).</summary>
+        public static void LogCopModelWiringDiagnostics()
+        {
+            GameObject cop = GameObject.Find("Cop");
+            if (cop == null) { Debug.LogWarning("[Diag] No Cop GameObject."); return; }
+
+            for (int i = 0; i < cop.transform.childCount; i++)
+            {
+                Debug.Log($"[Diag] Cop child[{i}] = {cop.transform.GetChild(i).name}");
+            }
+
+            Animator animator = cop.GetComponentInChildren<Animator>();
+            Debug.Log($"[Diag] Animator: isHuman={(animator.avatar != null && animator.avatar.isHuman)}, " +
+                $"applyRootMotion={animator.applyRootMotion}, " +
+                $"controller={(animator.runtimeAnimatorController == null ? "null" : animator.runtimeAnimatorController.name)}");
+
+            CopIdleAnimator idle = cop.GetComponent<CopIdleAnimator>();
+            Debug.Log($"[Diag] CopIdleAnimator present: {idle != null}");
+
+            CopTalkGestureAnimator gesture = cop.GetComponent<CopTalkGestureAnimator>();
+            Debug.Log($"[Diag] CopTalkGestureAnimator present: {gesture != null}");
+            if (gesture != null)
+            {
+                SerializedObject gso = new SerializedObject(gesture);
+                foreach (string f in new[] { "leftArm", "leftForeArm", "leftHand", "rightArm", "rightForeArm", "rightHand", "spine1", "lipSync" })
+                {
+                    SerializedProperty p = gso.FindProperty(f);
+                    Debug.Log($"[Diag]   gesture.{f} = {(p.objectReferenceValue == null ? "NULL" : p.objectReferenceValue.name)}");
+                }
+                if (idle != null)
+                {
+                    MonoScript idleScript = MonoScript.FromMonoBehaviour(idle);
+                    MonoScript gestureScript = MonoScript.FromMonoBehaviour(gesture);
+                    Debug.Log($"[Diag] Execution order: CopIdleAnimator={MonoImporter.GetExecutionOrder(idleScript)} " +
+                        $"CopTalkGestureAnimator={MonoImporter.GetExecutionOrder(gestureScript)}");
+                }
+            }
+
+            GameObject animGoCheck = GameObject.Find("AnimationDirector");
+            if (animGoCheck != null)
+            {
+                Debug.Log("[Diag] AnimationDirector components: " +
+                    string.Join(", ", animGoCheck.GetComponents<Component>().Select(c => c == null ? "MISSING" : c.GetType().Name)));
+            }
+
+            BlendShapeCopMouth bsMouth = cop.GetComponent<BlendShapeCopMouth>();
+            Debug.Log($"[Diag] BlendShapeCopMouth present: {bsMouth != null}");
+
+            CopMouthController mouthController = cop.GetComponent<CopMouthController>();
+            Debug.Log($"[Diag] CopMouthController present: {mouthController != null}");
+
+            ULS.uLipSync lipSync = cop.GetComponent<ULS.uLipSync>();
+            ULS.uLipSyncBlendShape blendShape = cop.GetComponent<ULS.uLipSyncBlendShape>();
+            Debug.Log($"[Diag] lipSync found: {lipSync != null}, blendShape found: {blendShape != null}");
+
+            if (lipSync != null)
+            {
+                Debug.Log($"[Diag] uLipSync.profile: {(lipSync.profile == null ? "NULL" : lipSync.profile.name)}");
+                Debug.Log($"[Diag] onLipSyncUpdate persistent listener count: {lipSync.onLipSyncUpdate.GetPersistentEventCount()}");
+            }
+
+            if (blendShape != null)
+            {
+                Debug.Log($"[Diag] uLipSyncBlendShape.skinnedMeshRenderer: {(blendShape.skinnedMeshRenderer == null ? "NULL" : blendShape.skinnedMeshRenderer.name)}");
+                Debug.Log($"[Diag] blendShapes.Count: {blendShape.blendShapes.Count}");
+                foreach (var bs in blendShape.blendShapes)
+                {
+                    Debug.Log($"[Diag]   phoneme={bs.phoneme} index={bs.index}");
+                }
+            }
+        }
+
+        /// <summary>Swaps the interrogation cop's model from the old Avaturn T1
+        /// export (cop_rigged.fbx, jaw-bone + mouth-dimple surgery, no morph
+        /// targets) to the new Avaturn T2 export (NewCop_rigged.fbx, built by
+        /// Tools/blender/rig_newcop.py — 73 real morph targets on Head_Mesh
+        /// including a full Oculus-viseme set, no jaw bone at all). Runs
+        /// BEFORE WireAnimationDirector so that method's own
+        /// cop.GetComponentInChildren&lt;Animator&gt;() picks up the new rig.
+        /// Non-destructive: cop_rigged.fbx/cop.glb and JawBoneCopMouth are
+        /// left on disk, just no longer referenced from the scene.</summary>
+        private static void WireCopModel()
+        {
+            GameObject cop = GameObject.Find("Cop");
+            if (cop == null)
+            {
+                Debug.LogWarning("[ProjectBootstrapBuilder] No 'Cop' GameObject — skipping cop model swap.");
+                return;
+            }
+
+            Transform oldModel = cop.transform.Find("cop_rigged");
+            if (oldModel != null) UnityEngine.Object.DestroyImmediate(oldModel.gameObject);
+
+            Transform newModelTransform = cop.transform.Find("NewCop_rigged");
+            GameObject newModel;
+            if (newModelTransform == null)
+            {
+                GameObject newModelSource = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Art/NewCop_rigged.fbx");
+                if (newModelSource == null)
+                {
+                    Debug.LogWarning("[ProjectBootstrapBuilder] NewCop_rigged.fbx not found — run Tools/blender/rig_newcop.py first.");
+                    return;
+                }
+                newModel = (GameObject)PrefabUtility.InstantiatePrefab(newModelSource, cop.transform);
+                newModel.transform.localPosition = Vector3.zero;
+                newModel.transform.localRotation = Quaternion.identity;
+                newModel.transform.localScale = Vector3.one;
+            }
+            else
+            {
+                newModel = newModelTransform.gameObject;
+            }
+
+            // Bone re-point for CopIdleAnimator — same convention as the old
+            // rig (spine/spine1/neck/head; Spine2 intentionally skipped),
+            // just targeting the new rig's identically-named bones.
+            Transform[] allChildren = newModel.GetComponentsInChildren<Transform>(true);
+            Transform FindBone(string name)
+            {
+                foreach (Transform t in allChildren)
+                {
+                    if (t.name == name) return t;
+                }
+                return null;
+            }
+
+            CopIdleAnimator idleAnimator = cop.GetComponent<CopIdleAnimator>();
+            if (idleAnimator != null)
+            {
+                SetField(idleAnimator, "spine", FindBone("Spine"));
+                SetField(idleAnimator, "spine1", FindBone("Spine1"));
+                SetField(idleAnimator, "neck", FindBone("Neck"));
+                SetField(idleAnimator, "head", FindBone("Head"));
+            }
+
+            Animator copAnimator = newModel.GetComponentInChildren<Animator>();
+            if (copAnimator != null)
+            {
+                copAnimator.applyRootMotion = false;
+            }
+
+            // Talking-with-hands body gesture — see CopTalkGestureAnimator's
+            // class doc for why this replaced a baked Timeline clip. Bones
+            // wired via Animator.GetBoneTransform (this rig's own Humanoid
+            // avatar mapping), not FindBone-by-name — arm/hand bones aren't
+            // in CopIdleAnimator's existing FindBone set above and
+            // GetBoneTransform is the more robust source of truth for a
+            // Humanoid rig regardless of the underlying bone names.
+            CopTalkGestureAnimator gesture = cop.GetComponent<CopTalkGestureAnimator>();
+            if (gesture == null) gesture = cop.AddComponent<CopTalkGestureAnimator>();
+            if (copAnimator != null)
+            {
+                SetField(gesture, "leftArm", copAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm));
+                SetField(gesture, "leftForeArm", copAnimator.GetBoneTransform(HumanBodyBones.LeftLowerArm));
+                SetField(gesture, "leftHand", copAnimator.GetBoneTransform(HumanBodyBones.LeftHand));
+                SetField(gesture, "rightArm", copAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm));
+                SetField(gesture, "rightForeArm", copAnimator.GetBoneTransform(HumanBodyBones.RightLowerArm));
+                SetField(gesture, "rightHand", copAnimator.GetBoneTransform(HumanBodyBones.RightHand));
+            }
+            SetField(gesture, "spine1", FindBone("Spine1"));
+            SetField(gesture, "lipSync", cop.GetComponent<ULS.uLipSync>());
+
+            // CopTalkGestureAnimator's spine1 accent is additive on top of
+            // whatever CopIdleAnimator's breathing curve wrote to spine1
+            // THIS FRAME (see that class's LateUpdate comment) — both write
+            // in LateUpdate, so this only composes correctly if
+            // CopTalkGestureAnimator's LateUpdate runs after
+            // CopIdleAnimator's. Unity's default same-phase execution order
+            // is otherwise unspecified, so pin it explicitly rather than
+            // rely on incidental component-add order.
+            MonoScript idleScript = idleAnimator != null ? MonoScript.FromMonoBehaviour(idleAnimator) : null;
+            MonoScript gestureScript = MonoScript.FromMonoBehaviour(gesture);
+            if (idleScript != null && gestureScript != null)
+            {
+                int idleOrder = MonoImporter.GetExecutionOrder(idleScript);
+                MonoImporter.SetExecutionOrder(gestureScript, idleOrder + 1);
+            }
+
+            // Mouth: this rig has no jaw bone at all (see class doc) — switch
+            // from the jaw-bone tier to the real blendshape tier.
+            // BlendShapeCopMouth already exists (Scripts/Cop/BlendShapeCopMouth.cs)
+            // and wraps uLipSync/uLipSyncBlendShape, both already present on
+            // Cop but previously unconfigured.
+            BlendShapeCopMouth blendMouth = cop.GetComponent<BlendShapeCopMouth>();
+            if (blendMouth == null) blendMouth = cop.AddComponent<BlendShapeCopMouth>();
+
+            ULS.uLipSync lipSync = cop.GetComponent<ULS.uLipSync>();
+            ULS.uLipSyncBlendShape blendShape = cop.GetComponent<ULS.uLipSyncBlendShape>();
+            SetField(blendMouth, "lipSync", lipSync);
+            SetField(blendMouth, "blendShape", blendShape);
+
+            CopMouthController mouthController = cop.GetComponent<CopMouthController>();
+            if (mouthController != null)
+            {
+                SetField(mouthController, "mouthImplementation", blendMouth);
+            }
+
+            SkinnedMeshRenderer headRenderer = null;
+            foreach (SkinnedMeshRenderer smr in newModel.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr.gameObject.name == "Head_Mesh") { headRenderer = smr; break; }
+            }
+            if (blendShape != null && headRenderer != null)
+            {
+                blendShape.skinnedMeshRenderer = headRenderer;
+                blendShape.blendShapes.Clear();
+                // uLipSync-Profile-Sample-Male's own phoneme set (A, I, U, E,
+                // O, '-', S — read directly off the .asset, not guessed)
+                // mapped to the closest Oculus-viseme shapes this T2 model
+                // ships. AddBlendShape looks up the blend shape index itself.
+                blendShape.AddBlendShape("A", "viseme_aa");
+                blendShape.AddBlendShape("I", "viseme_I");
+                blendShape.AddBlendShape("U", "viseme_U");
+                blendShape.AddBlendShape("E", "viseme_E");
+                blendShape.AddBlendShape("O", "viseme_O");
+                blendShape.AddBlendShape("-", "viseme_sil");
+                blendShape.AddBlendShape("S", "viseme_SS");
+                EditorUtility.SetDirty(blendShape);
+            }
+
+            // Profile: copied into the project rather than referenced
+            // straight out of PackageCache, which can be regenerated/moved.
+            const string profileDest = "Assets/_Project/Config/uLipSyncProfile.asset";
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(profileDest) == null)
+            {
+                const string profileSource = "Packages/com.hecomi.ulipsync/Assets/Profiles/uLipSync-Profile-Sample-Male.asset";
+                AssetDatabase.CopyAsset(profileSource, profileDest);
+            }
+            ULS.Profile profile = AssetDatabase.LoadAssetAtPath<ULS.Profile>(profileDest);
+            if (lipSync != null && profile != null)
+            {
+                lipSync.profile = profile;
+                EditorUtility.SetDirty(lipSync);
+            }
+
+            // Persistent listener, not just Begin()-time: nothing calls
+            // CopMouthController.Begin() during a cutscene (only DialogueManager
+            // calls it, for live turns), so without this the blendshapes would
+            // never move for CutsceneId.SpasskyAnswer no matter how correctly
+            // the audio is routed (see CutsceneAnimationDirector). Persistent/
+            // always-on covers both paths uniformly with one wiring.
+            //
+            // AddPersistentListener always APPENDS — it does not dedupe — so
+            // re-running this step without first clearing would silently
+            // accumulate a duplicate listener (same delegate called N times)
+            // on every bootstrap run. Clear to zero first for idempotency,
+            // matching every other builder in this file/CopAnimationBuilder's
+            // own clear-then-rewrite convention.
+            if (lipSync != null && blendShape != null)
+            {
+                while (lipSync.onLipSyncUpdate.GetPersistentEventCount() > 0)
+                {
+                    UnityEventTools.RemovePersistentListener(lipSync.onLipSyncUpdate, 0);
+                }
+                UnityEventTools.AddPersistentListener(lipSync.onLipSyncUpdate, blendShape.OnLipSyncUpdate);
+                EditorUtility.SetDirty(lipSync);
+            }
+        }
+
+        /// <summary>Creates/refreshes the AnimationDirector GameObject —
+        /// now scoped to only what CutsceneAnimationDirector still does:
+        /// redirect uLipSync's audio analysis to CutsceneId.SpasskyAnswer's
+        /// own VO for that cutscene's duration (see that class's doc for
+        /// why a cross-scene proxy redirect is still needed). It no longer
+        /// plays a Timeline clip — see class doc for why (the body is now
+        /// driven by CopTalkGestureAnimator, wired in WireCopModel, off
+        /// uLipSync's own volume, uniformly for live dialogue and cutscenes
+        /// alike, not just this one cutscene). CopAnimationBuilder's Cop_Talk
+        /// clip and Cutscene_SpasskyAnswer.playable are left on disk,
+        /// unreferenced — matching this project's convention for superseded
+        /// assets (see the T1 cop model) — so this method deliberately does
+        /// NOT call CopAnimationBuilder.EnsureBuilt() any more.
+        /// Idempotent, same GameObject.Find-or-create pattern as the rest of
+        /// this method.</summary>
+        private static void WireAnimationDirector()
+        {
+            GameObject cop = GameObject.Find("Cop");
+            if (cop == null)
+            {
+                Debug.LogWarning("[ProjectBootstrapBuilder] No 'Cop' GameObject — skipping AnimationDirector wiring.");
+                return;
+            }
+
+            // Deliberately NO runtimeAnimatorController assigned, and no
+            // PlayableDirector driving this Animator any more either — see
+            // ASSETS_TODO.md #2 for the sink bug a permanent controller
+            // caused, and this method's own class doc for why the Timeline
+            // path was retired on top of that. Nothing drives this
+            // Animator's muscles at all now; CopIdleAnimator and
+            // CopTalkGestureAnimator both work by writing bone
+            // Transform.localRotation directly, bypassing Mecanim
+            // evaluation entirely, which is what keeps this immune to the
+            // root-motion/sink class of bug regardless of clip authoring.
+            Animator copAnimator = cop.GetComponentInChildren<Animator>();
+            if (copAnimator != null)
+            {
+                copAnimator.applyRootMotion = false;
+                // Explicit null, not just "don't assign" — a stale prior-
+                // session save may have persisted a controller onto this
+                // Animator, and merely no longer writing it here would leave
+                // that stale reference in place across a re-run of this step.
+                copAnimator.runtimeAnimatorController = null;
+            }
+
+            // NOTE: deliberately NOT using `x ?? y` for these UnityEngine.Object
+            // gets/adds — GetComponent<T>() ?? AddComponent<T>() was confirmed
+            // (empirically, in this environment) to silently discard the
+            // AddComponent side even when GetComponent returned a genuine
+            // null, leaving `animDir` null. Explicit if-null checks below,
+            // matching CabinAnimationBuilder's LoadOrCreateClip style
+            // elsewhere in this codebase.
+            GameObject animGo = GameObject.Find("AnimationDirector");
+            if (animGo == null) animGo = new GameObject("AnimationDirector");
+
+            // A stale prior-session save may still carry the PlayableDirector
+            // this GameObject used to have when it played a Timeline clip —
+            // remove it so re-running this step actually converges instead
+            // of leaving an inert, unreferenced component behind.
+            PlayableDirector stalePlayableDirector = animGo.GetComponent<PlayableDirector>();
+            if (stalePlayableDirector != null) UnityEngine.Object.DestroyImmediate(stalePlayableDirector);
+
+            CutsceneAnimationDirector animDir = animGo.GetComponent<CutsceneAnimationDirector>();
+            if (animDir == null) animDir = animGo.AddComponent<CutsceneAnimationDirector>();
+            SetField(animDir, "cutsceneId", CutsceneId.SpasskyAnswer);
+            SetField(animDir, "lipSync", cop.GetComponent<ULS.uLipSync>());
         }
 
         // ------------------------------------------------------------------

@@ -74,6 +74,33 @@ namespace FalsePositive.Editor
         [MenuItem("Tools/False Positive/Bootstrap/T04b - Build Memory_CabinMorning (Cabin_v2)")]
         public static void BuildMorning() => BuildScene(MorningScenePath, isMorning: true);
 
+        /// <summary>
+        /// Refreshes just the fireplace fire on the already-built, already-
+        /// dressed-and-wired Memory_CabinNight — unlike T04a, does not touch
+        /// anything else in the scene, so MemorySceneDressing (8a) and
+        /// MemorySceneWiring (9a) output survives.
+        /// </summary>
+        [MenuItem("Tools/False Positive/Bootstrap/T04c - Rebuild Cabin Fire")]
+        public static void RebuildCabinFire()
+        {
+            Scene scene = EditorSceneManager.OpenScene(NightScenePath, OpenSceneMode.Single);
+            GameObject cabin = GameObject.Find("Cabin_v2");
+            Transform fireplace = cabin != null ? cabin.transform.Find("BO_Fireplace") : null;
+            if (fireplace == null)
+            {
+                Debug.LogError("[MemorySceneBuilderV2] Cabin_v2/BO_Fireplace not found in " +
+                    $"{NightScenePath} — run T04a first.");
+                return;
+            }
+
+            BuildFireplaceFire(fireplace);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, NightScenePath);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[MemorySceneBuilderV2] Cabin fire rebuilt.");
+        }
+
         private static void BuildScene(string path, bool isMorning)
         {
             Scene scene = OpenOrCreateEmptyScene(path);
@@ -204,26 +231,222 @@ namespace FalsePositive.Editor
             // exactly as the teaser scene did.
             GameObject cabin = GameObject.Find("Cabin_v2");
             Transform fireplace = cabin != null ? cabin.transform.Find("BO_Fireplace") : null;
-            if (fireplace != null)
-            {
-                GameObject fireLightGo = NewChild(fireplace, "Firelight");
-                fireLightGo.transform.localPosition = new Vector3(0f, 0.4f, -0.3f);
-                Light fireLight = fireLightGo.AddComponent<Light>();
-                fireLight.type = LightType.Point;
-                fireLight.color = new Color(1f, 0.55f, 0.22f);
-                fireLight.intensity = 3.2f;
-                fireLight.range = 6f;
-
-                CabinFireFlicker flicker = fireplace.gameObject.GetComponent<CabinFireFlicker>();
-                if (flicker == null) flicker = fireplace.gameObject.AddComponent<CabinFireFlicker>();
-                flicker.Configure(new[] { fireLight });
-
-                AddLoopingAudio(fireplace.gameObject, "fire_crackle_loop", volume: 0.6f);
-            }
+            BuildFireplaceFire(fireplace);
 
             AddLoopingAudio(root.gameObject, "interior_wind_loop", volume: 0.25f, spatial: false);
 
             return door;
+        }
+
+        private const string FireMaterialPath = "Assets/_Project/CabinNight/Materials/FireFlame.mat";
+
+        /// <summary>
+        /// Firelight + visible flame/embers on a BO_Fireplace transform. Also
+        /// called standalone from RebuildCabinFire (T04c) so the fire can be
+        /// refreshed without a full, dressing-and-wiring-destroying T04a
+        /// rebuild — safe to re-run: strips its own previous output first.
+        /// </summary>
+        public static void BuildFireplaceFire(Transform fireplace)
+        {
+            if (fireplace == null)
+            {
+                Debug.LogWarning("[MemorySceneBuilderV2] BO_Fireplace not found — no fire built.");
+                return;
+            }
+
+            Transform existingLight = fireplace.Find("Firelight");
+            if (existingLight != null) UnityEngine.Object.DestroyImmediate(existingLight.gameObject);
+            Transform existingVfx = fireplace.Find("FireVFX");
+            if (existingVfx != null) UnityEngine.Object.DestroyImmediate(existingVfx.gameObject);
+            // AddLoopingAudio does an unconditional AddComponent<AudioSource>
+            // on the fireplace itself (not a child), so a re-run without this
+            // would stack a second looping crackle source on top of the first.
+            // LoopOnEnable requires AudioSource ([RequireComponent]), so it
+            // must be destroyed first or Unity refuses to remove the source.
+            // GetComponentS (plural): a failed destroy on an earlier run
+            // leaves duplicates that GetComponent (singular) would only
+            // half-clean, so sweep every instance rather than just the first.
+            foreach (FalsePositive.Audio.LoopOnEnable loop in fireplace.GetComponents<FalsePositive.Audio.LoopOnEnable>())
+            {
+                UnityEngine.Object.DestroyImmediate(loop);
+            }
+            foreach (AudioSource audio in fireplace.GetComponents<AudioSource>())
+            {
+                UnityEngine.Object.DestroyImmediate(audio);
+            }
+
+            GameObject fireLightGo = NewChild(fireplace, "Firelight");
+            fireLightGo.transform.localPosition = new Vector3(0f, 0.4f, -0.3f);
+            Light fireLight = fireLightGo.AddComponent<Light>();
+            fireLight.type = LightType.Point;
+            fireLight.color = new Color(1f, 0.55f, 0.22f);
+            fireLight.intensity = 4.5f;
+            fireLight.range = 7.5f;
+            fireLight.shadows = LightShadows.Soft;
+            fireLight.shadowStrength = 0.8f;
+
+            CabinFireFlicker flicker = fireplace.gameObject.GetComponent<CabinFireFlicker>();
+            if (flicker == null) flicker = fireplace.gameObject.AddComponent<CabinFireFlicker>();
+            flicker.Configure(new[] { fireLight });
+
+            AddLoopingAudio(fireplace.gameObject, "fire_crackle_loop", volume: 0.6f);
+
+            BuildFireVfx(fireplace);
+        }
+
+        private static void BuildFireVfx(Transform fireplace)
+        {
+            GameObject vfxRoot = NewChild(fireplace, "FireVFX");
+            vfxRoot.transform.localPosition = new Vector3(0f, 0.25f, -0.3f);
+
+            Material flameMaterial = LoadOrCreateFireMaterial();
+
+            GameObject flameGo = NewChild(vfxRoot.transform, "Flame");
+            ParticleSystem flamePs = flameGo.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule flameMain = flamePs.main;
+            flameMain.loop = true;
+            flameMain.startLifetime = 0.6f;
+            flameMain.startSpeed = 0.9f;
+            flameMain.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.28f);
+            flameMain.maxParticles = 100;
+            flameMain.startColor = new Color(1f, 0.6f, 0.2f);
+            flameMain.simulationSpace = ParticleSystemSimulationSpace.Local;
+
+            ParticleSystem.EmissionModule flameEmission = flamePs.emission;
+            flameEmission.rateOverTime = 40f;
+
+            ParticleSystem.ShapeModule flameShape = flamePs.shape;
+            flameShape.shapeType = ParticleSystemShapeType.Cone;
+            flameShape.angle = 12f;
+            flameShape.radius = 0.12f;
+
+            ParticleSystem.VelocityOverLifetimeModule flameVelocity = flamePs.velocityOverLifetime;
+            flameVelocity.enabled = true;
+            flameVelocity.space = ParticleSystemSimulationSpace.Local;
+            flameVelocity.y = new ParticleSystem.MinMaxCurve(0.4f, 0.9f);
+
+            ParticleSystem.SizeOverLifetimeModule flameSize = flamePs.sizeOverLifetime;
+            flameSize.enabled = true;
+            flameSize.size = new ParticleSystem.MinMaxCurve(1f, ShrinkToZeroCurve());
+
+            ParticleSystem.ColorOverLifetimeModule flameColor = flamePs.colorOverLifetime;
+            flameColor.enabled = true;
+            flameColor.color = FlameGradient();
+
+            ParticleSystemRenderer flameRenderer = flamePs.GetComponent<ParticleSystemRenderer>();
+            flameRenderer.sharedMaterial = flameMaterial;
+            flameRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+
+            GameObject embersGo = NewChild(vfxRoot.transform, "Embers");
+            ParticleSystem embersPs = embersGo.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule embersMain = embersPs.main;
+            embersMain.loop = true;
+            embersMain.startLifetime = 2f;
+            embersMain.startSpeed = 0.5f;
+            embersMain.startSize = new ParticleSystem.MinMaxCurve(0.015f, 0.03f);
+            embersMain.maxParticles = 40;
+            embersMain.startColor = new Color(1f, 0.5f, 0.15f);
+            embersMain.simulationSpace = ParticleSystemSimulationSpace.Local;
+
+            ParticleSystem.EmissionModule embersEmission = embersPs.emission;
+            embersEmission.rateOverTime = 6f;
+
+            ParticleSystem.ShapeModule embersShape = embersPs.shape;
+            embersShape.shapeType = ParticleSystemShapeType.Cone;
+            embersShape.angle = 10f;
+            embersShape.radius = 0.1f;
+
+            ParticleSystem.VelocityOverLifetimeModule embersVelocity = embersPs.velocityOverLifetime;
+            embersVelocity.enabled = true;
+            embersVelocity.space = ParticleSystemSimulationSpace.Local;
+            embersVelocity.y = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
+
+            ParticleSystem.NoiseModule embersNoise = embersPs.noise;
+            embersNoise.enabled = true;
+            embersNoise.strength = 0.3f;
+            embersNoise.frequency = 0.5f;
+
+            ParticleSystem.ColorOverLifetimeModule embersColor = embersPs.colorOverLifetime;
+            embersColor.enabled = true;
+            embersColor.color = EmberGradient();
+
+            ParticleSystemRenderer embersRenderer = embersPs.GetComponent<ParticleSystemRenderer>();
+            embersRenderer.sharedMaterial = flameMaterial;
+            embersRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+        }
+
+        private static AnimationCurve ShrinkToZeroCurve() =>
+            new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+
+        private static Gradient FlameGradient()
+        {
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(1f, 0.95f, 0.6f), 0f),
+                    new GradientColorKey(new Color(1f, 0.45f, 0.1f), 0.5f),
+                    new GradientColorKey(new Color(0.4f, 0.05f, 0f), 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.9f, 0f),
+                    new GradientAlphaKey(0.7f, 0.6f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+            return gradient;
+        }
+
+        private static Gradient EmberGradient()
+        {
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(1f, 0.6f, 0.2f), 0f),
+                    new GradientColorKey(new Color(0.6f, 0.1f, 0.02f), 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(1f, 0f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+            return gradient;
+        }
+
+        /// <summary>
+        /// Additive-blended unlit particle material, built in code the same
+        /// way ApplyFlatColor/CabinV2Builder build their materials — no new
+        /// art asset needed, just Unity's built-in soft-particle texture.
+        /// _Surface/_Blend alone only drive the URP shader's editor GUI; the
+        /// actual GPU blend state comes from _SrcBlend/_DstBlend/_ZWrite, so
+        /// those are set explicitly here for a guaranteed additive glow.
+        /// </summary>
+        private static Material LoadOrCreateFireMaterial()
+        {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(FireMaterialPath);
+            if (material != null) return material;
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                ?? Shader.Find("Particles/Standard Unlit");
+            material = new Material(shader) { name = "FireFlame" };
+
+            Texture2D baseMap = AssetDatabase.GetBuiltinExtraResource<Texture2D>("Default-Particle.psd");
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", baseMap);
+            else if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", baseMap);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
+
+            material.SetFloat("_Surface", 1f); // Transparent
+            material.SetFloat("_Blend", 2f); // Additive (URP BlendMode enum)
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_ZWrite", 0f);
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+            AssetDatabase.CreateAsset(material, FireMaterialPath);
+            return material;
         }
 
         private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";

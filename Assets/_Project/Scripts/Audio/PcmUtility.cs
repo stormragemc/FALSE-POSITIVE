@@ -66,9 +66,32 @@ namespace FalsePositive.Audio
             return samples;
         }
 
-        public static AudioClip ToAudioClip(byte[] pcm16Bytes, int sampleRate, int channels, string clipName)
+        /// <summary>Decodes PCM16 into a clip, optionally applying gain.
+        ///
+        /// <paramref name="gain"/> exists because the officer's live TTS comes
+        /// back noticeably quieter than the pre-rendered cast VO, which is
+        /// jarring when a cutscene line and a live reply sit seconds apart.
+        /// AudioSource.volume cannot fix it — it is clamped at 1.0 and already
+        /// there — so the boost has to happen in the sample data.
+        ///
+        /// Hard-clipping a doubled signal would sound worse than the quiet it
+        /// fixes, so peaks are limited with tanh, which compresses what would
+        /// clip and leaves everything below it essentially untouched.</summary>
+        public static AudioClip ToAudioClip(byte[] pcm16Bytes, int sampleRate, int channels, string clipName,
+            float gain = 1f)
         {
             float[] samples = Pcm16BytesToFloats(pcm16Bytes);
+            if (!Mathf.Approximately(gain, 1f))
+            {
+                for (int i = 0; i < samples.Length; i++)
+                {
+                    float boosted = samples[i] * gain;
+                    // Only engage the limiter where it would actually clip.
+                    samples[i] = boosted > 0.95f || boosted < -0.95f
+                        ? (float)System.Math.Tanh(boosted)
+                        : boosted;
+                }
+            }
             channels = Mathf.Max(channels, 1);
             int frameCount = Mathf.Max(samples.Length / channels, 1);
             AudioClip clip = AudioClip.Create(clipName, frameCount, channels, sampleRate, false);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using FalsePositive.Core;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace FalsePositive.Audio
 {
@@ -129,7 +130,45 @@ namespace FalsePositive.Audio
                 return;
             }
 
-            if (!IsCalibrated || Gated || newCount == 0) return;
+            if (Gated || newCount == 0) return;
+
+            // Push-to-talk bypasses the calibrated thresholds entirely: the key
+            // IS the decision, so there is no noise floor to get wrong, nothing
+            // that varies with the room, and no multipliers to tune. Everything
+            // downstream (UtteranceRecorder, DialogueManager, LoudnessGate,
+            // RequestSpokenPrompt) drives off IsSpeaking and does not care how
+            // the state was reached.
+            //
+            // Calibration still runs when it is asked to, because
+            // LoudnessGate's call-for-Nick threshold uses its own calibrated
+            // reference — but PTT never waits on IsCalibrated to capture.
+            if (config.pushToTalk)
+            {
+                bool held = Keyboard.current != null
+                    && Keyboard.current[config.pushToTalkKey].isPressed;
+
+                if (held && !IsSpeaking)
+                {
+                    SetSpeaking(true);
+                    _silenceTimer = 0f;
+                    _speakingTimer = 0f;
+                }
+                else if (IsSpeaking)
+                {
+                    _speakingTimer += Time.deltaTime;
+                    // Released, or held past the upload cap the sidecar enforces.
+                    if (!held || _speakingTimer >= config.vadMaxUtteranceSeconds)
+                    {
+                        SetSpeaking(false);
+                    }
+                }
+
+                float[] pttSamples = _readScratch.ToArray();
+                NewSamplesAvailable?.Invoke(pttSamples, mic.DeviceSampleRate);
+                return;
+            }
+
+            if (!IsCalibrated) return;
 
             float rms = mic.CurrentRms;
             float enterThreshold = _noiseFloor * config.vadEnterMultiplier;

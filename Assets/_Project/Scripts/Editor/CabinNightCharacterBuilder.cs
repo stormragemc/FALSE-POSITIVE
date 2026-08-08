@@ -255,8 +255,29 @@ namespace FalsePositive.Editor
             CabinFirstPersonController movement = player.AddComponent<CabinFirstPersonController>();
             movement.SetView(view.transform);
             CabinFallRecovery recovery = player.AddComponent<CabinFallRecovery>();
-            recovery.Configure(player.transform.position);
+            // NOT player.transform.position. M2_Morning spawns the player at
+            // (0.75, 0, 0.25) — BO_Sofa's own origin, dead centre of its solid
+            // 1.0 x 0.85 x 3.5 BoxCollider. Because SaveCharacter writes one
+            // shared prefab for both scenes, that value became the recovery
+            // point for Night as well, so anyone who fell out of the world was
+            // teleported inside the sofa and the CharacterController re-enabled
+            // in there — depenetration then popped them out stuck on top of it.
+            recovery.Configure(FallRecoveryPoint);
         }
+
+        /// <summary>Where CabinFallRecovery puts a player who drops out of the
+        /// world. A fixed, furniture-clear floor point rather than either
+        /// scene's spawn — see ConfigurePlayer for why deriving it from the
+        /// spawn was the bug.
+        ///
+        /// Open floor south of the sofa, chosen to stay clear at ANY sofa yaw:
+        /// the sofa now faces the fireplace (CabinV2Builder.SofaYaw), and its
+        /// rotated footprint is x [-1.06, 2.56], z [-0.56, 1.06] — which
+        /// swallows the sofa's old -X approach strip, so the obvious
+        /// "just off the open face" spot is not safe any more. Also clear of
+        /// SM_Table (x [-3.55, -2.45]), the chair ring, BO_CoatHanger
+        /// (z [-4.78, -4.22]) and SM_Cabin_Stairs (x [3.90, 5.00]).</summary>
+        private static readonly Vector3 FallRecoveryPoint = new Vector3(1.0f, 0f, -3.0f);
 
         /// <summary>
         /// Swaps ConfigurePlayer's standalone CabinFirstPersonController
@@ -424,6 +445,27 @@ namespace FalsePositive.Editor
                 return;
             }
 
+            // Wire the baked animation clips onto this Animator BEFORE baking
+            // the edit-mode pose below, not after. Assigning
+            // runtimeAnimatorController rebinds the Animator, which resets the
+            // skeleton to the FBX bind pose (a T-pose) — assigning it first
+            // means that reset happens before SetHumanPose writes the real
+            // pose, instead of wiping it out afterward. This ordering bug is
+            // why every cast member was showing a T-pose in the Scene view:
+            // the bake was running, it just never survived the controller
+            // assignment three lines later. See Editor.CabinAnimationBuilder's
+            // class doc for why zero root curves means applyRootMotion must be
+            // false, and why cullingMode must stay AlwaysAnimate: accessory
+            // renderers already need updateWhenOffscreen = true (AddAccessory
+            // below) for the same reason — offscreen culling would desync
+            // them from an Animator that silently stopped evaluating.
+            CabinAnimationBuilder.EnsureBuilt();
+            RuntimeAnimatorController controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                "Assets/_Project/CabinNight/Animations/CabinCast.controller");
+            if (controller != null) animator.runtimeAnimatorController = controller;
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
             using HumanPoseHandler handler = new HumanPoseHandler(animator.avatar, animator.transform);
             HumanPose pose = new HumanPose();
             handler.GetHumanPose(ref pose);
@@ -431,26 +473,26 @@ namespace FalsePositive.Editor
             // here for a one-shot Editor-time bake so the prefab doesn't look
             // like a T-pose in the Scene view / Inspector preview outside
             // Play mode. In Play mode this is overwritten within the first
-            // frame by CabinCast.controller (assigned below) via
+            // frame by CabinCast.controller (assigned above) via
             // CabinAnimatorDriver.Start -> PlayProfile, which is now the real
             // owner of this pose data.
             CabinPoseLibrary.Apply(ref pose, profile);
             handler.SetHumanPose(ref pose);
 
-            // Wire the baked animation clips onto this Animator. Every state
-            // (idle profiles, walk/carry, the lift) lives on one shared
-            // controller — see Editor.CabinAnimationBuilder's class doc for
-            // why zero root curves means applyRootMotion must be false, and
-            // why cullingMode must stay AlwaysAnimate: accessory renderers
-            // already need updateWhenOffscreen = true (AddAccessory below)
-            // for the same reason — offscreen culling would desync them from
-            // an Animator that silently stopped evaluating.
-            CabinAnimationBuilder.EnsureBuilt();
-            RuntimeAnimatorController controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
-                "Assets/_Project/CabinNight/Animations/CabinCast.controller");
-            if (controller != null) animator.runtimeAnimatorController = controller;
-            animator.applyRootMotion = false;
-            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            // body is a nested FBX prefab instance — HumanPoseHandler's native
+            // transform writes above are not recorded as prefab overrides on
+            // their own the way a plain field assignment is. Without this,
+            // SaveCharacter's PrefabUtility.SaveAsPrefabAssetAndConnect call
+            // can silently drop the bone rotations and the prefab goes back to
+            // bind pose.
+            foreach (Transform bone in body.GetComponentsInChildren<Transform>(true))
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(bone))
+                {
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(bone);
+                }
+            }
+            EditorUtility.SetDirty(body);
         }
 
         private static void SaveCharacter(GameObject character, string fileName)

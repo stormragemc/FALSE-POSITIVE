@@ -59,6 +59,9 @@ namespace FalsePositive.Editor
         public const string StateIdleWalking = "Idle_Walking";
         public const string StatePoseCarrying = "Pose_Carrying";
         public const string StatePoseKneeling = "Pose_Kneeling";
+        public const string StatePoseSeated = "Pose_Seated";
+        public const string StatePoseSeatedBack = "Pose_SeatedBack";
+        public const string StatePoseSeatedForward = "Pose_SeatedForward";
         public const string StateWalk = "Walk";
         public const string StateWalkCarry = "Walk_Carry";
         public const string StateLiftCrouch = "Lift_Crouch";
@@ -73,6 +76,11 @@ namespace FalsePositive.Editor
             {
                 case CabinIdleProfile.Kneeling: return -0.28f;
                 case CabinIdleProfile.Sleeping: return -0.12f;
+                // Mirrors CabinAnimatorDriver.Editor_BodyYOffsetFor — all three
+                // seated variants share one drop; only the torso leans.
+                case CabinIdleProfile.Seated:
+                case CabinIdleProfile.SeatedBack:
+                case CabinIdleProfile.SeatedForward: return -0.31f;
                 default: return 0f;
             }
         }
@@ -113,6 +121,16 @@ namespace FalsePositive.Editor
 
             AnimationClip poseCarrying = HoldClip(StatePoseCarrying, CabinIdleProfile.Carrying, 4.0f);
             AnimationClip poseKneeling = HoldClip(StatePoseKneeling, CabinIdleProfile.Kneeling, 5.0f);
+            AnimationClip poseSeated = CycleClip(StatePoseSeated, CabinIdleProfile.Seated, 5.2f,
+                new[] { Spine(spineBreath * 0.8f, 1.3f) });
+            // Deliberately different lengths and phases from each other and
+            // from Pose_Seated: the flashbacks put four of these on screen at
+            // once, and matching periods would have the whole table breathing
+            // and swaying in lockstep.
+            AnimationClip poseSeatedBack = CycleClip(StatePoseSeatedBack, CabinIdleProfile.SeatedBack, 5.8f,
+                new[] { Spine(spineBreath * 1.1f, 0.4f), Twist(spineTwist * 0.9f, 2.4f) });
+            AnimationClip poseSeatedForward = CycleClip(StatePoseSeatedForward, CabinIdleProfile.SeatedForward, 4.6f,
+                new[] { Spine(spineBreath * 0.6f, 2.1f), Twist(spineTwist * 0.5f, 0.8f) });
 
             // Walk/Walk_Carry oscillator amplitudes and centres port
             // ScriptedActor.MoveTo's old per-frame swing math verbatim (see
@@ -155,7 +173,8 @@ namespace FalsePositive.Editor
 
             BuildController(
                 idleConfrontational, idleControlled, idleGuarded, idlePanicked, idleSleeping, idleWalking,
-                poseCarrying, poseKneeling, walk, walkCarry, liftCrouch);
+                poseCarrying, poseKneeling, poseSeated, poseSeatedBack, poseSeatedForward,
+                walk, walkCarry, liftCrouch);
 
             AssetDatabase.SaveAssets();
             Debug.Log("[CabinAnimationBuilder] Cast animation clips + CabinCast.controller built.");

@@ -1,4 +1,5 @@
 using System;
+using FalsePositive.CabinNight;
 using FalsePositive.Flow;
 using FalsePositive.Interaction;
 using UnityEditor;
@@ -62,51 +63,41 @@ namespace FalsePositive.Editor
                 new Vector3(0.12f, 0.3f, 0.12f), new Color(0.15f, 0.4f, 0.2f), "Bottles",
                 "Look at the bottles", null, glass: true);
 
-            // Mantel — fireplace runs the +Z wall (x in [-0.9,0.9], z~4.3).
-            // Real PHOSdigital PBR model now, not the Blender-MCP placeholder
-            // — keepOriginalMaterials:true so its own textures survive
-            // (ApplyMaterialRecursive would otherwise flatten it to `color`).
-            // Its own prefab root sits at a ~0.175m-tall real-world scale
-            // already (verified live) — no visualScale needed.
-            GameObject radioModel = AssetDatabase.LoadAssetAtPath<GameObject>(
-                "Assets/PHOSdigital/HQ_PBR_Radio_Free/Radio.prefab");
-            // interactionVolume: the radio's real mesh bounds are only ~30.6 x
-            // 17.4 x 8.1 cm, so the E prompt used to only appear when the
-            // crosshair landed on the radio itself. Widened here rather than
-            // moved (user asked for a bigger aim target, not a relocated
-            // radio) — 0.9 x 0.7 x 0.6 stays clear of Prop_MantelClock above
-            // it (y~2.0, z~4.30) so the clock's own prompt can't get stolen.
-            RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.35f, 3.45f),
+            // ON the mantel shelf. Found by casting rays straight DOWN onto the
+            // fireplace rather than trusting SM_Fireplace_Stone's bounding box,
+            // which is misleading here: the box spans z [3.50, 5.00] but the
+            // shelf surface only begins at z 3.85 — every ray in front of that
+            // falls past it to the hearth at y 0.05. The shelf top is y 1.380,
+            // and SM_Fireplace_Brick (the chimney breast) rises from z 4.00, so
+            // the usable strip is just z [3.85, 4.00].
+            //
+            // The old values had both props hanging in mid-air in front of the
+            // fireplace AND sunk into it: at z 3.45 they were 0.40 forward of
+            // any surface, with the radio's base at y 1.17 — 0.21 below the
+            // shelf it was supposed to stand on. Each y below is derived from
+            // that prop's own measured model bounds so its BASE lands exactly
+            // on 1.380 (the radio's base sits 0.185 under its origin, the
+            // clock's 0.125). The clock fits the 0.15 m strip outright; the
+            // radio is 0.21 deep so it is biased forward to overhang the front
+            // lip slightly rather than clip through the brickwork behind.
+            //
+            // interactionVolume: the placeholder box is only 0.3 x 0.2 x 0.15,
+            // so the E prompt used to only appear when the crosshair landed on
+            // the radio itself. Widened rather than moved — 0.9 x 0.7 x 0.6
+            // stays clear of Prop_MantelClock beside it so the clock's own
+            // prompt can't get stolen.
+            RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.565f, 3.91f),
                 new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
-                "Tune the radio", null, overrideModel: radioModel, keepOriginalMaterials: true,
+                "Tune the radio", null,
                 interactionVolume: new Vector3(0.9f, 0.7f, 0.6f));
             WireRadioAudio(radio);
 
-            // Real wall-clock pack, hung on the chimney breast above the
-            // radio rather than sitting on the mantel shelf next to it.
-            // Chimney breast (SM_Fireplace_Brick's upper portion, per
-            // Art/Cabin_v2/README.md's stated bounds converted through the
-            // confirmed Blender->Unity axis mapping): x in [-0.5,0.5],
-            // y in [1.3,2.7], front face z ~= 4.3. x matches the radio's own
-            // x so the clock reads as directly above it; y sits well above
-            // the radio's own ~1.35-1.53 footprint; z is the breast face
-            // minus roughly half the clock's own depth so it appears
-            // mounted on the wall rather than floating in front of it.
-            // Rotation: the prefab's own hands/Nail sit at local z=+0.025,
-            // in FRONT of the Face (identity orientation points the face
-            // toward the room's -Z but puts the nail/hand backing plate
-            // between the face and the camera) — confirmed via a raycast
-            // showing HourHand/Nail/etc. nearer the camera than Face at
-            // identity rotation, occluding the actual dial. A 180-degree
-            // yaw swaps that so the Nail sits against the wall and the
-            // face reads toward the room.
-            GameObject clockModel = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Clock/Prefabs/Clock.prefab");
-            InspectPoint clock = AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(-0.35f, 2.0f, 4.30f),
+            InspectPoint clock = AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.505f, 3.93f),
                 new Vector3(0.2f, 0.25f, 0.1f), new Color(0.5f, 0.4f, 0.25f), "Clock (00:52)",
-                "Look at the clock", MemoryFlagIds.SawClock, overrideModel: clockModel, keepOriginalMaterials: true,
-                rotation: Quaternion.Euler(0f, 180f, 0f));
-            AddAmbientLoop(clock.gameObject, "clock_tick_loop", volume: 0.35f);
-            ConfigureFrozenClock(clock.gameObject);
+                "Look at the clock", MemoryFlagIds.SawClock);
+            // 0.35 was loud enough to sit on top of dialogue from across the
+            // room. A mantel clock should only be audible near the fireplace.
+            AddAmbientLoop(clock.gameObject, "clock_tick_loop", volume: 0.10f);
 
             // On the front peg of BO_CoatHanger (pole at (-1.4, 0, -4.5),
             // ~1.79 m tall). Its own BoxCollider is a solid 0.56x0.56x1.79 m
@@ -163,6 +154,8 @@ namespace FalsePositive.Editor
             AddProp<InspectPoint>(root, "Prop_FrontWindow", new Vector3(2.3f, 1.6f, -4.95f),
                 new Vector3(0.1f, 0.7f, 0.9f), new Color(0.15f, 0.2f, 0.35f), "Window (curtained)",
                 "Look at the window", null);
+
+            AddStairBlocker();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, NightScenePath);
@@ -261,6 +254,16 @@ namespace FalsePositive.Editor
             }
             SetClip(key, "pickupClip", "key_pickup");
 
+            // Morning has no Prop_BlockedStairs, but it has the same unbuilt
+            // second floor, so the same stranding bug. Blocking it costs
+            // nothing here: M2MorningController's opening beat is
+            // PriyaScreams -> TheyComeDown, which walks Aaron and Ivy down to
+            // the player, so the player never needs to climb. The descent
+            // itself is unaffected — CutsceneStage.MoveActor lerps actor
+            // Transforms directly rather than driving a CharacterController,
+            // so cast members pass through this volume.
+            AddStairBlocker();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, MorningScenePath);
             AssetDatabase.SaveAssets();
@@ -270,7 +273,7 @@ namespace FalsePositive.Editor
         private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
 
         /// <summary>Loop AudioSource, playOnAwake, on the given GameObject — clock tick, and (from MemorySceneBuilderV2) fire crackle / interior wind.</summary>
-        private static void AddAmbientLoop(GameObject go, string clipName, float volume = 1f)
+        private static void AddAmbientLoop(GameObject go, string clipName, float volume = 1f, float maxDistance = 4f)
         {
             AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
             if (clip == null)
@@ -284,6 +287,14 @@ namespace FalsePositive.Editor
             source.playOnAwake = true;
             source.volume = volume;
             source.spatialBlend = 1f; // 3D — fades with distance from the prop
+            // Volume alone was not what made the clock carry: spatialBlend 1
+            // still uses AudioSource's DEFAULT maxDistance of 500 m on a
+            // logarithmic curve, so inside a 10 m room it is effectively at
+            // full level everywhere. Linear rolloff over a few metres is what
+            // actually makes it a fireplace-side detail instead of a room tone.
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = 0.5f;
+            source.maxDistance = maxDistance;
             go.AddComponent<FalsePositive.Audio.LoopOnEnable>();
         }
 
@@ -426,6 +437,70 @@ namespace FalsePositive.Editor
             AudioClip staticClip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + "radio_static_loop.mp3");
             if (staticClip != null) staticSource.clip = staticClip;
             else Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}radio_static_loop.mp3 not found — radio static loop left unset.");
+        }
+
+        // SM_Cabin_Stairs measured in Memory_CabinNight: x in [3.90, 5.00]
+        // (1.10 m wide), rising along +Z from z = -1.43 to y = 2.72 at
+        // z = 3.85. SM_Cabin_StairRailing caps at y = 2.60 on the -X side.
+        private const float StairMinX = 3.90f;
+        private const float StairMaxX = 5.00f;
+
+        /// <summary>Invisible collision wall across the foot of the staircase.
+        ///
+        /// The stairs are freely climbable (non-convex MeshCollider, riser
+        /// 0.18 against the player's stepOffset 0.28) but lead nowhere:
+        /// Cabin_v2/README.md records that the second floor was never built,
+        /// only "the ceiling slab and stair opening". A player who walks up
+        /// steps off the top tread (y 2.72) onto the ceiling slab's upper face
+        /// (y 2.90 — a 0.18 step-up, inside stepOffset), and is then stranded
+        /// on a flat 10.4 x 10.4 m plate inside the roof mesh, hunting for an
+        /// invisible hole to get back down. CabinFallRecovery cannot rescue
+        /// them either: its minimumHeight is -4, and they are at +2.9.
+        ///
+        /// Prop_BlockedStairs already states the fiction ("Aaron and Ivy went
+        /// up an hour ago") but cannot enforce it — it resolves to a real FBX,
+        /// so its collider is that model's 0.61 x 0.62 x 0.07 board, roughly a
+        /// third of the stair width, and the player simply walks around it.
+        /// Widening it is not an option without re-authoring the mesh, hence a
+        /// separate invisible volume.
+        ///
+        /// Placed just up-stair of Prop_BlockedStairs, whose own collider comes
+        /// from its FBX and measures 0.61 x 0.62 x 0.07 at (3.90, 0.20, -1.20),
+        /// i.e. z [-1.235, -1.165] — so the blocker sits clear of it at
+        /// z [-1.125, -0.875] and never intercepts the interaction raycast to
+        /// it. Overhangs the stair width by 0.15 m each side so it cannot be
+        /// squeezed past. Lives under the "Gameplay" root, which
+        /// MemorySceneBuilderV2 creates and reserves for exactly this.
+        ///
+        /// Paired with a wider StairWarning trigger further down the approach,
+        /// so the player is told why before they are stopped.</summary>
+        private static void AddStairBlocker()
+        {
+            GameObject gameplay = GameObject.Find("Gameplay") ?? new GameObject("Gameplay");
+            float midX = (StairMinX + StairMaxX) * 0.5f;
+            float width = StairMaxX - StairMinX + 0.30f;
+
+            Replace(gameplay, "Blocker_Stairs");
+            GameObject blocker = new GameObject("Blocker_Stairs");
+            blocker.transform.SetParent(gameplay.transform, false);
+            blocker.transform.position = new Vector3(midX, 1.25f, -1.00f);
+            BoxCollider box = blocker.AddComponent<BoxCollider>();
+            box.size = new Vector3(width, 2.50f, 0.25f);
+
+            Replace(gameplay, "Warn_Stairs");
+            GameObject warn = new GameObject("Warn_Stairs");
+            warn.transform.SetParent(gameplay.transform, false);
+            warn.transform.position = new Vector3(midX, 1.00f, -1.75f);
+            BoxCollider trigger = warn.AddComponent<BoxCollider>();
+            trigger.size = new Vector3(width + 0.2f, 2.00f, 1.00f);
+            trigger.isTrigger = true;
+            warn.AddComponent<StairWarning>();
+        }
+
+        private static void Replace(GameObject parent, string childName)
+        {
+            Transform existing = parent.transform.Find(childName);
+            if (existing != null) UnityEngine.Object.DestroyImmediate(existing.gameObject);
         }
 
         private static GameObject FindOrCreateRoot()

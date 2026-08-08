@@ -79,6 +79,11 @@ namespace FalsePositive.CabinNight
             {
                 case CabinIdleProfile.Kneeling: return -0.28f;
                 case CabinIdleProfile.Sleeping: return -0.12f;
+                // All three seated variants share one drop — the lean changes
+                // the torso only, never how far the hips sit onto the pad.
+                case CabinIdleProfile.Seated:
+                case CabinIdleProfile.SeatedBack:
+                case CabinIdleProfile.SeatedForward: return -0.31f;
                 default: return 0f;
             }
         }
@@ -95,6 +100,9 @@ namespace FalsePositive.CabinNight
                 case CabinIdleProfile.Walking: return "Idle_Walking";
                 case CabinIdleProfile.Carrying: return "Pose_Carrying";
                 case CabinIdleProfile.Kneeling: return "Pose_Kneeling";
+                case CabinIdleProfile.Seated: return "Pose_Seated";
+                case CabinIdleProfile.SeatedBack: return "Pose_SeatedBack";
+                case CabinIdleProfile.SeatedForward: return "Pose_SeatedForward";
                 default: return "Idle_Controlled";
             }
         }

@@ -1,4 +1,5 @@
 using System;
+using FalsePositive.Flow;
 using UnityEngine;
 
 namespace FalsePositive.Interaction
@@ -30,7 +31,21 @@ namespace FalsePositive.Interaction
         // doc comment for how this was caught.
         private void OnEnable()
         {
-            if (staticLoopSource != null && !IsComplete) staticLoopSource.Play();
+            if (staticLoopSource == null || IsComplete) return;
+
+            // The radio belongs to the FIRST cabin visit only. That same
+            // re-activation behaviour above is what made it come back later:
+            // the P3 memory pair re-enters Memory_CabinNight through
+            // GameFlowDirector.RequestMemoryInterlude -> SceneRouter.Activate,
+            // which fires OnEnable again, and IsComplete is per-instance so a
+            // reloaded scene arrives with it false. The interlude deliberately
+            // does NOT change Phase (it only swaps the active scene), so the
+            // live phase is the reliable way to tell "we are actually playing
+            // M1_Night" from "we are looking back at it".
+            GameFlowDirector flow = GameFlowDirector.Instance;
+            if (flow != null && flow.Phase != GamePhase.M1_Night) return;
+
+            staticLoopSource.Play();
         }
 
         public override void OnInteract()

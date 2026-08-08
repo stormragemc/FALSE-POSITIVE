@@ -80,23 +80,32 @@ namespace FalsePositive.Editor
         /// anything else in the scene, so MemorySceneDressing (8a) and
         /// MemorySceneWiring (9a) output survives.
         /// </summary>
-        [MenuItem("Tools/False Positive/Bootstrap/T04c - Rebuild Cabin Fire")]
-        public static void RebuildCabinFire()
+        [MenuItem("Tools/False Positive/Bootstrap/T04c - Rebuild Cabin Fire (Night)")]
+        public static void RebuildCabinFireNight() => RebuildCabinFire(NightScenePath, isMorning: false);
+
+        /// <summary>
+        /// Same as T04c but for Memory_CabinMorning — unlike T04b, does not
+        /// touch anything else in the scene, so MemorySceneDressing (8b) and
+        /// MemorySceneWiring (9b) output survives.
+        /// </summary>
+        [MenuItem("Tools/False Positive/Bootstrap/T04d - Rebuild Cabin Fire (Morning)")]
+        public static void RebuildCabinFireMorning() => RebuildCabinFire(MorningScenePath, isMorning: true);
+
+        private static void RebuildCabinFire(string scenePath, bool isMorning)
         {
-            Scene scene = EditorSceneManager.OpenScene(NightScenePath, OpenSceneMode.Single);
+            Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             GameObject cabin = GameObject.Find("Cabin_v2");
-            Transform fireplace = cabin != null ? cabin.transform.Find("BO_Fireplace") : null;
-            if (fireplace == null)
+            if (cabin == null)
             {
-                Debug.LogError("[MemorySceneBuilderV2] Cabin_v2/BO_Fireplace not found in " +
-                    $"{NightScenePath} — run T04a first.");
+                Debug.LogError($"[MemorySceneBuilderV2] Cabin_v2 not found in {scenePath} — run T04a/T04b first.");
                 return;
             }
+            Transform fireplace = EnsureFireplaceAnchor(cabin.transform);
 
-            BuildFireplaceFire(fireplace);
+            BuildFireplaceFire(fireplace, isMorning);
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, NightScenePath);
+            EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("[MemorySceneBuilderV2] Cabin fire rebuilt.");
         }
@@ -230,8 +239,8 @@ namespace FalsePositive.Editor
             // provides the mesh, not the flicker; reuses CabinFireFlicker
             // exactly as the teaser scene did.
             GameObject cabin = GameObject.Find("Cabin_v2");
-            Transform fireplace = cabin != null ? cabin.transform.Find("BO_Fireplace") : null;
-            BuildFireplaceFire(fireplace);
+            Transform fireplace = EnsureFireplaceAnchor(cabin != null ? cabin.transform : null);
+            BuildFireplaceFire(fireplace, isMorning);
 
             AddLoopingAudio(root.gameObject, "interior_wind_loop", volume: 0.25f, spatial: false);
 
@@ -242,11 +251,12 @@ namespace FalsePositive.Editor
 
         /// <summary>
         /// Firelight + visible flame/embers on a BO_Fireplace transform. Also
-        /// called standalone from RebuildCabinFire (T04c) so the fire can be
-        /// refreshed without a full, dressing-and-wiring-destroying T04a
-        /// rebuild — safe to re-run: strips its own previous output first.
+        /// called standalone from RebuildCabinFire (T04c/T04d) so the fire
+        /// can be refreshed without a full, dressing-and-wiring-destroying
+        /// T04a/T04b rebuild — safe to re-run: strips its own previous
+        /// output first.
         /// </summary>
-        public static void BuildFireplaceFire(Transform fireplace)
+        public static void BuildFireplaceFire(Transform fireplace, bool isMorning)
         {
             if (fireplace == null)
             {
@@ -280,9 +290,11 @@ namespace FalsePositive.Editor
             Light fireLight = fireLightGo.AddComponent<Light>();
             fireLight.type = LightType.Point;
             fireLight.color = new Color(1f, 0.55f, 0.22f);
-            fireLight.intensity = 4.5f;
-            fireLight.range = 7.5f;
-            fireLight.shadows = LightShadows.Soft;
+            // Morning fire reads as embers in the grey daylight grade — dimmer,
+            // shorter range, no shadow — vs. the night scene's full blaze.
+            fireLight.intensity = isMorning ? 3.2f : 4.5f;
+            fireLight.range = isMorning ? 6f : 7.5f;
+            fireLight.shadows = isMorning ? LightShadows.None : LightShadows.Soft;
             fireLight.shadowStrength = 0.8f;
 
             CabinFireFlicker flicker = fireplace.gameObject.GetComponent<CabinFireFlicker>();
@@ -580,6 +592,38 @@ namespace FalsePositive.Editor
             GameObject go = new GameObject(name);
             if (parent != null) go.transform.SetParent(parent, false);
             return go;
+        }
+
+        /// Cabin.fbx no longer ships a BO_Fireplace blockout (replaced by
+        /// SM_Fireplace_* at ae0bfd4, "feat: Added beer assets"), which
+        /// orphaned Firelight/FireVFX onto the Cabin_v2 root — their
+        /// authored local offsets became world positions at the room
+        /// origin instead of the firebox. Re-create the anchor the fire
+        /// offsets were authored against: the firebox centre on the +Z
+        /// wall, per Cabin_v2/README.md's "centred on the South wall at
+        /// (0, ~-4.3)" and confirmed against SM_Fireplace_Firewood's
+        /// measured bounds (z in [3.84, 4.77]). Idempotent: reuses the
+        /// anchor if a previous run already created it, and sweeps any
+        /// root-level Firelight/FireVFX left over from the orphaned state
+        /// so re-running this doesn't leave a stray fire at the origin.
+        private static Transform EnsureFireplaceAnchor(Transform cabinRoot)
+        {
+            if (cabinRoot == null) return null;
+
+            Transform strayLight = cabinRoot.Find("Firelight");
+            if (strayLight != null) UnityEngine.Object.DestroyImmediate(strayLight.gameObject);
+            Transform strayVfx = cabinRoot.Find("FireVFX");
+            if (strayVfx != null) UnityEngine.Object.DestroyImmediate(strayVfx.gameObject);
+
+            Transform fireplace = cabinRoot.Find("BO_Fireplace");
+            if (fireplace == null)
+            {
+                fireplace = NewChild(cabinRoot, "BO_Fireplace").transform;
+                fireplace.localPosition = new Vector3(0f, 0f, 4.3f);
+                fireplace.localRotation = Quaternion.identity;
+                fireplace.localScale = Vector3.one;
+            }
+            return fireplace;
         }
     }
 }

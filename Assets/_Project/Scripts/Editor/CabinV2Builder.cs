@@ -263,12 +263,54 @@ namespace FalsePositive.Editor
 
             AddColliders(instance, MeshColliderObjects, useMeshCollider: true);
             AddColliders(instance, BoxColliderObjects, useMeshCollider: false);
+            OrientSofaToFireplace(instance);
 
+            // Runs AFTER OrientSofaToFireplace so the sofa's yaw is already on
+            // the instance when the prefab is saved. The swap SetActive(false)s
+            // SM_Table/SM_Chair_01..06 but leaves them in place at their
+            // authored positions — CutsceneStage.SeatedAtChair still reads those
+            // transforms for seating, so it must look them up in a way that
+            // sees inactive objects (see the note on SeatedAtChair).
             SwapFurnitureWithRealModels(instance);
 
             System.IO.Directory.CreateDirectory(PrefabRoot);
             PrefabUtility.SaveAsPrefabAsset(instance, PrefabRoot + "Cabin_v2.prefab");
             UnityEngine.Object.DestroyImmediate(instance);
+        }
+
+        /// <summary>Yaw that turns BO_Sofa's open face toward the fire.
+        ///
+        /// The sofa imports axis-aligned at yaw 0, which LOOKS like it faces
+        /// forward but does not: its seating face is local -X, not +Z — its
+        /// collider is 1.0 deep in X by 3.5 long in Z, so the long axis is the
+        /// backrest. At yaw 0 the seat therefore opens due west while
+        /// BO_Fireplace sits at (0, 0, 4.3), leaving it ~79.5 degrees off.
+        ///
+        /// Derived, not eyeballed: rotating the seat normal (-1, 0, 0) by yaw
+        /// t gives (-cos t, 0, sin t); matching that to the normalised sofa ->
+        /// fireplace vector (-0.182, 0, 0.983) gives t = 79.5.
+        ///
+        /// Cutscene.CutsceneStage stores its sofa rest spots as sofa-LOCAL
+        /// offsets (see SofaPoint there) precisely so this yaw can change
+        /// without stranding actors inside the furniture.</summary>
+        public const float SofaYaw = 79.5f;
+
+        private static void OrientSofaToFireplace(GameObject cabin)
+        {
+            Transform sofa = cabin.transform.Find("BO_Sofa");
+            if (sofa == null)
+            {
+                Debug.LogWarning("[CabinV2Builder] BO_Sofa not found — sofa orientation skipped.");
+                return;
+            }
+
+            // Pre-multiplied, NOT assigned: BO_Sofa comes off the FBX carrying
+            // the Blender Z-up import rotation (270 about X, as every SM_/BO_
+            // node here does). Assigning a pure yaw would discard it and tip
+            // the sofa onto its back. This composes a world-Y turn on top of
+            // whatever the import gave us. Safe to run repeatedly only because
+            // BuildCabinPrefab always starts from a fresh FBX instance.
+            sofa.localRotation = Quaternion.Euler(0f, SofaYaw, 0f) * sofa.localRotation;
         }
 
         // Real-world target heights for the furniture swap below — matches
@@ -359,7 +401,17 @@ namespace FalsePositive.Editor
                 return;
             }
 
-            Vector3 position = old.position;
+            // X/Z come from the object being replaced so the authored floor
+            // layout is preserved exactly; Y is pinned to the floor instead of
+            // copied. The two originals disagree about where their own origin
+            // sits — SM_Chair_0X's is at its base (y 0), SM_Table's is at its
+            // mid-height (y 0.725) — while both PolyHaven models are
+            // base-origin. Copying old.position.y verbatim therefore seated the
+            // stools correctly but hung the table 0.725 in the air, putting its
+            // top at 1.475 instead of the 0.75 that TableTargetHeight and
+            // MemorySceneDressing's Prop_FiveCups/Prop_Bottles both assume.
+            // The cabin floor is y 0 (every SM_Chair_0X sits at exactly 0).
+            Vector3 position = new Vector3(old.position.x, 0f, old.position.z);
             // `rotation` is passed in explicitly rather than derived from
             // `old.rotation` — every object baked into Cabin.fbx carries a
             // (270, 0, 0)-class rotation (Unity's importer compensating for
@@ -369,27 +421,40 @@ namespace FalsePositive.Editor
             // do not point where they intuitively should (confirmed live:
             // SM_Table.up read as world (0,0,-1), not (0,1,0)) — there is no
             // reliable way to recover "the horizontal facing direction" from
-            // it generically. The new furniture FBX was exported WITH axis
-            // conversion baked in (export_furniture.py), so it has no such
-            // artifact and a plain yaw-only rotation is all it ever needs.
+            // it generically. `rotation` therefore goes on the `replacement`
+            // parent, and the model keeps its own imported transform below it.
             old.gameObject.SetActive(false);
 
             GameObject replacement = new GameObject(newName);
             replacement.transform.SetParent(instance.transform, false);
             replacement.transform.SetPositionAndRotation(position, rotation);
 
+            // The visual's OWN localRotation/localScale are preserved, not
+            // overwritten. export_furniture.py exports with axis_forward="-Z"/
+            // axis_up="Y" but deliberately WITHOUT bake_space_transform, and
+            // WoodenTable_01.fbx.meta/WoodenStool_01.fbx.meta both carry
+            // bakeAxisConversion: 0 — so neither Blender nor the importer folds
+            // the Z-up -> Y-up conversion into the vertices. It survives as a
+            // -90-degree X rotation on the imported root instead. Assigning
+            // Quaternion.identity here discarded it and laid every table and
+            // stool on its face; the giveaway was Prop_Table measuring
+            // 0.63 x 0.75 x 2.05 (the model's 0.66 DEPTH scaled up to hit the
+            // 0.75 height target) instead of the upright 0.90 x 0.75 x 2.45.
+            // Same trap OrientSofaToFireplace documents for BO_Sofa: compose
+            // onto the import rotation, never replace it.
             GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(modelSource, replacement.transform);
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
-            visual.transform.localScale = Vector3.one;
+            Vector3 importedScale = visual.transform.localScale;
 
+            // Measured with the imported rotation and scale in place, so the
+            // height read here is the model's real upright height and the
+            // correction multiplies the imported scale rather than replacing it.
             Bounds rawBounds = ComputeWorldRelativeLocalBounds(visual, replacement.transform);
             float rawHeight = rawBounds.size.y;
             if (rawHeight > 0.001f)
             {
-                float scale = targetHeight / rawHeight;
-                visual.transform.localScale = Vector3.one * scale;
+                visual.transform.localScale = importedScale * (targetHeight / rawHeight);
             }
             else
             {

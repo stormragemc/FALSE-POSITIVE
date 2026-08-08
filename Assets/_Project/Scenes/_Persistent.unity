@@ -9530,43 +9530,89 @@ MonoBehaviour:
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
     keepScreenLit: 0
+  - id: 25
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
+    beats:
+    - speaker: SPASSKY
+      line: That's what I don't understand.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 2
+      memoryFlagToSet: 
+    - speaker: SPASSKY
+      line: Old friends. An anniversary. Drinks. From the way they tell it, things
+        were going well.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 5
+      memoryFlagToSet: 
+    - speaker: SPASSKY
+      line: So when did it all go wrong?
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 2.4
+      memoryFlagToSet: 
+    keepScreenLit: 1
+  - id: 26
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
+    beats:
+    - speaker: SPASSKY
+      line: And somewhere between that photograph and sunrise, Nick ended up dead.
+      voClip: {fileID: 8300000, guid: 53dae1ad1abba554282ddfce667e9a7b, type: 3}
+      holdSecondsIfNoClip: 4.4
+      memoryFlagToSet: 
+    - speaker: SPASSKY
+      line: "If it wasn't you, David \u2014 who killed Nick?"
+      voClip: {fileID: 8300000, guid: 554cd220c000ec14ba20f2bfa172e856, type: 3}
+      holdSecondsIfNoClip: 3
+      memoryFlagToSet: 
+    keepScreenLit: 1
+  - id: 27
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
+    beats:
+    - speaker: SPASSKY
+      line: Who, David?
+      voClip: {fileID: 8300000, guid: b889e8ceacf8cc24188dd979e352edcf, type: 3}
+      holdSecondsIfNoClip: 1.6
+      memoryFlagToSet: 
+    keepScreenLit: 1
   - id: 23
     fadeOutSeconds: 0
     fadeInSeconds: 0
     beats:
     - speaker: PRIYA
       line: Fifteen years and you two still act exactly the same.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 2.4
       memoryFlagToSet: 
     - speaker: NICK
       line: He was worse at seventeen.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: 
     - speaker: PRIYA
       line: And two years for these two.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 1.8
       memoryFlagToSet: 
     - speaker: AARON
       line: Barely survived it.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 1.4
       memoryFlagToSet: 
     - speaker: PRIYA
       line: To us. Somehow.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 1.4
       memoryFlagToSet: 
     - speaker: NICK
       line: Unfortunately.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
     - speaker: NICK
       line: Here. You look fucking freezing.
-      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
       holdSecondsIfNoClip: 2
       memoryFlagToSet: saw_coat_swap
     keepScreenLit: 1
@@ -9576,52 +9622,52 @@ MonoBehaviour:
     beats:
     - speaker: RADIO
       line: "\u2026snow storm\u2026"
-      voClip: {fileID: 0}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
     - speaker: NICK
       line: You've been saying 'after this trip' for two years.
-      voClip: {fileID: 8300000, guid: 554cd220c000ec14ba20f2bfa172e856, type: 3}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 2.6
       memoryFlagToSet: 
     - speaker: AARON
       line: "\u2026Two years?"
-      voClip: {fileID: 0}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: saw_aaron_learn
     - speaker: RADIO
       line: "\u2026please stay indoors\u2026"
-      voClip: {fileID: 0}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
     - speaker: DAVID
       line: You need to tell him.
-      voClip: {fileID: 0}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.8
       memoryFlagToSet: 
     - speaker: NICK
       line: He already knows.
-      voClip: {fileID: 8300000, guid: 1526fa3044060f547bef77b294bd33d3, type: 3}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: 
     - speaker: DAVID
       line: Then say it to his face.
-      voClip: {fileID: 0}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.8
       memoryFlagToSet: 
     - speaker: NICK
       line: I need some air.
-      voClip: {fileID: 8300000, guid: 5154af074a124034fb3239b80f518845, type: 3}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: 
     - speaker: RADIO
       line: "\u2026during these times."
-      voClip: {fileID: 0}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
     - speaker: 
       line: 
-      voClip: {fileID: 8300000, guid: e2ae14da0ef5a2249b94aebb278e139c, type: 3}
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
       holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
     keepScreenLit: 1
@@ -9631,7 +9677,7 @@ MonoBehaviour:
     beats:
     - speaker: 
       line: 
-      voClip: {fileID: 8300000, guid: b889e8ceacf8cc24188dd979e352edcf, type: 3}
+      voClip: {fileID: 8300000, guid: 779ee8702a11764488a813601e3c16a2, type: 3}
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
@@ -9641,7 +9687,7 @@ MonoBehaviour:
     beats:
     - speaker: 
       line: 
-      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
+      voClip: {fileID: 8300000, guid: 458c1f42d94f2d44daf7a4ced8dc8832, type: 3}
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
@@ -9651,7 +9697,7 @@ MonoBehaviour:
     beats:
     - speaker: 
       line: 
-      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
+      voClip: {fileID: 8300000, guid: 458c1f42d94f2d44daf7a4ced8dc8832, type: 3}
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
@@ -9661,7 +9707,7 @@ MonoBehaviour:
     beats:
     - speaker: SPASSKY
       line: "\u2014 you were the only one who couldn't tell me where you were."
-      voClip: {fileID: 8300000, guid: 779ee8702a11764488a813601e3c16a2, type: 3}
+      voClip: {fileID: 8300000, guid: 458c1f42d94f2d44daf7a4ced8dc8832, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0

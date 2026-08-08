@@ -416,6 +416,15 @@ namespace FalsePositive.Flow
             if (fader != null) yield return fader.FadeToBlack(fadeDuration);
             yield return null; // one full frame fully black before swapping anything
 
+            // Memory objectives are per-phase: M1NightController and
+            // M2MorningController set them, and nothing ever cleared them, so
+            // the last one ("Go to the door.", "Bring him to the sofa.") stayed
+            // burned on screen through the interrogation that follows. Cleared
+            // here rather than on PhaseExiting so it happens under the black
+            // frame and never pops, and before PhaseChanged so a handler that
+            // sets the next phase's objective still wins.
+            objectives?.Clear();
+
             string targetScene = SceneNameFor(next);
             if (sceneRouter != null && !string.IsNullOrEmpty(targetScene))
             {

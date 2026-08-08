@@ -4,7 +4,9 @@
     "references": [
         "FalsePositive.Runtime",
         "Unity.InputSystem",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "Unity.Timeline",
+        "uLipSync.Runtime"
     ],
     "includePlatforms": [
         "Editor"

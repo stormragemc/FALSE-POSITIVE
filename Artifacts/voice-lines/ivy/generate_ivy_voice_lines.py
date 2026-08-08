@@ -1,4 +1,4 @@
-"""Generate Priya's production dialogue with the selected Aaira voice."""
+"""Generate Ivy's production dialogue with the selected Laura voice."""
 
 from argparse import ArgumentParser
 from pathlib import Path
@@ -11,7 +11,7 @@ from elevenlabs.client import ElevenLabs
 
 
 OUTPUT_DIRECTORY = Path(__file__).resolve().parent
-VOICE_ID = "1XNFRxE3WBB7iI0jnm7p"  # Aaira
+VOICE_ID = "FGY2WhTYpPnrIDTdsKH5"  # Laura
 MODEL_ID = "eleven_v3"
 OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
@@ -27,30 +27,15 @@ VOICE_SETTINGS = VoiceSettings(
 # Tags and punctuation direct the performance without changing the spoken words.
 LINES = (
     (
-        "PRIYA-001",
-        "[worried] Guys—help! Something’s happened to Nick.\n\n"
-        "IVY! AARON! DAVID!\n\nPlease—come here!",
-    ),
-    ("PRIYA-002", "[panicked] What do we do?! What do we do?!"),
-    ("PRIYA-003", "[stunned] How did this happen?"),
-    ("PRIYA-004", "[skeptical] All night?"),
-    ("PRIYA-005", "[realizing] The door was locked... who locked it?"),
-    ("PRIYA-006", "[softly] Nick? ... Nick, can you hear me?"),
-    (
-        "PRIYA-007",
-        "[panicked but clear] Police? Our friend is hurt! We found him "
-        "outside—in the snow. Please send someone. Please hurry!",
+        "IVY-001",
+        "[shocked] Oh my God. What happened to him? What do we do now?",
     ),
     (
-        "PRIYA-008",
-        "[shaken] What happened...? Why won’t anyone tell me what happened?",
+        "IVY-002",
+        "[guarded, answering quickly] I don’t know. I was upstairs with Aaron.",
     ),
-    (
-        "PRIYA-014",
-        "[warmly amused] Fifteen years—and you two still act exactly the same.",
-    ),
-    ("PRIYA-015", "[playfully] And two years for these two."),
-    ("PRIYA-016", "[warm, lightly wistful] To us... somehow."),
+    ("IVY-003", "[guarded] Yes. All night."),
+    ("IVY-004", "[quietly, focused] Careful. Careful... easy."),
 )
 
 

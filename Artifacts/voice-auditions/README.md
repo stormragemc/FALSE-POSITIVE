@@ -1,8 +1,12 @@
 # FALSE POSITIVE voice auditions
 
-This directory preserves historical ElevenLabs audition metadata and playback scripts. The generated audition WAVs were removed after Priya's voice was finalized; rerunning a historical player requires regenerating its referenced files.
+This directory preserves historical ElevenLabs audition metadata and playback scripts. Generated audition WAVs are removed after a character's voice is finalized; rerunning a historical player requires regenerating its referenced files.
 
-Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. No other character was finalized in this workflow. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
+<<<<<<< HEAD
+Finalized production voices: Priya uses Aaira and Ivy uses Laura, both with Eleven V3 Natural stability. Their complete ID-based production sets and settings are in `../voice-lines/priya/` and `../voice-lines/ivy/`. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
+=======
+Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. Officer Spassky's finalized production voice is Maksim; his set is in `../voice-lines/spassky/`. No other character has been finalized. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
+>>>>>>> 1013b3247cd915b1d060ac68ca9a2833fcbf00b5
 
 ## Running an audition
 
@@ -36,6 +40,8 @@ Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Rog
 
 Candidates: 1 Stanislav, 2 Alexei, 3 Ivan, 4 Denis, 5 Alex Bell, 6 Artem Lebedev, 7 Dmitry, 8 Valery.
 
+Final selection: **Maksim — "Raw, unpolished, deep"** (`6sXsAlJKKBf265ucBSRt`), `eleven_multilingual_v2`. Maksim is not among the eight numbered candidates above — he came from a later round against the brief *semi-deep, snarly, raspy, Russian, angry in a contained way*, which none of the first eight carried. Casting rationale and the delivery-register table are in `../voice_guide/Spassky.md`. Production files are `../voice-lines/spassky/SPASSKY-001.wav` through `SPASSKY-062.wav`.
+
 ### Nick
 
 - `nick/play_nick_line_01_fire_argument.py`
@@ -55,8 +61,12 @@ Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Rog
 - `ivy/play_ivy_line_01_shock.py`
 - `ivy/play_ivy_line_02_alibi.py`
 - `ivy/play_ivy_line_03_confirmation.py`
+- `ivy/play_ivy_final_decider.py`
+- `ivy/play_ivy_long_final_decider.py`
 
 Candidates: 1 Jessica, 2 Matilda, 3 Laura, 4 Lily, 5 Sarah, 6 Alice, 7 Aria, 8 Charlotte.
+
+Final selection: Laura (`FGY2WhTYpPnrIDTdsKH5`), Eleven V3 Natural stability. Production files are `../voice-lines/ivy/IVY-001.wav` through `IVY-004.wav`.
 
 ### Priya
 

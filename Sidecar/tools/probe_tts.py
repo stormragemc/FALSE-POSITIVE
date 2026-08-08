@@ -34,7 +34,7 @@ _MODEL_ID = tts._MODEL_ID
 _VOICE_SETTINGS = tts._VOICE_SETTINGS
 
 # Maksim — the cast officer voice. See
-# docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md §2.3.
+# Artifacts/voice_guide/Spassky.md §2.3.
 _SPASSKY_VOICE_ID = "6sXsAlJKKBf265ucBSRt"
 
 _TEST_TEXT = "Testing one two."

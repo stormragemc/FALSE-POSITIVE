@@ -63,7 +63,8 @@ NICK_RUSSIAN_MALE = (
     ("08-escobar", "Escobar", "XGyi3FDBCYWBQ6vRd0FV"),
 )
 
-# Neutral female pool. Used for Ivy.
+# Historical neutral female pool. Ivy's finalized selection is Laura using
+# eleven_v3; see ../voice-lines/ivy/README.md for production settings.
 NEUTRAL_FEMALE = (
     ("01-jessica", "Jessica", "cgSgspJ2msm6clMCkdW9"),
     ("02-matilda", "Matilda", "XrExE9yKIg1WjnnlVkGX"),

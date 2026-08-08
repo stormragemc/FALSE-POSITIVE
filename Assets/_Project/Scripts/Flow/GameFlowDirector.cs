@@ -27,6 +27,16 @@ namespace FalsePositive.Flow
     /// whole interrogation instead of resetting every time the player
     /// leaves for a memory scene.
     /// </summary>
+    // Runs before every default-order MonoBehaviour so Instance exists by the
+    // time anything reads it. InterrogationSceneBinder.Awake resolves
+    // GameFlowDirector.Instance, and Unity does not guarantee Awake order
+    // ACROSS scenes: in the shipped flow that is masked, because _Persistent is
+    // build index 0 and SceneRouter loads Interrogation additively long after
+    // this component is alive. In the editor, with Interrogation already open
+    // alongside _Persistent, both Awakes fire in the same startup batch and the
+    // order is arbitrary — which surfaced as a spurious "No GameFlowDirector in
+    // the scene" error on roughly every other Play.
+    [DefaultExecutionOrder(-100)]
     public sealed class GameFlowDirector : MonoBehaviour
     {
         private static readonly GamePhase[] PhaseOrder =

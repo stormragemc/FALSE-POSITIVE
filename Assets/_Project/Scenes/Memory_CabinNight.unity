@@ -19389,7 +19389,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1938c9d41ab764a41970144ebf69cffc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.M1NightController
-  radio: {fileID: 0}
+  radio: {fileID: 1087453146}
 --- !u!65 &1857569759
 BoxCollider:
   m_ObjectHideFlags: 0

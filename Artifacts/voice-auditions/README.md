@@ -1,0 +1,82 @@
+# FALSE POSITIVE voice auditions
+
+This directory preserves historical ElevenLabs audition metadata and playback scripts. The generated audition WAVs were removed after Priya's voice was finalized; rerunning a historical player requires regenerating its referenced files.
+
+Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. No other character was finalized in this workflow. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
+
+## Running an audition
+
+Run the playback file for the character and line you want to compare:
+
+```powershell
+Sidecar\.venv\Scripts\python.exe Artifacts\voice-auditions\spassky\play_spassky_line_03_verdict.py
+```
+
+Pass `--dry-run` to verify candidate numbering and file paths without playing audio:
+
+```powershell
+Sidecar\.venv\Scripts\python.exe Artifacts\voice-auditions\spassky\play_spassky_line_03_verdict.py --dry-run
+```
+
+## Playback file index
+
+### David, reference only
+
+- `david/play_david_line_01_confusion.py`
+- `david/play_david_line_02_confession.py`
+- `david/play_david_line_03_defense.py`
+
+Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Roger.
+
+### Officer Spassky
+
+- `spassky/play_spassky_line_01_introduction.py`
+- `spassky/play_spassky_line_02_evidence_pressure.py`
+- `spassky/play_spassky_line_03_verdict.py`
+
+Candidates: 1 Stanislav, 2 Alexei, 3 Ivan, 4 Denis, 5 Alex Bell, 6 Artem Lebedev, 7 Dmitry, 8 Valery.
+
+### Nick
+
+- `nick/play_nick_line_01_fire_argument.py`
+
+Candidates: 1 Ivan, 2 Denis, 3 Ivan Energetic, 4 Alexei, 5 Oleg, 6 Guy, 7 Alex Bell, 8 Escobar.
+
+### Aaron
+
+- `aaron/play_aaron_line_01_body.py`
+- `aaron/play_aaron_line_02_deflection.py`
+- `aaron/play_aaron_line_03_command.py`
+
+Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Roger.
+
+### Ivy
+
+- `ivy/play_ivy_line_01_shock.py`
+- `ivy/play_ivy_line_02_alibi.py`
+- `ivy/play_ivy_line_03_confirmation.py`
+
+Candidates: 1 Jessica, 2 Matilda, 3 Laura, 4 Lily, 5 Sarah, 6 Alice, 7 Aria, 8 Charlotte.
+
+### Priya
+
+- `priya/play_priya_line_01_panic.py`
+- `priya/play_priya_line_01_panic_v3_natural.py`
+- `priya/play_priya_aaira_name_call_variations.py`
+- `priya/play_priya_aaira_v3_final_validation_lines.py`
+- `priya/play_priya_line_02_suspicion.py`
+- `priya/play_priya_line_03_concern.py`
+
+Candidates: 1 Anika, 2 Monika Sogam, 3 Mahi, 4 Aisha, 5 Aaira, 6 Aaliyah, 7 Aasha, 8 Saavi.
+
+Final selection: Aaira (`1XNFRxE3WBB7iI0jnm7p`), Eleven V3 Natural stability. Production files are `../voice-lines/priya/PRIYA-001.wav` through `PRIYA-008.wav`.
+
+### Radio announcer
+
+- `radio-announcer/play_radio_announcer_line_01_storm_warning.py`
+
+Candidates: 1 Roger, 2 Sarah, 3 Daniel, 4 Matilda, 5 George, 6 Jessica, 7 Chris, 8 Alice.
+
+## Generation reference
+
+`generate_all_auditions.py` records every candidate's exact ElevenLabs voice ID and the shared synthesis settings. It reads `ELEVENLABS_API_KEY` from the process environment and never stores the key. Existing WAVs are skipped, so rerunning it only fills missing files.

@@ -72,7 +72,6 @@ namespace FalsePositive.Core
         [Tooltip("RMS level at which the HUD microphone meter warns that the input is excessively loud and may clip.")]
         [Range(0.05f, 1f)]
         public float micTooLoudRms = 0.25f;
-        [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         [Tooltip("Gain applied to the officer's live TTS before it becomes an AudioClip. " +
             "The live voice comes back noticeably quieter than the pre-rendered cast VO, and " +
             "AudioSource.volume cannot fix it — it is clamped at 1.0 and already there — so the " +
@@ -80,6 +79,7 @@ namespace FalsePositive.Core
         [Range(1f, 4f)]
         public float ttsPlaybackGain = 2.0f;
 
+        [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         public float ttsEchoGateTailSeconds = 0.25f;
 
         [Header("Voice calibration (A4) and the call-for-Nick loudness gate (A6)")]

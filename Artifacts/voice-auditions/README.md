@@ -2,7 +2,7 @@
 
 This directory preserves historical ElevenLabs audition metadata and playback scripts. The generated audition WAVs were removed after Priya's voice was finalized; rerunning a historical player requires regenerating its referenced files.
 
-Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. No other character was finalized in this workflow. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
+Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. Officer Spassky's finalized production voice is Maksim; his set is in `../voice-lines/spassky/`. No other character has been finalized. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
 
 ## Running an audition
 
@@ -35,6 +35,8 @@ Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Rog
 - `spassky/play_spassky_line_03_verdict.py`
 
 Candidates: 1 Stanislav, 2 Alexei, 3 Ivan, 4 Denis, 5 Alex Bell, 6 Artem Lebedev, 7 Dmitry, 8 Valery.
+
+Final selection: **Maksim — "Raw, unpolished, deep"** (`6sXsAlJKKBf265ucBSRt`), `eleven_multilingual_v2`. Maksim is not among the eight numbered candidates above — he came from a later round against the brief *semi-deep, snarly, raspy, Russian, angry in a contained way*, which none of the first eight carried. Casting rationale and the delivery-register table are in `../voice_guide/Spassky.md`. Production files are `../voice-lines/spassky/SPASSKY-001.wav` through `SPASSKY-062.wav`.
 
 ### Nick
 

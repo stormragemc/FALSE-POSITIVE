@@ -61,7 +61,8 @@ namespace FalsePositive.Editor
                 SerializedProperty beatsProp = recipeProp.FindPropertyRelative("beats");
                 for (int b = 0; b < beatsProp.arraySize && b < clipNames.Length; b++)
                 {
-                    AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".mp3");
+                    AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".wav")
+                        ?? AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".mp3");
                     if (clip == null)
                     {
                         Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO clip {clipNames[b]}.mp3 for {id} beat {b}.");
@@ -195,7 +196,12 @@ namespace FalsePositive.Editor
         /// still comes from `line`, same as Beat().</summary>
         private static CutsceneBeat VoBeat(string speaker, string line, string voName, float holdIfMissing, string flag = null)
         {
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".mp3");
+            // .wav first: the finalized production lines are 24 kHz PCM WAV
+            // (Artifacts/voice_guide/Priya.md §4.3), while the earlier cast was
+            // rendered to MP3. Both live side by side in Art/Audio/VO, so this
+            // resolves either without transcoding anything.
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".wav")
+                ?? AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".mp3");
             if (clip == null)
             {
                 Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO {voName}.mp3 under {VoRoot} — beat will be a silent hold.");
@@ -300,12 +306,12 @@ namespace FalsePositive.Editor
                     Beat("AARON", "He looks cold. Let's bring him in — to the sofa, near the fireplace.", 3f)),
 
                 VisibleRecipe(CutsceneId.TheCarry,
-                    Beat("PRIYA", "What could have happened here?", 2f),
+                    Beat("PRIYA", "How did this happen?", 2f),
                     Beat("IVY", "I don't know! I was with Aaron upstairs!!", 2f),
                     Beat("PRIYA", "…All night?", 1.2f),
                     Beat("IVY", "…Yes. All night.", 1.5f, MemoryFlagIds.HeardIvyAlibi),
                     Beat("AARON", "Priya. Not now.", 1.2f),
-                    Beat("PRIYA", "The door was locked. Who locked the door?", 2f),
+                    Beat("PRIYA", "The door was locked. Who locked it?", 2f),
                     Beat("AARON", "Lift on three.", 1.5f, MemoryFlagIds.HeardAaronDeflect)),
 
                 VisibleRecipe(CutsceneId.TheSofa,

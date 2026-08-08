@@ -265,6 +265,12 @@ namespace FalsePositive.Editor
             AddColliders(instance, BoxColliderObjects, useMeshCollider: false);
             OrientSofaToFireplace(instance);
 
+            // Runs AFTER OrientSofaToFireplace so the sofa's yaw is already on
+            // the instance when the prefab is saved. The swap SetActive(false)s
+            // SM_Table/SM_Chair_01..06 but leaves them in place at their
+            // authored positions — CutsceneStage.SeatedAtChair still reads those
+            // transforms for seating, so it must look them up in a way that
+            // sees inactive objects (see the note on SeatedAtChair).
             SwapFurnitureWithRealModels(instance);
 
             System.IO.Directory.CreateDirectory(PrefabRoot);
@@ -395,7 +401,17 @@ namespace FalsePositive.Editor
                 return;
             }
 
-            Vector3 position = old.position;
+            // X/Z come from the object being replaced so the authored floor
+            // layout is preserved exactly; Y is pinned to the floor instead of
+            // copied. The two originals disagree about where their own origin
+            // sits — SM_Chair_0X's is at its base (y 0), SM_Table's is at its
+            // mid-height (y 0.725) — while both PolyHaven models are
+            // base-origin. Copying old.position.y verbatim therefore seated the
+            // stools correctly but hung the table 0.725 in the air, putting its
+            // top at 1.475 instead of the 0.75 that TableTargetHeight and
+            // MemorySceneDressing's Prop_FiveCups/Prop_Bottles both assume.
+            // The cabin floor is y 0 (every SM_Chair_0X sits at exactly 0).
+            Vector3 position = new Vector3(old.position.x, 0f, old.position.z);
             // `rotation` is passed in explicitly rather than derived from
             // `old.rotation` — every object baked into Cabin.fbx carries a
             // (270, 0, 0)-class rotation (Unity's importer compensating for
@@ -405,27 +421,40 @@ namespace FalsePositive.Editor
             // do not point where they intuitively should (confirmed live:
             // SM_Table.up read as world (0,0,-1), not (0,1,0)) — there is no
             // reliable way to recover "the horizontal facing direction" from
-            // it generically. The new furniture FBX was exported WITH axis
-            // conversion baked in (export_furniture.py), so it has no such
-            // artifact and a plain yaw-only rotation is all it ever needs.
+            // it generically. `rotation` therefore goes on the `replacement`
+            // parent, and the model keeps its own imported transform below it.
             old.gameObject.SetActive(false);
 
             GameObject replacement = new GameObject(newName);
             replacement.transform.SetParent(instance.transform, false);
             replacement.transform.SetPositionAndRotation(position, rotation);
 
+            // The visual's OWN localRotation/localScale are preserved, not
+            // overwritten. export_furniture.py exports with axis_forward="-Z"/
+            // axis_up="Y" but deliberately WITHOUT bake_space_transform, and
+            // WoodenTable_01.fbx.meta/WoodenStool_01.fbx.meta both carry
+            // bakeAxisConversion: 0 — so neither Blender nor the importer folds
+            // the Z-up -> Y-up conversion into the vertices. It survives as a
+            // -90-degree X rotation on the imported root instead. Assigning
+            // Quaternion.identity here discarded it and laid every table and
+            // stool on its face; the giveaway was Prop_Table measuring
+            // 0.63 x 0.75 x 2.05 (the model's 0.66 DEPTH scaled up to hit the
+            // 0.75 height target) instead of the upright 0.90 x 0.75 x 2.45.
+            // Same trap OrientSofaToFireplace documents for BO_Sofa: compose
+            // onto the import rotation, never replace it.
             GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(modelSource, replacement.transform);
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
-            visual.transform.localScale = Vector3.one;
+            Vector3 importedScale = visual.transform.localScale;
 
+            // Measured with the imported rotation and scale in place, so the
+            // height read here is the model's real upright height and the
+            // correction multiplies the imported scale rather than replacing it.
             Bounds rawBounds = ComputeWorldRelativeLocalBounds(visual, replacement.transform);
             float rawHeight = rawBounds.size.y;
             if (rawHeight > 0.001f)
             {
-                float scale = targetHeight / rawHeight;
-                visual.transform.localScale = Vector3.one * scale;
+                visual.transform.localScale = importedScale * (targetHeight / rawHeight);
             }
             else
             {

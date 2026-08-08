@@ -902,12 +902,24 @@ namespace FalsePositive.Cutscene
         /// still puts the hands 0.05-0.18 m onto the table.</summary>
         private const float SeatTuck = 0.18f;
 
+        /// <summary>The seat transforms are still SM_Chair_01..06 even though
+        /// CabinV2Builder's furniture swap now hides them behind real stool
+        /// models: the swap SetActive(false)s each original and drops
+        /// Prop_Chair_0X at the SAME captured world position, so the authored
+        /// seating layout lives on the originals and is what this reads.
+        ///
+        /// The lookup therefore goes through Cabin_v2's transform, NOT
+        /// GameObject.Find — Find skips inactive objects, so once the swap ran
+        /// it returned null for all six chairs and every actor fell back to
+        /// `table`, stacking the whole cast on the table centre. Same reason
+        /// FindCastMember goes through the Characters root.</summary>
         private static Vector3 SeatedAtChair(string chairName, Vector3 table)
         {
-            GameObject chair = GameObject.Find(chairName);
+            GameObject cabin = GameObject.Find("Cabin_v2");
+            Transform chair = cabin != null ? cabin.transform.Find(chairName) : null;
             if (chair == null) return table;
 
-            Vector3 seat = new Vector3(chair.transform.position.x, 0f, chair.transform.position.z);
+            Vector3 seat = new Vector3(chair.position.x, 0f, chair.position.z);
             Vector3 toTable = table - seat;
             toTable.y = 0f;
             if (toTable.sqrMagnitude < 0.0001f) return seat;

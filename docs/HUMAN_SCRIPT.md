@@ -274,6 +274,109 @@ Use these details when selecting or generating character voices. The listed race
 
 **[SPASSKY-037] OFFICER SPASSKY:** Tell me why I should spare your life.
 
+### The photograph and the two memories
+
+*After the witness has defended themselves, Spassky does not immediately ask for
+a name. He looks down at the folder, turns one page, then slides a printed group
+photograph across the table — all five of them, drunk and smiling, earlier that
+night. **The microphone is inactive for everything in this section** until
+[SPASSKY-042]; these are scripted beats, not live conversation.*
+
+**[SPASSKY-038] OFFICER SPASSKY:** That's what I don't understand.
+
+**[SPASSKY-039] OFFICER SPASSKY:** Old friends. An anniversary. Drinks. From the way they tell it, things were going well.
+
+**[SPASSKY-040] OFFICER SPASSKY:** So when did it all go wrong?
+
+#### Memory fragment A — the good years
+
+*Warm, stable, undistorted. Roughly 21:00 in the cabin. Firelight, bottles and
+half-full glasses. This is the cleanest image of the friend group the player will
+ever see, and it exists so the second fragment can destroy it.*
+
+*Nick has David in a loose one-armed headlock while Priya holds up an old school
+photograph of the two of them, both much younger.*
+
+**[PRIYA-014] PRIYA:** Fifteen years and you two still act exactly the same.
+
+**[NICK-002] NICK:** He was worse at seventeen.
+
+*Priya swipes to another photograph on her phone: Aaron and Ivy on their wedding
+day. She turns the screen toward them.*
+
+**[PRIYA-015] PRIYA:** And two years for these two.
+
+**[AARON-004] AARON:** Barely survived it.
+
+*Ivy laughs and leans into Aaron; he puts an arm around her. For less than half a
+second, Nick and Ivy look at each other instead of at Aaron. David notices.*
+
+**[PRIYA-016] PRIYA:** To us. Somehow.
+
+**[NICK-003] NICK:** Unfortunately.
+
+*Five glasses meet. As everyone breaks from the toast, Nick notices David's thin
+jacket and pulls off his own heavy parka.*
+
+**[NICK-004] NICK:** Here. You look fucking freezing.
+
+*He throws the parka at David; David tosses the thin jacket back. Nick puts it on
+with exaggerated pride. An ordinary best-friend joke — and the reason Nick is
+underdressed later. Hard cut back to the interrogation room on the sound of the
+glasses touching.*
+
+**[SPASSKY-041] OFFICER SPASSKY:** And somewhere between that photograph and sunrise, Nick ended up dead.
+
+*He pulls the photograph back into the folder.*
+
+**[SPASSKY-042] OFFICER SPASSKY:** If it wasn't you, David — who killed Nick?
+
+#### Memory fragment B — when it went wrong
+
+*The same room, later and colder: empty bottles, a dying fire, chairs abandoned.
+Each beat hard-cuts forward in time. The radio warning from the night bleeds
+underneath in broken pieces.*
+
+**[RADIO-002] RADIO ANNOUNCER:** …snow storm…
+
+*Roughly 23:40. Nick and Ivy stand too close near the table. Nick, drunk and
+careless, says something he should not while Aaron is close enough to hear.*
+
+**[NICK-005] NICK:** You've been saying "after this trip" for two years.
+
+*Ivy freezes. She looks at Nick, then at Aaron. Aaron has stopped moving. He does
+not shout and he does not approach them. This one quiet question is his entire
+visible reaction — play it flat and slow, a man who already knows the answer.*
+
+**[AARON-005] AARON:** …Two years?
+
+**[RADIO-003] RADIO ANNOUNCER:** …please stay indoors…
+
+*Hard jump forward to roughly 00:50. David and Nick are by the fireplace. David's
+side is subtitle only — he is heard exclusively through the player's microphone
+and is never pre-recorded.*
+
+**[DAVID-030a] DAVID (subtitle only, not recorded):** You need to tell him.
+
+**[NICK-006] NICK:** He already knows.
+
+**[DAVID-030b] DAVID (subtitle only, not recorded):** Then say it to his face.
+
+*Nick looks back at David, angry and humiliated. He grabs a bottle from the table
+and turns toward the front door — still wearing David's thin jacket.*
+
+**[NICK-007] NICK:** I need some air.
+
+**[RADIO-004] RADIO ANNOUNCER:** …during these times.
+
+*The door slams. Hard return to the interrogation room on the slam. Spassky has
+not moved. One beat.*
+
+**[SPASSKY-043] OFFICER SPASSKY:** Who, David?
+
+***The microphone activates here.*** *Everything below this line is live
+conversation again.*
+
 ### Truthful defense route
 
 **[DAVID-031] DAVID:** Because I didn't kill Nick. I argued with him, let him walk out into that storm, and passed out. I kept the affair from Aaron. I helped move Nick's body. Those are the things I did. I did not lock that door.

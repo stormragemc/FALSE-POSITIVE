@@ -1,5 +1,12 @@
 fileFormatVersion: 2
-guid: 829b1aa114e5d4e30a743f6528646854
+guid: aa6225e7168d06a4ba23cfc6811f5671
+AssetOrigin:
+  serializedVersion: 1
+  productId: 44164
+  packageName: Clock Free
+  packageVersion: 1.01
+  assetPath: Assets/Clock/Textures/Clock_A.png
+  uploadId: 149857
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -7,7 +14,7 @@ TextureImporter:
   mipmaps:
     mipMapMode: 0
     enableMipMap: 1
-    sRGBTexture: 0
+    sRGBTexture: 1
     linearTexture: 0
     fadeOut: 0
     borderMipMap: 0
@@ -30,7 +37,7 @@ TextureImporter:
   generateCubemap: 6
   cubemapConvolution: 0
   seamlessCubemap: 0
-  textureFormat: 1
+  textureFormat: -1
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
@@ -54,7 +61,7 @@ TextureImporter:
   alphaUsage: 1
   alphaIsTransparency: 0
   spriteTessellationDetail: -1
-  textureType: 1
+  textureType: 0
   textureShape: 1
   singleChannelComponent: 0
   flipbookRows: 1
@@ -63,9 +70,9 @@ TextureImporter:
   compressionQualitySet: 0
   textureFormatSet: 0
   ignorePngGamma: 0
-  applyGammaDecoding: 0
+  applyGammaDecoding: 1
   swizzle: 50462976
-  cookieLightType: 0
+  cookieLightType: 1
   platformSettings:
   - serializedVersion: 4
     buildTarget: DefaultTexturePlatform

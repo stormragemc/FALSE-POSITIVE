@@ -1,7 +1,8 @@
 # Asset sourcing — what's left to do
 
-The room/table/chairs are still primitive placeholder geometry. The cop
-character is done, now at **T2** tier: `Assets/_Project/Art/NewCop.glb` (a
+Interrogation's room shell (walls/floor) is still placeholder; its
+table/chairs were already swapped for real PolyHaven models in an earlier
+pass (§2). The cop character is done, now at **T2** tier: `Assets/_Project/Art/NewCop.glb` (a
 second Avaturn export, this one with real morph targets) has been rigged,
 seated, and wired into the scene with real audio-driven blendshape lip
 sync — see below for exactly what that involved. The original T1 export
@@ -187,6 +188,77 @@ Only buy from `assetstore.unity.com` (including its free tier),
 `syntystore.com`, itch.io CC0 packs, Sketchfab CC0, or Mixamo. Several
 "free" reuploads of these exact paid packages turned up during research on
 piracy-mirror sites — don't use those.
+
+## 3a. Memory_CabinNight furniture, clock, radio — status: done (Aug 2026)
+
+`Assets/Clock/` (Asset Store wall-clock pack, working `Clock.cs`),
+`Assets/PHOSdigital/HQ_PBR_Radio_Free/` (PBR radio), and PolyHaven's
+`WoodenTable_01`/`wooden_stool_01` (originally `.blend`-only under
+`Assets/_Project/Art/Furniture/`) all landed today. All four are wired in
+now, via `Editor/CabinV2Builder.cs` (table/chairs, baked into
+`Cabin_v2.prefab`) and `Editor/MemorySceneDressing.cs` (clock/radio, part of
+the `StoryProps` wipe-and-rebuild).
+
+**Table + 6 chairs.** The two `.blend` sources violated this project's own
+"`.blend` never lives under `Assets/`" rule (see `Art/Cabin_v2/README.md`) —
+moved to `ArtSource/Furniture/`, exported to clean FBX via
+`Tools/blender/export_furniture.py` (headless, same pattern as
+`rig_newcop.py`). `CabinV2Builder.SwapFurnitureWithRealModels` (called from
+`BuildCabinPrefab`) disables `SM_Table`/`SM_Chair_01..06` (non-destructive —
+same convention as every other superseded-asset swap in this project) and
+adds `Prop_Table`/`Prop_Chair_01..06` at the same captured world positions,
+uniformly scaled from each model's own measured height to real-world
+targets (table 0.75m, matching `SM_Table`'s already-established top height;
+stools 0.45m). **Real bug found along the way**: the replacement's rotation
+was first copied straight from the old `SM_*` object's own `transform.rotation`
+— but every object baked into `Cabin.fbx` carries a `(270,0,0)`-class
+rotation (Unity's importer compensating for that FBX not baking its own
+axis conversion; same fact `BuildDoorPrefab`'s `DoorClosedRotation` already
+documented), under which `.up`/`.forward` do not point where they
+intuitively should (confirmed live: `SM_Table.up` read as world `(0,0,-1)`).
+Copying it verbatim scaled the new table onto the wrong axis. Fixed by
+computing an explicit, sensible rotation instead (90° yaw for the table to
+match its long axis to the room; look-at-table-centre for each stool) rather
+than trying to decode the old rotation.
+
+**Radio and clock.** `MemorySceneDressing.AddProp` gained `overrideModel`
+(use a real prefab instead of the `Art/Props/*.fbx` placeholder lookup) and
+`keepOriginalMaterials` for these two. **Real bug found**: "keep original
+materials" originally meant keeping the material *asset* — but both packs
+were authored for the Built-in Render Pipeline (`Standard`/`Standard
+(Specular setup)` shaders), which render solid magenta in this URP project.
+Fixed by `ConvertMaterialsToUrpRecursive`/`ConvertOneMaterialToUrp`: builds
+one cached URP Lit material per source material, carrying over
+`_MainTex`→`_BaseMap`, `_Color`→`_BaseColor`, and `_BumpMap` if present.
+
+The clock also moved: hung on the chimney breast (`SM_Fireplace_Brick`'s
+upper portion, `x∈[-0.5,0.5], y∈[1.3,2.7]`, front face `z≈4.3` — from
+`Art/Cabin_v2/README.md`'s stated bounds) directly above the radio, instead
+of sitting on the mantel next to it. **Real bug found**: at the prefab's
+default (identity) orientation, the hour/minute/second hand meshes sit
+*in front of* the face mesh along local Z relative to the camera — a
+raycast confirmed `HourHand`/`MinuteHand`/`SecondHand`/`Nail` all hit
+nearer than `Face`, and those hand materials carry no texture, so the whole
+dial looked like a flat untextured disc. A 180° yaw fixes the front/back
+ordering so the textured face reads correctly with hands overlaid — verified
+via a camera capture only after isolating each renderer individually
+(`Renderer.enabled` toggles made through `Unity_RunCommand` must call
+`result.RegisterObjectModification(renderer)` first or the change is
+invisible to the next capture — cost real time to work out). `Clock.cs`
+(global-namespace `MonoBehaviour`, compiles into `Assembly-CSharp`, not
+referenceable from `FalsePositive.Editor.asmdef`) is configured via
+`GetComponentInChildren(System.Type.GetType("Clock, Assembly-CSharp"))` +
+`SerializedObject`, frozen at the story's existing "00:52" beat
+(`realTime=false, hour=0, minutes=52, clockSpeed=0`) rather than the
+prefab's default real-system-clock behavior.
+
+**Cups/bottles — measured, not scaled.** The same pass was asked to make
+`Prop_FiveCups`/`Prop_Bottles` bigger too, but live measurement first (real-
+world targets: mug ~0.08×0.09m, beer bottle ~0.06×0.24m) showed individual
+meshes already at ~0.11-0.16m diameter × 0.14m tall (mugs) and
+~0.06-0.09m diameter × 0.25m tall (bottles) — already correctly sized. Left
+unscaled; see the comment at `MemorySceneDressing.DressNight`'s
+`Prop_FiveCups`/`Prop_Bottles` calls.
 
 ## 3. What does NOT need sourcing
 

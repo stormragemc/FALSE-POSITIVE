@@ -48,7 +48,18 @@ One conversational turn, in order:
 1. **Mic capture + voice activity detection** (Unity, `Audio/`) — the mic is
    always live while seated; `VoiceActivityDetector` decides speaking vs.
    silence off a calibrated RMS threshold and `UtteranceRecorder` buffers
-   the utterance.
+   the utterance. Calibration (`MicCalibration`) samples 3 s of room tone
+   (was 1 s) and takes the **minimum** RMS observed, not the mean — one
+   cough/click during that window used to drag the mean up and desensitise
+   the VAD for the whole session. Speaking starts at `2.0 x` that floor and
+   ends once RMS drops back under `1.5x` (was `1.2x`, a thin hysteresis band
+   that made speech end too eagerly on syllable gaps). The HUD meter
+   (`MicIndicator`) goes green on `SpeakingStateChanged(true)` and back to
+   grey only once the span resolves — either sent (`UtteranceRecorder.
+   UtteranceCaptured`) or thrown away as too short (`UtteranceDiscarded`) —
+   rather than a per-frame level-vs-threshold check, so it reflects whether
+   an utterance is actually being captured instead of flickering on every
+   transient.
 2. **Speech-to-text**: ~~`faster-whisper` (`small.en`), local, no API key~~
    **(4 Aug: Google Cloud Speech-to-Text v2, `short` recognizer, called from
    the backend)** — turns the utterance into a transcript.
@@ -249,6 +260,17 @@ verified through workarounds:
 - **F1** in Play mode toggles a debug overlay: sidecar boot status, dialogue
   state, live VAD state + mic RMS, and the last turn's transcript, detected
   emotion, reply text, and per-stage timings (`stt_ms`/`ser_ms`/`llm_ms`/`tts_ms`).
+- `Tools ▸ False Positive ▸ Debug ▸ Jump to P1_Tutorial / P2_Recall / P3_Verdict /
+  P4_Ending` (`Editor/PhaseJumpDebugMenu.cs`) — play-mode-only menu items that
+  drop straight into any interrogation phase, so testing P2/P3/P4 doesn't mean
+  talking through every earlier phase first. Mints a session id via
+  `StartNewPlaythrough` first if none exists yet (e.g. jumping right after
+  pressing Play, without ever clicking through the main menu) — otherwise the
+  jump binds a null session id and every backend turn fails. Memory flags and
+  session score are empty on this path; use the F1 overlay's flag toggles if
+  the officer's questions need them. `Editor/P3MemoryPairDebugMenu.cs` keeps
+  the P3-memory-pair-specific items (playing CS-16A/CS-16B in isolation, and
+  asserting M1's borrowed cast was handed back).
 - `Tools ▸ Interrogation ▸ Start Sidecar` in the Unity Editor menu for
   iterating on the Python side without restarting Play mode each time.
   **`Stop Sidecar` doesn't actually stop it** — the launcher spawns

@@ -70,9 +70,16 @@ namespace FalsePositive.Editor
             // already (verified live) — no visualScale needed.
             GameObject radioModel = AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/PHOSdigital/HQ_PBR_Radio_Free/Radio.prefab");
+            // interactionVolume: the radio's real mesh bounds are only ~30.6 x
+            // 17.4 x 8.1 cm, so the E prompt used to only appear when the
+            // crosshair landed on the radio itself. Widened here rather than
+            // moved (user asked for a bigger aim target, not a relocated
+            // radio) — 0.9 x 0.7 x 0.6 stays clear of Prop_MantelClock above
+            // it (y~2.0, z~4.30) so the clock's own prompt can't get stolen.
             RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.35f, 3.45f),
                 new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
-                "Tune the radio", null, overrideModel: radioModel, keepOriginalMaterials: true);
+                "Tune the radio", null, overrideModel: radioModel, keepOriginalMaterials: true,
+                interactionVolume: new Vector3(0.9f, 0.7f, 0.6f));
             WireRadioAudio(radio);
 
             // Real wall-clock pack, hung on the chimney breast above the
@@ -441,7 +448,7 @@ namespace FalsePositive.Editor
             GameObject parent, string name, Vector3 position, Vector3 size, Color color,
             string labelText, string lookPrompt, string memoryFlag, bool glass = false,
             GameObject overrideModel = null, bool keepOriginalMaterials = false,
-            Quaternion? rotation = null) where T : Interactable
+            Quaternion? rotation = null, Vector3? interactionVolume = null) where T : Interactable
         {
             GameObject go = new GameObject(name);
             go.transform.SetParent(parent.transform, false);
@@ -486,6 +493,27 @@ namespace FalsePositive.Editor
             BoxCollider collider = go.AddComponent<BoxCollider>();
             collider.center = localBounds.center;
             collider.size = Vector3.Max(localBounds.size, new Vector3(0.05f, 0.05f, 0.05f));
+
+            // Optional, larger, trigger-only hit volume for props whose real
+            // mesh bounds make them fiddly to aim InteractionRaycaster's
+            // zero-radius camera ray at (e.g. Prop_Radio — see DressNight).
+            // isTrigger keeps this from becoming a physics wall the player
+            // bumps into; the raycaster still hits it because
+            // ProjectSettings/DynamicsManager.asset has queriesHitTriggers on.
+            // It needs no script of its own — InteractionRaycaster resolves a
+            // hit via GetComponentInParent<Interactable>(), which walks up to
+            // this same GameObject's `interactable` component regardless of
+            // which of the two colliders the ray actually hit.
+            if (interactionVolume.HasValue)
+            {
+                GameObject volumeGo = new GameObject("InteractionVolume");
+                volumeGo.transform.SetParent(go.transform, false);
+                volumeGo.transform.localPosition = localBounds.center;
+                BoxCollider volumeCollider = volumeGo.AddComponent<BoxCollider>();
+                volumeCollider.isTrigger = true;
+                volumeCollider.center = Vector3.zero;
+                volumeCollider.size = interactionVolume.Value;
+            }
 
             // Floating TextMesh name labels used to live here — the game's
             // only on-screen identification for an interactable, per

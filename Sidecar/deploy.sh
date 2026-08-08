@@ -118,6 +118,11 @@ gcloud run deploy "${SERVICE}" \
 URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --format='value(status.url)')"
 KEY="$(gcloud secrets versions access latest --secret=fp-client-key)"
 
+# macOS ships no bare `python`, only `python3`; CI's setup-python provides both.
+# Resolved up front because the alternative is discovering it after the build,
+# the push and the deploy have all already happened.
+PY="$(command -v python3 || command -v python)"
+
 echo "==> health"
 curl -fsS -m 60 -o /dev/null -w '    HTTP %{http_code} in %{time_total}s\n' "${URL}/health"
 
@@ -125,9 +130,17 @@ echo "==> turn (checking the live persona)"
 REPLY="$(curl -fsS -m 90 -X POST "${URL}/turn" \
   -H "x-fp-client-key: ${KEY}" \
   -F session_id="deploy-probe-${SHA}" \
-  | python -c 'import json,sys; print(json.load(sys.stdin).get("reply_text",""))')"
+  | "${PY}" -c 'import json,sys; print(json.load(sys.stdin).get("reply_text",""))')"
 
 echo "    ${REPLY}"
+# An empty reply must fail loudly. The grep below only ever proves the presence
+# of the *old* persona, so a blank REPLY sails through it and the script would
+# report a verified deploy having verified nothing — the same silent-staleness
+# shape this check exists to catch.
+if [ -z "${REPLY}" ]; then
+  echo "ERROR: /turn returned no reply_text - the persona is unverified." >&2
+  exit 1
+fi
 if printf '%s' "${REPLY}" | grep -qi "halden\|convenience store\|mara voss"; then
   echo "ERROR: the deployed container is still running the pre-Cabin_v2 persona." >&2
   exit 1

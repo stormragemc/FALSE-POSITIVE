@@ -32,5 +32,12 @@ namespace FalsePositive.Flow
         EndingAaron,
         EndingIvy,
         EndingPriya,
+
+        // STORY_SCRIPT.md §4 P3_VERDICT / §5 CS-16A and CS-16B. Appended at
+        // the end deliberately: CutsceneRecipeBuilder serializes recipes by
+        // enumValueIndex, so inserting these in story order would silently
+        // repoint every recipe already wired on the CutsceneDirector.
+        GoodYears,
+        WhenItWentWrong,
     }
 }

@@ -1,8 +1,10 @@
 using System.Collections;
+using System.Collections.Generic;
 using FalsePositive.CabinNight;
 using FalsePositive.Flow;
 using FalsePositive.Interaction;
 using FalsePositive.Player;
+using FalsePositive.UI;
 using UnityEngine;
 
 namespace FalsePositive.Cutscene
@@ -104,6 +106,10 @@ namespace FalsePositive.Cutscene
                     return StandFromChair();
                 case CutsceneId.SomeoneLeft:
                     return SomeoneLeft();
+                case CutsceneId.GoodYears:
+                    return GoodYears();
+                case CutsceneId.WhenItWentWrong:
+                    return WhenItWentWrong();
                 default:
                     return null;
             }
@@ -665,6 +671,295 @@ namespace FalsePositive.Cutscene
         }
 
         // ---- helpers ----
+
+        // --- P3 memory pair (CS-16A / CS-16B) --------------------------------
+
+        // M1_Night deliberately leaves Nick and the Teagues disabled
+        // (CabinNightCharacterBuilder: Nick is already outside, Aaron/Ivy are
+        // upstairs behind the blocked stairs) — and that has to stay true, or
+        // STORY_SCRIPT.md §7's "who went through the door?" trap collapses:
+        // the player could just look around the room and see who is still in
+        // it. So these two flashbacks borrow the cast rather than owning it.
+        // Every actor they switch on is switched back off, and every transform
+        // they move is put back, before the routine returns.
+        private GameObject FindCastMember(string name)
+        {
+            // GameObject.Find skips inactive objects; Transform.Find does not,
+            // so the lookup goes through the always-active Characters root.
+            GameObject root = GameObject.Find("Characters");
+            if (root == null) return null;
+            Transform found = root.transform.Find(name);
+            return found != null ? found.gameObject : null;
+        }
+
+        private readonly List<BorrowedActor> _borrowed = new List<BorrowedActor>();
+
+        private readonly struct BorrowedActor
+        {
+            public readonly GameObject Go;
+            public readonly bool WasActive;
+            public readonly Vector3 Position;
+            public readonly Quaternion Rotation;
+
+            public BorrowedActor(GameObject go, bool wasActive, Vector3 position, Quaternion rotation)
+            {
+                Go = go;
+                WasActive = wasActive;
+                Position = position;
+                Rotation = rotation;
+            }
+        }
+
+        private GameObject Borrow(string name, Vector3 position, float yaw, CabinIdleProfile pose)
+        {
+            GameObject go = FindCastMember(name);
+            if (go == null) return null;
+            _borrowed.Add(new BorrowedActor(go, go.activeSelf, go.transform.position, go.transform.rotation));
+            go.SetActive(true);
+            go.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            ScriptedActor actor = go.GetComponent<ScriptedActor>();
+            if (actor != null) actor.PlayPose(pose);
+            return go;
+        }
+
+        private void ReturnBorrowed()
+        {
+            for (int i = _borrowed.Count - 1; i >= 0; i--)
+            {
+                BorrowedActor b = _borrowed[i];
+                if (b.Go == null) continue;
+                b.Go.transform.SetPositionAndRotation(b.Position, b.Rotation);
+                b.Go.SetActive(b.WasActive);
+            }
+            _borrowed.Clear();
+        }
+
+        /// <summary>Yaw that makes an actor standing at <paramref name="from"/>
+        /// face <paramref name="target"/>, flattened to the floor plane.</summary>
+        private static float YawToward(Vector3 from, Vector3 target)
+        {
+            Vector3 flat = new Vector3(target.x - from.x, 0f, target.z - from.z);
+            return flat.sqrMagnitude < 0.0001f
+                ? 0f
+                : Quaternion.LookRotation(flat.normalized, Vector3.up).eulerAngles.y;
+        }
+
+        // Chair assignments for the P3 memory pair. SM_Chair_05 is David's —
+        // CabinV2Builder derived the Blender->Unity axis mapping from it, and
+        // it sits exactly where M1_Night spawns the player, so the memories
+        // reuse the seat the player already occupies.
+        private const string ChairDavid = "SM_Chair_05"; // (-3.00, 0.85)
+        private const string ChairNick = "SM_Chair_01";  // (-1.85, 1.60) beside David
+        private const string ChairIvy2 = "SM_Chair_02";  // (-1.85, 3.00) same side as Nick
+        private const string ChairAaron = "SM_Chair_03"; // (-4.15, 1.60) opposite Nick
+        private const string ChairIvy = "SM_Chair_04";   // (-4.15, 3.00) beside Aaron
+        private const string ChairPriya = "SM_Chair_06"; // (-3.00, 3.75) facing David
+
+        /// <summary>Standing spot for an actor at a chair: the chair's floor
+        /// position pushed away from the table so the body clears both the chair
+        /// and the table mesh.
+        ///
+        /// The first pass placed everyone on table-relative offsets and several
+        /// landed inside SM_Chair_01/03/04 — the chairs ring the table at ±1.15
+        /// in x and 1.60/3.00 in z, which those offsets walked straight into. On
+        /// screen the actors' legs simply vanished into the furniture, which read
+        /// as them being sunk into the floor.</summary>
+        private static Vector3 StandingAtChair(string chairName, Vector3 table, float clearance = 0.5f)
+        {
+            GameObject chair = GameObject.Find(chairName);
+            if (chair == null) return table;
+            Vector3 seat = new Vector3(chair.transform.position.x, 0f, chair.transform.position.z);
+            Vector3 away = seat - table;
+            away.y = 0f;
+            return away.sqrMagnitude < 0.0001f ? seat : seat + away.normalized * clearance;
+        }
+
+        /// <summary>Borrows an actor only to take it off screen, recording its
+        /// state so ReturnBorrowed puts it back. Priya is active in M1_Night,
+        /// asleep on the sofa and in shot — she has to go for CS-16B's private
+        /// argument between David and Nick.</summary>
+        private GameObject BorrowHidden(string name)
+        {
+            GameObject go = FindCastMember(name);
+            if (go == null) return null;
+            _borrowed.Add(new BorrowedActor(go, go.activeSelf, go.transform.position, go.transform.rotation));
+            go.SetActive(false);
+            return go;
+        }
+
+        /// <summary>Swings the front door open or shut. Records the door's
+        /// rotation on first use so ReturnBorrowed restores it — M1_Night needs
+        /// the door shut, and a flashback must not leave it hanging open.</summary>
+        private IEnumerator SwingFrontDoor(bool open, float duration)
+        {
+            GameObject door = GameObject.Find("Prop_FrontDoor_Locked");
+            if (door == null) yield break;
+
+            bool alreadyBorrowed = false;
+            foreach (BorrowedActor b in _borrowed)
+            {
+                if (b.Go == door) { alreadyBorrowed = true; break; }
+            }
+            if (!alreadyBorrowed)
+            {
+                _borrowed.Add(new BorrowedActor(door, door.activeSelf, door.transform.position, door.transform.rotation));
+            }
+
+            Quaternion openRotation = Quaternion.Euler(0f, DoorOpenYawDegrees, 0f) * DoorClosedRotation;
+            Quaternion from = open ? DoorClosedRotation : openRotation;
+            Quaternion to = open ? openRotation : DoorClosedRotation;
+
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                door.transform.rotation = Quaternion.Slerp(from, to, t / duration);
+                yield return null;
+            }
+            door.transform.rotation = to;
+        }
+
+        /// <summary>CS-16A — the good years, ~13 s. Everyone is placed at their
+        /// own chair around the table, facing in, with the player already in
+        /// SM_Chair_05. Warm and undistorted on purpose: this is the version of
+        /// the friend group CS-16B destroys, so it has to read as ordinary
+        /// first.</summary>
+        private IEnumerator GoodYears()
+        {
+            Vector3 table = TableCentre();
+            Vector3 david = StandingAtChair(ChairDavid, table);
+
+            Vector3 nickAt = StandingAtChair(ChairNick, table);
+            Vector3 priyaAt = StandingAtChair(ChairPriya, table);
+            Vector3 aaronAt = StandingAtChair(ChairAaron, table);
+            Vector3 ivyAt = StandingAtChair(ChairIvy, table);
+
+            GameObject nick = Borrow("Nick Vlahos (Male)", nickAt, YawToward(nickAt, david), CabinIdleProfile.Confrontational);
+            GameObject aaron = Borrow("Aaron Teague (Male)", aaronAt, YawToward(aaronAt, table), CabinIdleProfile.Controlled);
+            GameObject ivy = Borrow("Ivy Teague (Female)", ivyAt, YawToward(ivyAt, table), CabinIdleProfile.Guarded);
+            // Priya is already active, asleep on the sofa — Borrow records that
+            // so she is returned to it, rather than left standing at the table.
+            GameObject priya = Borrow("Priya Raman (Female)", priyaAt, YawToward(priyaAt, david), CabinIdleProfile.Walking);
+
+            // 0-4s — old friends. Priya holds up the school photograph.
+            yield return new WaitForSeconds(4f);
+
+            // 4-8s — Aaron and Ivy. Ivy turns to Aaron, then the half-second
+            // where Nick and Ivy look at each other instead of at him. Held
+            // under half a second: catchable, not certain.
+            if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
+            yield return new WaitForSeconds(3.2f);
+            if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, ivyAt), 0f);
+            if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, nickAt), 0f);
+            yield return new WaitForSeconds(0.45f);
+            if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, table), 0f);
+            if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
+            yield return new WaitForSeconds(0.35f);
+
+            // 8-11s — the toast. Everyone turns in to the middle of the table.
+            TurnAllToward(table, nick, aaron, ivy, priya);
+            yield return new WaitForSeconds(3f);
+
+            // 11-13s — the coat swap. Nick turns to David and throws the parka.
+            if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, david), 0f);
+            yield return new WaitForSeconds(2f);
+
+            ReturnBorrowed();
+        }
+
+        /// <summary>CS-16B — when it went wrong, ~13 s. Same room and cast as
+        /// CS-16A so the difference is carried by blocking and performance, per
+        /// §5's memory-pair rule. Two staged moments separated by a hard blink:
+        /// the table with everyone still present, then David and Nick alone at
+        /// the fire. Ends with Nick out through the front door and the scene
+        /// handed back exactly as M1_Night left it.</summary>
+        private IEnumerator WhenItWentWrong()
+        {
+            Vector3 table = TableCentre();
+            Vector3 fire = FireplaceCentre(table);
+            Vector3 david = StandingAtChair(ChairDavid, table);
+            ScreenFader fader = FindAnyObjectByType<ScreenFader>();
+
+            // 0-5s — Aaron learns. Nick and Ivy are on the same side of the
+            // table, one chair apart, which is as close as the seating allows.
+            // Aaron is opposite and near enough to hear. He never moves: the
+            // stillness is the whole performance.
+            Vector3 nickAt = StandingAtChair(ChairNick, table);
+            Vector3 ivyAt = StandingAtChair(ChairIvy2, table);
+            Vector3 aaronAt = StandingAtChair(ChairAaron, table);
+
+            GameObject nick = Borrow("Nick Vlahos (Male)", nickAt, YawToward(nickAt, ivyAt), CabinIdleProfile.Confrontational);
+            GameObject ivy = Borrow("Ivy Teague (Female)", ivyAt, YawToward(ivyAt, nickAt), CabinIdleProfile.Guarded);
+            GameObject aaron = Borrow("Aaron Teague (Male)", aaronAt, YawToward(aaronAt, nickAt), CabinIdleProfile.Controlled);
+            // The argument is private. Priya asleep on the sofa is still in
+            // shot otherwise.
+            BorrowHidden("Priya Raman (Female)");
+
+            yield return new WaitForSeconds(2.6f);
+            // Ivy freezes: she looks at Nick, then at Aaron.
+            if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
+            yield return new WaitForSeconds(2.4f);
+
+            // Hard blink into the second moment. §4 jumps forward without
+            // anyone leaving the room, so the room has to change under a cut
+            // rather than have Ivy and Aaron walk out in front of the player.
+            if (fader != null) yield return fader.FadeToBlack(0.12f);
+
+            if (ivy != null) ivy.SetActive(false);
+            if (aaron != null) aaron.SetActive(false);
+
+            Vector3 nickFire = Vector3.Lerp(fire, david, 0.35f);
+            nickFire.y = 0f;
+            if (nick != null)
+            {
+                nick.transform.SetPositionAndRotation(nickFire, Quaternion.Euler(0f, YawToward(nickFire, david), 0f));
+            }
+
+            yield return null;
+            if (fader != null) yield return fader.FadeFromBlack(0.12f);
+
+            // 5-11s — the argument, David and Nick alone at the fire.
+            yield return new WaitForSeconds(3.4f);
+
+            // 11-13s — Nick goes outside, still in David's thin jacket. The
+            // door is opened rather than walked through, then shut behind him.
+            // Routed via the doorway waypoints: the front door sits in the
+            // chamfered corner and a direct line crosses solid wall.
+            yield return SwingFrontDoor(open: true, duration: 0.5f);
+            yield return MoveActorAlong(nick, new[] { DoorwayCentre, DoorwayOutside }, 2.6f);
+            yield return SwingFrontDoor(open: false, duration: 0.4f);
+
+            ReturnBorrowed();
+        }
+
+        private static void TurnAllToward(Vector3 target, params GameObject[] actors)
+        {
+            foreach (GameObject go in actors)
+            {
+                if (go == null) continue;
+                go.transform.rotation = Quaternion.Euler(0f, YawToward(go.transform.position, target), 0f);
+            }
+        }
+
+        /// <summary>Floor-plane centre of the table, taken from Prop_FiveCups so
+        /// re-dressing the scene moves the staging with it.</summary>
+        private static Vector3 TableCentre()
+        {
+            GameObject cups = GameObject.Find("Prop_FiveCups");
+            return cups != null
+                ? new Vector3(cups.transform.position.x, 0f, cups.transform.position.z)
+                : new Vector3(-3f, 0f, 2.15f);
+        }
+
+        /// <summary>Floor-plane centre of the fireplace, taken from the mantel
+        /// clock for the same reason as TableCentre.</summary>
+        private static Vector3 FireplaceCentre(Vector3 tableFallback)
+        {
+            GameObject clock = GameObject.Find("Prop_MantelClock");
+            return clock != null
+                ? new Vector3(clock.transform.position.x, 0f, clock.transform.position.z)
+                : tableFallback + new Vector3(2.5f, 0f, 0f);
+        }
 
         private IEnumerator MoveActor(GameObject go, Vector3 destination, float speed, CabinIdleProfile walkProfile = CabinIdleProfile.Walking)
         {

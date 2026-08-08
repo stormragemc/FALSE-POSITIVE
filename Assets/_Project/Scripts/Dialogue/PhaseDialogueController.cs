@@ -100,7 +100,7 @@ namespace FalsePositive.Dialogue
                     break;
                 case GamePhase.P3_Verdict:
                     _namedSuspect = Suspect.None;
-                    EnterLiveDialoguePhase(prompts != null ? prompts.TextFor(phase) : string.Empty, p3TurnCap);
+                    EnterP3();
                     break;
                 case GamePhase.P4_Ending:
                     EnterP4Placeholder();
@@ -264,6 +264,26 @@ namespace FalsePositive.Dialogue
             GamePhase finishedPhase = _currentPhase;
             PhaseDialogueFinished?.Invoke(finishedPhase);
             _flow.AdvancePhase();
+        }
+
+        /// <summary>P3 opens with the memory pair, not with the officer's
+        /// question (docs/STORY_SCRIPT.md §4 P3_VERDICT). The mic stays down
+        /// across both: Spassky asks who killed Nick twice, and the memories
+        /// are the answer David is not managing to give him. Live dialogue —
+        /// and with it the mic — starts only once CS-16B has returned.
+        ///
+        /// Both interludes run on GameFlowDirector rather than here: they
+        /// swap the active scene, which deactivates this component, so a
+        /// coroutine started here would not survive to see them finish.</summary>
+        private void EnterP3()
+        {
+            Dialogue?.Suspend();
+
+            _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.GoodYears, () =>
+                _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.WhenItWentWrong, () =>
+                    EnterLiveDialoguePhase(
+                        prompts != null ? prompts.TextFor(GamePhase.P3_Verdict) : string.Empty,
+                        p3TurnCap)));
         }
 
         private void EnterP4Placeholder()

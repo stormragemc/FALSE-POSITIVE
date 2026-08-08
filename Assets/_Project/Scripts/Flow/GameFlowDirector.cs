@@ -315,6 +315,56 @@ namespace FalsePositive.Flow
 
         public void AbortToMenu() => GoToPhase(GamePhase.Menu);
 
+        /// <summary>Steps out of the interrogation into a memory scene, plays one
+        /// cutscene there, and steps back — <b>without</b> a phase change, so
+        /// SessionId, the backend's conversation history and ProsodyTracker's
+        /// affect baseline all survive (see SessionId for why that matters).
+        /// This is P3's memory pair, docs/STORY_SCRIPT.md §4 P3_VERDICT / §5
+        /// CS-16A and CS-16B.
+        ///
+        /// Driven from here rather than from PhaseDialogueController because
+        /// SceneRouter.Activate deactivates the non-active scene's roots and
+        /// PhaseDialogueController lives in Interrogation — it would disable
+        /// itself, and its own coroutine would stop, halfway through. This
+        /// component lives in _Persistent and survives the swap.
+        ///
+        /// No fade: §4 asks for a hard cut in and a hard cut back. The scene is
+        /// loaded additively first (invisible — additive loading does not touch
+        /// the scene on screen) so that Activate is an instant swap rather than
+        /// a hitch. By P3 the memory scene is normally already loaded from M1,
+        /// which makes EnsureLoaded a no-op.</summary>
+        public void RequestMemoryInterlude(GamePhase memoryPhase, CutsceneId id, Action onComplete)
+        {
+            StartCoroutine(MemoryInterludeRoutine(memoryPhase, id, onComplete));
+        }
+
+        private IEnumerator MemoryInterludeRoutine(GamePhase memoryPhase, CutsceneId id, Action onComplete)
+        {
+            string memoryScene = SceneNameFor(memoryPhase);
+
+            if (sceneRouter != null && !string.IsNullOrEmpty(memoryScene))
+            {
+                // Load before cutting, so the cut itself costs nothing.
+                yield return sceneRouter.EnsureLoaded(memoryScene);
+                yield return sceneRouter.Activate(memoryScene);
+            }
+
+            bool finished = false;
+            RequestCutscene(id, () => finished = true);
+            while (!finished) yield return null;
+
+            if (sceneRouter != null && !string.IsNullOrEmpty(interrogationSceneName))
+            {
+                yield return sceneRouter.Activate(interrogationSceneName);
+            }
+
+            // Invoked only after Interrogation's roots are live again, so a
+            // caller that lives in that scene (PhaseDialogueController) is
+            // enabled and able to start coroutines by the time it runs.
+            onComplete?.Invoke();
+        }
+
+
         private IEnumerator TransitionRoutine(GamePhase next)
         {
             _transitioning = true;

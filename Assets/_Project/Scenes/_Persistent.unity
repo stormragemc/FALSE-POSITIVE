@@ -965,27 +965,102 @@ MonoBehaviour:
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
     keepScreenLit: 0
-  - id: 16
-    fadeOutSeconds: 0.5
-    fadeInSeconds: 0.5
+  - id: 23
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
     beats:
-    - speaker: 
-      line: 
+    - speaker: PRIYA
+      line: Fifteen years and you two still act exactly the same.
       voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
-      holdSecondsIfNoClip: 5
+      holdSecondsIfNoClip: 2.4
       memoryFlagToSet: 
-    keepScreenLit: 0
-  - id: 17
-    fadeOutSeconds: 0.5
-    fadeInSeconds: 0.5
+    - speaker: NICK
+      line: He was worse at seventeen.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 1.6
+      memoryFlagToSet: 
+    - speaker: PRIYA
+      line: And two years for these two.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 1.8
+      memoryFlagToSet: 
+    - speaker: AARON
+      line: Barely survived it.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 1.4
+      memoryFlagToSet: 
+    - speaker: PRIYA
+      line: To us. Somehow.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 1.4
+      memoryFlagToSet: 
+    - speaker: NICK
+      line: Unfortunately.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 1.2
+      memoryFlagToSet: 
+    - speaker: NICK
+      line: Here. You look fucking freezing.
+      voClip: {fileID: 8300000, guid: d43819e8d09e10d49b7b4b314b64cfcf, type: 3}
+      holdSecondsIfNoClip: 2
+      memoryFlagToSet: saw_coat_swap
+    keepScreenLit: 1
+  - id: 24
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
     beats:
+    - speaker: RADIO
+      line: "\u2026snow storm\u2026"
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 1.2
+      memoryFlagToSet: 
+    - speaker: NICK
+      line: You've been saying 'after this trip' for two years.
+      voClip: {fileID: 8300000, guid: 554cd220c000ec14ba20f2bfa172e856, type: 3}
+      holdSecondsIfNoClip: 2.6
+      memoryFlagToSet: 
+    - speaker: AARON
+      line: "\u2026Two years?"
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 1.6
+      memoryFlagToSet: saw_aaron_learn
+    - speaker: RADIO
+      line: "\u2026please stay indoors\u2026"
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 1.2
+      memoryFlagToSet: 
+    - speaker: DAVID
+      line: You need to tell him.
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 1.8
+      memoryFlagToSet: 
+    - speaker: NICK
+      line: He already knows.
+      voClip: {fileID: 8300000, guid: 1526fa3044060f547bef77b294bd33d3, type: 3}
+      holdSecondsIfNoClip: 1.6
+      memoryFlagToSet: 
+    - speaker: DAVID
+      line: Then say it to his face.
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 1.8
+      memoryFlagToSet: 
+    - speaker: NICK
+      line: I need some air.
+      voClip: {fileID: 8300000, guid: 5154af074a124034fb3239b80f518845, type: 3}
+      holdSecondsIfNoClip: 1.6
+      memoryFlagToSet: 
+    - speaker: RADIO
+      line: "\u2026during these times."
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 1.2
+      memoryFlagToSet: 
     - speaker: 
       line: 
-      voClip: {fileID: 0}
-      holdSecondsIfNoClip: 5
+      voClip: {fileID: 8300000, guid: e2ae14da0ef5a2249b94aebb278e139c, type: 3}
+      holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
-    keepScreenLit: 0
-  - id: 18
+    keepScreenLit: 1
+  - id: 16
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
     beats:
@@ -995,13 +1070,33 @@ MonoBehaviour:
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
+  - id: 17
+    fadeOutSeconds: 0.5
+    fadeInSeconds: 0.5
+    beats:
+    - speaker: 
+      line: 
+      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
+      holdSecondsIfNoClip: 5
+      memoryFlagToSet: 
+    keepScreenLit: 0
+  - id: 18
+    fadeOutSeconds: 0.5
+    fadeInSeconds: 0.5
+    beats:
+    - speaker: 
+      line: 
+      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
+      holdSecondsIfNoClip: 5
+      memoryFlagToSet: 
+    keepScreenLit: 0
   - id: 19
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
     beats:
     - speaker: SPASSKY
       line: "\u2014 you were the only one who couldn't tell me where you were."
-      voClip: {fileID: 8300000, guid: e04100ab4f8e20d48b4b9db1f06d10dc, type: 3}
+      voClip: {fileID: 8300000, guid: 779ee8702a11764488a813601e3c16a2, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
@@ -1011,7 +1106,7 @@ MonoBehaviour:
     beats:
     - speaker: SPASSKY
       line: He locked it. You unlocked it. One of those took a decision.
-      voClip: {fileID: 8300000, guid: 6f5d3c28476e9474caa409792851c365, type: 3}
+      voClip: {fileID: 8300000, guid: 458c1f42d94f2d44daf7a4ced8dc8832, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
@@ -1021,7 +1116,7 @@ MonoBehaviour:
     beats:
     - speaker: SPASSKY
       line: She agreed with you. That's not the same as it being true.
-      voClip: {fileID: 8300000, guid: 779ee8702a11764488a813601e3c16a2, type: 3}
+      voClip: {fileID: 8300000, guid: 458c1f42d94f2d44daf7a4ced8dc8832, type: 3}
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
@@ -2360,157 +2455,6 @@ MonoBehaviour:
   tooLoudColor: {r: 0.95, g: 0.15, b: 0.12, a: 1}
   attackSpeed: 8
   releaseSpeed: 3
---- !u!1 &2146000100
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2146000101}
-  - component: {fileID: 2146000102}
-  - component: {fileID: 2146000103}
-  m_Layer: 0
-  m_Name: LevelMeterBackground
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &2146000101
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146000100}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 2146000104}
-  m_Father: {fileID: 479599744}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: 0, y: 7}
-  m_SizeDelta: {x: -8, y: 12}
-  m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &2146000102
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146000100}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.15}
-  m_RaycastTarget: 0
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
---- !u!222 &2146000103
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146000100}
-  m_CullTransparentMesh: 1
---- !u!1 &2146000106
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2146000104}
-  - component: {fileID: 2146000105}
-  - component: {fileID: 2146000107}
-  m_Layer: 0
-  m_Name: LevelMeterFill
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &2146000104
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146000106}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 2146000101}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
-  m_Pivot: {x: 0, y: 0.5}
---- !u!114 &2146000105
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146000106}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
-  m_Color: {r: 0.6, g: 0.6, b: 0.6, a: 1}
-  m_RaycastTarget: 0
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
---- !u!222 &2146000107
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146000106}
-  m_CullTransparentMesh: 1
 --- !u!1 &481648420
 GameObject:
   m_ObjectHideFlags: 0
@@ -10605,6 +10549,157 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2126357048}
+  m_CullTransparentMesh: 1
+--- !u!1 &2146000100
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2146000101}
+  - component: {fileID: 2146000102}
+  - component: {fileID: 2146000103}
+  m_Layer: 0
+  m_Name: LevelMeterBackground
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &2146000101
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146000100}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 2146000104}
+  m_Father: {fileID: 479599744}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: 0, y: 7}
+  m_SizeDelta: {x: -8, y: 12}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &2146000102
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146000100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.15}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &2146000103
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146000100}
+  m_CullTransparentMesh: 1
+--- !u!224 &2146000104
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146000106}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2146000101}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0, y: 0.5}
+--- !u!114 &2146000105
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146000106}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.6, g: 0.6, b: 0.6, a: 1}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!1 &2146000106
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2146000104}
+  - component: {fileID: 2146000105}
+  - component: {fileID: 2146000107}
+  m_Layer: 0
+  m_Name: LevelMeterFill
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!222 &2146000107
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146000106}
   m_CullTransparentMesh: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

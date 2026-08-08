@@ -21,6 +21,17 @@ namespace FalsePositive.CabinNight
             SetMuscle(ref pose, "Left Forearm Stretch", -0.18f);
             SetMuscle(ref pose, "Right Forearm Stretch", -0.18f);
 
+            // Legs are set explicitly rather than left at the cleared 0. A muscle
+            // value of 0 is the MIDPOINT of that muscle's range, not its rest
+            // pose, and the knee range is asymmetric — leaving it at 0 stands
+            // every character in a visible half-crouch, knees bent as if about to
+            // hop. Positive Lower Leg Stretch extends the knee; Kneeling below
+            // bends it with -0.58/-0.7, which is what fixes the sign. Kneeling
+            // and Sleeping set their own leg muscles after this and so override
+            // it.
+            SetMuscle(ref pose, "Left Lower Leg Stretch", 0.6f);
+            SetMuscle(ref pose, "Right Lower Leg Stretch", 0.6f);
+
             switch (profile)
             {
                 case CabinIdleProfile.Confrontational:

@@ -700,13 +700,18 @@ namespace FalsePositive.Cutscene
             public readonly bool WasActive;
             public readonly Vector3 Position;
             public readonly Quaternion Rotation;
+            public readonly CabinIdleProfile Pose;
+            public readonly bool WantsPose;
 
-            public BorrowedActor(GameObject go, bool wasActive, Vector3 position, Quaternion rotation)
+            public BorrowedActor(GameObject go, bool wasActive, Vector3 position, Quaternion rotation,
+                CabinIdleProfile pose = default, bool wantsPose = false)
             {
                 Go = go;
                 WasActive = wasActive;
                 Position = position;
                 Rotation = rotation;
+                Pose = pose;
+                WantsPose = wantsPose;
             }
         }
 
@@ -714,12 +719,84 @@ namespace FalsePositive.Cutscene
         {
             GameObject go = FindCastMember(name);
             if (go == null) return null;
-            _borrowed.Add(new BorrowedActor(go, go.activeSelf, go.transform.position, go.transform.rotation));
+            _borrowed.Add(new BorrowedActor(go, go.activeSelf, go.transform.position, go.transform.rotation, pose, true));
             go.SetActive(true);
             go.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
-            ScriptedActor actor = go.GetComponent<ScriptedActor>();
-            if (actor != null) actor.PlayPose(pose);
+            // Pose is applied by PoseBorrowed() a frame later, NOT here. These
+            // actors are disabled at scene load, so SetActive(true) is their
+            // first activation: Awake has only just run, Start has not, and the
+            // Animator is not initialised yet. Cross-fading a clip into that
+            // window drops the hips to the root — the clips are muscle-only
+            // with zero root curves by design (CabinAnimationBuilder), so
+            // nothing puts the body back up — and the mesh sinks about hip
+            // height into the floor while the collider stays correct.
             return go;
+        }
+
+        /// <summary>Applies the poses recorded by Borrow(), one frame after
+        /// activation so each actor's Animator has initialised. Yield on this,
+        /// do not call it directly.</summary>
+        private IEnumerator PoseBorrowed()
+        {
+            yield return null;
+            foreach (BorrowedActor b in _borrowed)
+            {
+                if (!b.WantsPose || b.Go == null || !b.Go.activeSelf) continue;
+                ScriptedActor actor = b.Go.GetComponent<ScriptedActor>();
+                if (actor != null) actor.PlayPose(b.Pose);
+            }
+
+            // Let the Animator evaluate the pose it was just handed before the
+            // feet are measured against it.
+            yield return null;
+
+            foreach (BorrowedActor b in _borrowed)
+            {
+                if (!b.WantsPose || b.Go == null || !b.Go.activeSelf) continue;
+                PlantFeet(b.Go);
+            }
+        }
+
+        /// <summary>Drops the character so its feet rest on the floor.
+        ///
+        /// The baked clips are muscle-only with zero root curves
+        /// (CabinAnimationBuilder authors none, because root translation is not
+        /// scale-safe at the cast's 0.96-1.02 scales). Muscle values carry pose
+        /// but not hip height, and CabinAnimatorDriver only ever applies a
+        /// NEGATIVE body offset (Kneeling -0.28, Sleeping -0.12) — there is no
+        /// positive standing baseline anywhere. Measured live during CS-16A:
+        /// every borrowed actor sat with its Hips bone at y = -0.08 against a
+        /// player rig at +0.92, i.e. a full hip-height below the floor, while
+        /// the CapsuleCollider stayed correctly at 0.
+        ///
+        /// Uses the humanoid foot bones, NOT renderer bounds. SkinnedMeshRenderer
+        /// bounds are a conservative box that does not hug the animated pose:
+        /// measuring those over-lifted the whole cast by ~0.35m and left them
+        /// visibly hovering with their feet at y = 0.40.</summary>
+        private static void PlantFeet(GameObject go)
+        {
+            Animator animator = go.GetComponentInChildren<Animator>();
+            if (animator == null || !animator.isHuman) return;
+
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            if (leftFoot == null && rightFoot == null) return;
+
+            float lowest = leftFoot == null ? rightFoot.position.y
+                : rightFoot == null ? leftFoot.position.y
+                : Mathf.Min(leftFoot.position.y, rightFoot.position.y);
+
+            float scale = Mathf.Approximately(go.transform.lossyScale.y, 0f) ? 1f : go.transform.lossyScale.y;
+            // The foot bone is the ankle, not the sole — leave a boot's worth
+            // of clearance under it or the character sinks to the shins.
+            const float SoleToAnkle = 0.09f;
+            float target = go.transform.position.y + SoleToAnkle * scale;
+
+            float lift = target - lowest;
+            if (Mathf.Abs(lift) < 0.005f) return;
+
+            Transform body = animator.transform;
+            body.localPosition += new Vector3(0f, lift / scale, 0f);
         }
 
         private void ReturnBorrowed()
@@ -841,8 +918,10 @@ namespace FalsePositive.Cutscene
             // so she is returned to it, rather than left standing at the table.
             GameObject priya = Borrow("Priya Raman (Female)", priyaAt, YawToward(priyaAt, david), CabinIdleProfile.Walking);
 
+            yield return PoseBorrowed();
+
             // 0-4s — old friends. Priya holds up the school photograph.
-            yield return new WaitForSeconds(4f);
+            yield return new WaitForSeconds(3.95f);
 
             // 4-8s — Aaron and Ivy. Ivy turns to Aaron, then the half-second
             // where Nick and Ivy look at each other instead of at him. Held
@@ -895,7 +974,9 @@ namespace FalsePositive.Cutscene
             // shot otherwise.
             BorrowHidden("Priya Raman (Female)");
 
-            yield return new WaitForSeconds(2.6f);
+            yield return PoseBorrowed();
+
+            yield return new WaitForSeconds(2.55f);
             // Ivy freezes: she looks at Nick, then at Aaron.
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
             yield return new WaitForSeconds(2.4f);

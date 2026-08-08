@@ -57,6 +57,13 @@ namespace FalsePositive.Core
             "sprint during the cabin free-roam.")]
         public UnityEngine.InputSystem.Key pushToTalkKey = UnityEngine.InputSystem.Key.V;
 
+        [Tooltip("How far above the noise floor calibration needs to hear you before it " +
+            "accepts the sample. Deliberately lower than vadEnterMultiplier: that value " +
+            "decides whether a live utterance starts, which is a different and stricter " +
+            "question than 'did the microphone pick up a human at all'. Reusing it made " +
+            "calibration fail for people whose microphone worked perfectly well.")]
+        public float calibrationCrossMultiplier = 1.4f;
+
         public float vadEnterMultiplier = 2.0f;
         public float vadExitMultiplier = 1.5f;
         public float vadMinUtteranceSeconds = 0.3f;
@@ -66,6 +73,13 @@ namespace FalsePositive.Core
         [Range(0.05f, 1f)]
         public float micTooLoudRms = 0.25f;
         [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
+        [Tooltip("Gain applied to the officer's live TTS before it becomes an AudioClip. " +
+            "The live voice comes back noticeably quieter than the pre-rendered cast VO, and " +
+            "AudioSource.volume cannot fix it — it is clamped at 1.0 and already there — so the " +
+            "boost has to be in the sample data. Peaks are soft-limited, not clipped.")]
+        [Range(1f, 4f)]
+        public float ttsPlaybackGain = 2.0f;
+
         public float ttsEchoGateTailSeconds = 0.25f;
 
         [Header("Voice calibration (A4) and the call-for-Nick loudness gate (A6)")]

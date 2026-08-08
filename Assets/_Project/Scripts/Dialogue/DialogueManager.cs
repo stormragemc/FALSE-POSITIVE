@@ -48,6 +48,9 @@ namespace FalsePositive.Dialogue
     /// </summary>
     public sealed class DialogueManager : MonoBehaviour
     {
+        [Tooltip("Read for ttsPlaybackGain. Optional — playback falls back to unity gain " +
+            "if unassigned, rather than silently losing the boost.")]
+        [SerializeField] private FalsePositive.Core.InterrogationConfig config;
         [SerializeField] private CopVoicePlayback copVoice;
         [SerializeField] private CopMouthController copMouth;
         [SerializeField] private AudioSource fillerSource;
@@ -317,7 +320,8 @@ namespace FalsePositive.Dialogue
 
             byte[] pcmBytes = Convert.FromBase64String(response.audio_b64);
             int channels = Mathf.Max(response.audio_channels, 1);
-            AudioClip clip = PcmUtility.ToAudioClip(pcmBytes, response.audio_sample_rate, channels, "CopReply");
+            AudioClip clip = PcmUtility.ToAudioClip(pcmBytes, response.audio_sample_rate, channels, "CopReply",
+                config != null ? config.ttsPlaybackGain : 1f);
 
             SetState(DialogueState.Speaking);
             copMouth.Begin(copVoice.Source);

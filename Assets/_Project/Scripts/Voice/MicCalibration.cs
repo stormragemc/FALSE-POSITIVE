@@ -89,7 +89,11 @@ namespace FalsePositive.Voice
             float elapsedSinceStart = 0f;
             float elapsedSinceCross = 0f;
             bool crossedFloor = false;
-            float crossThreshold = vad.NoiseFloor * config.vadEnterMultiplier;
+            // Its own multiplier, not vadEnterMultiplier: that one decides whether
+            // a live utterance starts, which is a stricter question than "did the
+            // mic hear a human at all". Sharing it made calibration reject people
+            // whose microphone was working.
+            float crossThreshold = vad.NoiseFloor * config.calibrationCrossMultiplier;
             float hardCap = config.calibrationTimeoutSeconds + config.calibrationSpeechSeconds;
 
             while (true)
@@ -121,6 +125,21 @@ namespace FalsePositive.Voice
 
                 if (!crossedFloor && elapsedSinceStart >= config.calibrationTimeoutSeconds)
                 {
+                    // Under push-to-talk, calibration is no longer load-bearing for
+                    // capture — the key decides that. All it still feeds is
+                    // LoudnessGate's call-for-Nick reference. Blocking the player
+                    // behind a failure card for a measurement that now only affects
+                    // one optional beat is the wrong trade, so take whatever was
+                    // heard and carry on. Without PTT the VAD genuinely cannot work
+                    // unmeasured, so that path still fails.
+                    if (config.pushToTalk)
+                    {
+                        Debug.LogWarning("[MicCalibration] Never crossed the voice threshold, but " +
+                            "push-to-talk is on, so capture does not depend on this. Continuing with " +
+                            "the samples collected; LoudnessGate's reference will be low.");
+                        break;
+                    }
+
                     Stage = CalibrationStage.Failed;
                     Failed?.Invoke("I can't hear you. Check your microphone.");
                     yield break;

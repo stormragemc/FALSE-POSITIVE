@@ -45,6 +45,12 @@ LINES = (
         "PRIYA-008",
         "[shaken] What happened...? Why won’t anyone tell me what happened?",
     ),
+    (
+        "PRIYA-014",
+        "[warmly amused] Fifteen years—and you two still act exactly the same.",
+    ),
+    ("PRIYA-015", "[playfully] And two years for these two."),
+    ("PRIYA-016", "[warm, lightly wistful] To us... somehow."),
 )
 
 

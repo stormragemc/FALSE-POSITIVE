@@ -1,0 +1,90 @@
+"""Generate Ivy's production dialogue with the selected Laura voice."""
+
+from argparse import ArgumentParser
+from pathlib import Path
+import os
+import sys
+import wave
+
+from elevenlabs import VoiceSettings
+from elevenlabs.client import ElevenLabs
+
+
+OUTPUT_DIRECTORY = Path(__file__).resolve().parent
+VOICE_ID = "FGY2WhTYpPnrIDTdsKH5"  # Laura
+MODEL_ID = "eleven_v3"
+OUTPUT_FORMAT = "pcm_24000"
+SAMPLE_RATE = 24_000
+
+VOICE_SETTINGS = VoiceSettings(
+    stability=0.50,
+    similarity_boost=0.75,
+    style=0.00,
+    use_speaker_boost=True,
+    speed=1.00,
+)
+
+# Tags and punctuation direct the performance without changing the spoken words.
+LINES = (
+    (
+        "IVY-001",
+        "[shocked] Oh my God. What happened to him? What do we do now?",
+    ),
+    (
+        "IVY-002",
+        "[guarded, answering quickly] I don’t know. I was upstairs with Aaron.",
+    ),
+    ("IVY-003", "[guarded] Yes. All night."),
+    ("IVY-004", "[quietly, focused] Careful. Careful... easy."),
+)
+
+
+def write_wav(path: Path, pcm: bytes) -> None:
+    """Write raw 24 kHz mono PCM returned by ElevenLabs to a WAV container."""
+    with wave.open(str(path), "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(SAMPLE_RATE)
+        output.writeframes(pcm)
+
+
+def main() -> int:
+    """Generate missing lines, or every line when --force is supplied."""
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate and overwrite every existing production WAV.",
+    )
+    args = parser.parse_args()
+
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        print("ELEVENLABS_API_KEY is not set.", file=sys.stderr)
+        return 2
+
+    client = ElevenLabs(api_key=api_key)
+    for line_id, prompt in LINES:
+        output_path = OUTPUT_DIRECTORY / f"{line_id}.wav"
+        if output_path.exists() and not args.force:
+            print(f"SKIP {output_path.name}", flush=True)
+            continue
+
+        chunks = client.text_to_speech.convert(
+            voice_id=VOICE_ID,
+            text=prompt,
+            model_id=MODEL_ID,
+            output_format=OUTPUT_FORMAT,
+            voice_settings=VOICE_SETTINGS,
+        )
+        pcm = b"".join(chunks)
+        if not pcm:
+            raise RuntimeError(f"Empty audio response for {line_id}")
+        write_wav(output_path, pcm)
+        print(f"GENERATED {output_path.name}", flush=True)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

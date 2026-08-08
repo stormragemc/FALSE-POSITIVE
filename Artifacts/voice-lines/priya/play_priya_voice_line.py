@@ -1,4 +1,4 @@
-"""Play one or more finalized Priya lines without opening a media player."""
+"""Play one or more selected-voice Priya lines without opening a media player."""
 
 from argparse import ArgumentParser
 from pathlib import Path
@@ -7,7 +7,11 @@ import winsound
 
 
 VOICE_DIRECTORY = Path(__file__).resolve().parent
-LINE_IDS = tuple(f"PRIYA-{number:03d}" for number in range(1, 9))
+LINE_IDS = tuple(f"PRIYA-{number:03d}" for number in range(1, 9)) + (
+    "PRIYA-014",
+    "PRIYA-015",
+    "PRIYA-016",
+)
 
 
 def main() -> None:

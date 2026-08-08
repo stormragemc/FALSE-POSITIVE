@@ -33,6 +33,16 @@ namespace FalsePositive.Editor
         private const string CabinFbxPath = ArtRoot + "Cabin.fbx";
         private const string DoorFbxPath = ArtRoot + "Door.fbx";
 
+        // Real furniture swap (Aug 2026 follow-up pass): SM_Table/SM_Chair_0X
+        // above are baked into Cabin.fbx at whatever scale/quality the
+        // original blockout pass used; these two PolyHaven models (exported
+        // via Tools/blender/export_furniture.py — see that script's own doc
+        // for why the .blend sources live in ArtSource/Furniture/, not here)
+        // replace them. See SwapFurnitureWithRealModels below.
+        private const string FurnitureRoot = "Assets/_Project/Art/Furniture/";
+        private const string TableFbxPath = FurnitureRoot + "WoodenTable_01.fbx";
+        private const string StoolFbxPath = FurnitureRoot + "WoodenStool_01.fbx";
+
         // Hinge coordinate, Unity frame, derived per the mapping above from
         // the Blender-frame hinge coordinate (3.378769, 4.121231, 0.0) in the
         // Cabin_v2 README: Unity(x,y,z) = (-3.378769, 0.0, -4.121231).
@@ -102,14 +112,24 @@ namespace FalsePositive.Editor
 
         private static void SetupNormalMapImportSettings()
         {
-            string[] normalMaps =
+            string[] paths =
             {
-                "Cabin_Normal.png", "Brick_Normal.png", "Metal_Normal.png",
-                "Stone_Normal.png", "Firewood_Normal.png",
+                TextureRoot + "Cabin_Normal.png", TextureRoot + "Brick_Normal.png",
+                TextureRoot + "Metal_Normal.png", TextureRoot + "Stone_Normal.png",
+                TextureRoot + "Firewood_Normal.png",
+                // Furniture nor_gl maps landed next to the exported FBX (FBX
+                // export's path_mode=COPY dropped them in a *.fbm folder) —
+                // full paths here, not TextureRoot-relative like the rest.
+                FurnitureRoot + "WoodenTable_01.fbm/WoodenTable_01_nor_gl_4k.exr",
+                FurnitureRoot + "WoodenStool_01.fbm/wooden_stool_01_nor_gl_4k.exr",
             };
-            foreach (string fileName in normalMaps)
+            SetupNormalMapImportSettings(paths);
+        }
+
+        private static void SetupNormalMapImportSettings(string[] paths)
+        {
+            foreach (string path in paths)
             {
-                string path = TextureRoot + fileName;
                 TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
                 if (importer == null)
                 {
@@ -148,6 +168,20 @@ namespace FalsePositive.Editor
                 TextureRoot + "Firewood_Normal.png", smoothness: 0.1f);
 
             CreateFlatMaterial("M_Blockout_Grey", new Color(0.55f, 0.55f, 0.55f), smoothness: 0.2f);
+
+            // Real furniture materials (see SwapFurnitureWithRealModels).
+            // Diffuse + normal + a scalar smoothness only, same "blockout-
+            // quality, not a final lighting pass" shortcut as every material
+            // above (class doc) — these packs also ship separate roughness/
+            // metallic maps, deliberately not sampled here for the same
+            // reason the wood/brick/stone maps above aren't either.
+            CreateTexturedMaterial("M_Wood_Table",
+                FurnitureRoot + "WoodenTable_01.fbm/WoodenTable_01_diff_4k.jpg",
+                FurnitureRoot + "WoodenTable_01.fbm/WoodenTable_01_nor_gl_4k.exr", smoothness: 0.35f);
+
+            CreateTexturedMaterial("M_Wood_Stool",
+                FurnitureRoot + "WoodenStool_01.fbm/wooden_stool_01_diff_4k.jpg",
+                FurnitureRoot + "WoodenStool_01.fbm/wooden_stool_01_nor_gl_4k.exr", smoothness: 0.3f);
         }
 
         private static void CreateTexturedMaterial(string name, string diffusePath, string normalPath, float smoothness)
@@ -231,6 +265,8 @@ namespace FalsePositive.Editor
             AddColliders(instance, BoxColliderObjects, useMeshCollider: false);
             OrientSofaToFireplace(instance);
 
+            SwapFurnitureWithRealModels(instance);
+
             System.IO.Directory.CreateDirectory(PrefabRoot);
             PrefabUtility.SaveAsPrefabAsset(instance, PrefabRoot + "Cabin_v2.prefab");
             UnityEngine.Object.DestroyImmediate(instance);
@@ -269,6 +305,171 @@ namespace FalsePositive.Editor
             // whatever the import gave us. Safe to run repeatedly only because
             // BuildCabinPrefab always starts from a fresh FBX instance.
             sofa.localRotation = Quaternion.Euler(0f, SofaYaw, 0f) * sofa.localRotation;
+        }
+
+        // Real-world target heights for the furniture swap below — matches
+        // SM_Table's own already-established top height (0.75 m, also the
+        // number MemorySceneDressing.cs's Prop_FiveCups/Prop_Bottles seat
+        // against) for the table, and a standard stool/counter-seat height
+        // for the chairs. The imported models' OWN raw height is measured
+        // live (not assumed) and scaled to hit these.
+        private const float TableTargetHeight = 0.75f;
+        private const float ChairTargetHeight = 0.45f;
+
+        /// <summary>Disables SM_Table/SM_Chair_01..06 (the blockout-quality
+        /// furniture baked into Cabin.fbx) and replaces each with a real
+        /// PolyHaven model (WoodenTable_01.fbx / WoodenStool_01.fbx — the
+        /// stool has no backrest, a deliberate asset swap the user confirmed,
+        /// not a chair-with-back replacement) at the SAME captured world
+        /// position/rotation, scaled to a real-world target height. Disabling
+        /// rather than destroying the originals is non-destructive — same
+        /// convention as every other superseded-asset swap in this project
+        /// (e.g. the old T1 cop model): the README's authored numbers stay
+        /// on disk and recoverable, just unused.
+        ///
+        /// Runs on the in-memory `instance` before SaveAsPrefabAsset, so the
+        /// swap is baked into Cabin_v2.prefab itself and survives every
+        /// re-run of Bootstrap step 0 without any extra wiring elsewhere.</summary>
+        private static void SwapFurnitureWithRealModels(GameObject instance)
+        {
+            GameObject tableSource = AssetDatabase.LoadAssetAtPath<GameObject>(TableFbxPath);
+            GameObject stoolSource = AssetDatabase.LoadAssetAtPath<GameObject>(StoolFbxPath);
+            Material tableMaterial = LoadMaterial("M_Wood_Table");
+            Material stoolMaterial = LoadMaterial("M_Wood_Stool");
+
+            if (tableSource == null || stoolSource == null)
+            {
+                Debug.LogWarning("[CabinV2Builder] Furniture FBX missing (run Tools/blender/export_furniture.py first) — skipping furniture swap.");
+                return;
+            }
+
+            Transform tableTransform = instance.transform.Find("SM_Table");
+            if (tableTransform == null)
+            {
+                Debug.LogWarning("[CabinV2Builder] SM_Table not found on Cabin_v2 — skipping furniture swap.");
+                return;
+            }
+            Vector3 tableCenter = tableTransform.position;
+
+            // WoodenTable_01's raw export has its long axis along X (fresh-
+            // instance bounds measured 1.80 x 0.55 x 0.66) but the room's
+            // table runs long-axis along Z (SM_Table's own world footprint
+            // is 1.1 wide x 2.2 long, chairs sit at z=1.6/3.0 either side) —
+            // a 90 degree yaw aligns them. Verified against the rebuilt
+            // collider's footprint, not assumed.
+            SwapOneFurnitureObject(instance, "SM_Table", "Prop_Table", tableSource, tableMaterial,
+                TableTargetHeight, Quaternion.Euler(0f, 90f, 0f));
+
+            for (int i = 1; i <= 6; i++)
+            {
+                string oldName = $"SM_Chair_0{i}";
+                string newName = $"Prop_Chair_0{i}";
+                Transform chairTransform = instance.transform.Find(oldName);
+                if (chairTransform == null)
+                {
+                    Debug.LogWarning($"[CabinV2Builder] {oldName} not found on Cabin_v2 — skipping furniture swap for it.");
+                    continue;
+                }
+
+                // Face the table centre — matches the README's stated intent
+                // for these chairs ("facing inward"). A round stool has no
+                // strong visual front/back, so exact yaw doesn't need to
+                // preserve the original's own ±3 degree jitter.
+                Vector3 towardTable = Vector3.ProjectOnPlane(tableCenter - chairTransform.position, Vector3.up);
+                Quaternion facing = towardTable.sqrMagnitude > 0.0001f
+                    ? Quaternion.LookRotation(towardTable.normalized, Vector3.up)
+                    : Quaternion.identity;
+
+                SwapOneFurnitureObject(instance, oldName, newName, stoolSource, stoolMaterial,
+                    ChairTargetHeight, facing);
+            }
+        }
+
+        private static void SwapOneFurnitureObject(GameObject instance, string oldName, string newName,
+            GameObject modelSource, Material material, float targetHeight, Quaternion rotation)
+        {
+            Transform old = instance.transform.Find(oldName);
+            if (old == null)
+            {
+                Debug.LogWarning($"[CabinV2Builder] {oldName} not found on Cabin_v2 — skipping furniture swap for it.");
+                return;
+            }
+
+            Vector3 position = old.position;
+            // `rotation` is passed in explicitly rather than derived from
+            // `old.rotation` — every object baked into Cabin.fbx carries a
+            // (270, 0, 0)-class rotation (Unity's importer compensating for
+            // that FBX not baking its own axis conversion; see
+            // BuildDoorPrefab's DoorClosedRotation doc for the same fact on
+            // this exact FBX), under which `old`'s OWN local up/forward axes
+            // do not point where they intuitively should (confirmed live:
+            // SM_Table.up read as world (0,0,-1), not (0,1,0)) — there is no
+            // reliable way to recover "the horizontal facing direction" from
+            // it generically. The new furniture FBX was exported WITH axis
+            // conversion baked in (export_furniture.py), so it has no such
+            // artifact and a plain yaw-only rotation is all it ever needs.
+            old.gameObject.SetActive(false);
+
+            GameObject replacement = new GameObject(newName);
+            replacement.transform.SetParent(instance.transform, false);
+            replacement.transform.SetPositionAndRotation(position, rotation);
+
+            GameObject visual = (GameObject)PrefabUtility.InstantiatePrefab(modelSource, replacement.transform);
+            visual.name = "Visual";
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.identity;
+            visual.transform.localScale = Vector3.one;
+
+            Bounds rawBounds = ComputeWorldRelativeLocalBounds(visual, replacement.transform);
+            float rawHeight = rawBounds.size.y;
+            if (rawHeight > 0.001f)
+            {
+                float scale = targetHeight / rawHeight;
+                visual.transform.localScale = Vector3.one * scale;
+            }
+            else
+            {
+                Debug.LogWarning($"[CabinV2Builder] {newName}'s model has near-zero measured height — leaving scale at 1.");
+            }
+
+            if (material != null)
+            {
+                foreach (Renderer renderer in visual.GetComponentsInChildren<Renderer>())
+                {
+                    Material[] shared = new Material[renderer.sharedMaterials.Length == 0 ? 1 : renderer.sharedMaterials.Length];
+                    for (int i = 0; i < shared.Length; i++) shared[i] = material;
+                    renderer.sharedMaterials = shared;
+                }
+            }
+
+            Bounds scaledLocalBounds = ComputeWorldRelativeLocalBounds(visual, replacement.transform);
+            BoxCollider collider = replacement.AddComponent<BoxCollider>();
+            collider.center = scaledLocalBounds.center;
+            collider.size = Vector3.Max(scaledLocalBounds.size, new Vector3(0.05f, 0.05f, 0.05f));
+        }
+
+        /// <summary>World-space-renderer-bounds-based local bounds, scale-safe
+        /// (correctly accounts for a non-1 `visual.transform.localScale`) —
+        /// unlike this file's own ComputeLocalBounds(Transform) below, which
+        /// reads raw UNSCALED mesh bounds and is only valid when the caller
+        /// assigns the result directly to a BoxCollider on an object whose
+        /// own scale will apply it once (see that method's doc for the
+        /// double-scaling bug this caused before). The furniture swap above
+        /// introduces a real, deliberate non-1 scale on `visual`, so it needs
+        /// this version instead — same technique
+        /// Editor.MemorySceneDressing.ComputeLocalBounds already uses for
+        /// exactly this reason.</summary>
+        private static Bounds ComputeWorldRelativeLocalBounds(GameObject visual, Transform relativeTo)
+        {
+            Renderer[] renderers = visual.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return new Bounds(Vector3.zero, Vector3.one * 0.1f);
+
+            Bounds worldBounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) worldBounds.Encapsulate(renderers[i].bounds);
+
+            Vector3 localCenter = relativeTo.InverseTransformPoint(worldBounds.center);
+            Vector3 localSize = relativeTo.InverseTransformVector(worldBounds.size);
+            return new Bounds(localCenter, new Vector3(Mathf.Abs(localSize.x), Mathf.Abs(localSize.y), Mathf.Abs(localSize.z)));
         }
 
         private static void BuildDoorPrefab()

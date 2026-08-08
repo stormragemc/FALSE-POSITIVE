@@ -14,7 +14,7 @@ ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 # than left to .env so the officer sounds the same on every machine without
 # anyone hand-copying an undocumented ID; a Voice Library ID is public, not a
 # secret (the API key above still is). Casting rationale and the sharing-terms
-# check are in docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md.
+# check are in Artifacts/voice_guide/Spassky.md.
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "6sXsAlJKKBf265ucBSRt")
 FP_CLIENT_KEY = os.environ.get("FP_CLIENT_KEY", "").strip()
 MAX_TURNS_PER_SESSION = max(1, int(os.environ.get("MAX_TURNS_PER_SESSION", "40")))
@@ -76,8 +76,24 @@ SIDECAR_MAX_SESSIONS = max(1, int(os.environ.get("SIDECAR_MAX_SESSIONS", "32")))
 # The client sends one of these per interrogation phase (see docs/GAME_COMPLETION_PLAN.md
 # A7) — generous enough for a phase prompt plus the witness-knowledge briefing, small
 # enough that it can't be used to smuggle a large payload into history.
+#
+# Raised from 6000 for the §7 trap baits. Measured before that change, P2's
+# instruction was already 4860 of 6000 worst case (case_file.txt 1864 +
+# phase_p2_recall.txt 1690 + the 16-row knowledge block 1300), and the six bait
+# lines plus their follow-ups do not fit in the remaining 1140.
 SIDECAR_MAX_SCENE_INSTRUCTION_CHARS = max(
-    256, int(os.environ.get("SIDECAR_MAX_SCENE_INSTRUCTION_CHARS", "6000"))
+    256, int(os.environ.get("SIDECAR_MAX_SCENE_INSTRUCTION_CHARS", "9000"))
+)
+# docs/STORY_SCRIPT.md §7. Off makes every turn report no unsupported details,
+# which the client already treats as a normal playthrough — so this is a kill
+# switch that needs no code change if the judge ever misbehaves in a demo.
+TRAP_JUDGE_ENABLED = _env_bool("TRAP_JUDGE_ENABLED", True)
+# How long the turn will wait for the judge AFTER text-to-speech has returned.
+# The judge starts alongside the officer's reply and normally finishes long
+# before TTS does, so this is the tail case only. It is deliberately short: a
+# turn must never become slow, or fail, because a scoring signal was late.
+TRAP_JUDGE_GRACE_SECONDS = max(
+    0.0, float(os.environ.get("TRAP_JUDGE_GRACE_SECONDS", "1.5"))
 )
 MAX_TURN_REQUEST_BYTES = min(
     1_000_000,

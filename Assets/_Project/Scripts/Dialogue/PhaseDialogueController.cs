@@ -224,6 +224,29 @@ namespace FalsePositive.Dialogue
             TurnsThisSession++;
             Marks.Observe(response.transcript);
 
+            // §7. Deliberately ABOVE the P3 memory-sequence early return below:
+            // the turn that return skips is the witness's answer to "Tell me why
+            // I should spare your life", which is the most fabrication-dense
+            // utterance in the game and must not go unscored. Null is normal —
+            // JsonUtility leaves an absent array null, and DialogueManager's
+            // offline turns build a response by hand with no fabrications at all.
+            if (response.fabrications != null)
+            {
+                foreach (string trapId in response.fabrications)
+                {
+                    _flow.Score.RecordFabrication(trapId);
+                }
+            }
+
+            // Only P2 covers the seven marks; P3 runs against a tracker that
+            // EnterLiveDialoguePhase has already Reset(), so reading it there
+            // would score a full P2 as zero coverage.
+            if (_currentPhase == GamePhase.P2_Recall)
+            {
+                _flow.Score.ObserveMarkCoverage(Marks.CoveredCount);
+            }
+            _flow.Score.UpdateCredibility(StoryMarkTracker.TotalMarks);
+
             if (_currentPhase == GamePhase.P3_Verdict && _namedSuspect == Suspect.None)
             {
                 _namedSuspect = DetectNamedSuspect(response.transcript);
@@ -303,6 +326,20 @@ namespace FalsePositive.Dialogue
             _p3MemoriesPlayed = true;
             Dialogue?.Suspend();
 
+            // §4: Spassky slides a printed group photograph across the table.
+            // Laid on the desk by raycast between the two seats — the
+            // interrogation Table is a bare Transform with no renderer, so its
+            // surface height cannot be read off the object, and a guessed height
+            // is exactly how a prop ends up floating.
+            Vector3 seat = binder != null && binder.PlayerState != null
+                ? binder.PlayerState.transform.position
+                : new Vector3(0f, 0f, -0.8f);
+            GameObject groupPhoto = FalsePositive.Cutscene.PhotoProps.LayOnSurface(
+                "photo_group_that_night",
+                above: new Vector3(0f, 0.9f, 0.1f),
+                readFrom: seat,
+                width: 0.18f, height: 0.135f);
+
             _flow.RequestCutscene(CutsceneId.P3Photograph, () =>
                 _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.GoodYears, () =>
                     _flow.RequestCutscene(CutsceneId.P3AfterGoodYears, () =>
@@ -312,6 +349,9 @@ namespace FalsePositive.Dialogue
                                 // Mic back up. Resume the same phase rather than
                                 // re-entering it: re-entering would reset the
                                 // turn counter and the story marks.
+                                // "He pulls the photograph back into the folder"
+                                // — it goes before the name is asked for.
+                                FalsePositive.Cutscene.PhotoProps.Discard(groupPhoto);
                                 Dialogue?.Resume();
                                 Dialogue?.RequestOfficerTurn(null);
                             })))));
@@ -386,6 +426,17 @@ namespace FalsePositive.Dialogue
             foreach (StoryMarkId id in (StoryMarkId[])Enum.GetValues(typeof(StoryMarkId)))
             {
                 sb.Append(Marks.IsCovered(id) ? "[x] " : "[ ] ").Append(id).Append("  ");
+            }
+
+            // §7/§8, dev-only. Labelled "unsupported" rather than anything about
+            // truth or lying — G6 applies to every visible string, including
+            // this one.
+            if (_flow.Score != null)
+            {
+                sb.Append('\n')
+                    .Append("unsupported ").Append(_flow.Score.CaughtFabrications)
+                    .Append('/').Append(TrapIds.All.Length)
+                    .Append("  credibility ").Append(_flow.Score.Credibility.ToString("0.00"));
             }
             debugOverlay.SetMarksStatus(sb.ToString());
         }

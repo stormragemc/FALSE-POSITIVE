@@ -27,6 +27,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import audio_utils
 import auth
 import config
+import fabrication
 import features_classical
 import limits
 import llm
@@ -40,6 +41,12 @@ config.validate()
 
 _ser_pool = ThreadPoolExecutor(max_workers=1)
 _vendor_pool = ThreadPoolExecutor(max_workers=2)
+# The §7 judge gets its own worker rather than sharing _vendor_pool. A judge
+# stuck on the 20s LLM HTTP timeout then cannot starve the next turn's reply or
+# TTS of a worker, and one worker is self-limiting in the right direction: a
+# still-running judge makes the next turn's judge queue, that turn's grace
+# window expires, and it simply reports nothing.
+_judge_pool = ThreadPoolExecutor(max_workers=1)
 
 # Conversation history per session, keyed by the GUID Unity mints at scene
 # start. See session_store.py for why in-memory is correct here.
@@ -181,6 +188,10 @@ def _empty_response() -> dict:
         "audio_sample_rate": 0, "audio_channels": 0,
         "stt_ms": 0, "ser_ms": 0, "llm_ms": 0, "tts_ms": 0, "total_ms": 0,
         "prosody": prosody.ProsodySignal().to_dict(),
+        # Trap ids from docs/STORY_SCRIPT.md §7 — details this witness stated as
+        # memory but was not in a position to observe. Empty is the common case
+        # and is indistinguishable, by design, from the judge not having run.
+        "fabrications": [],
     }
 
 
@@ -233,6 +244,60 @@ def _validate_scene_instruction(scene_instruction: str) -> str:
 
 def _history_for(session_id: str) -> list[dict]:
     return _session_store.history(session_id)
+
+
+def _last_officer_question(history: list[dict]) -> str:
+    """The officer's most recent line, read before this turn is committed.
+
+    The §7 judge needs it because the traps are baited as questions: after "Did
+    you hear glass?", a witness answering "Yes" has claimed something they could
+    not have observed, and the word "yes" alone does not say so.
+    """
+    for message in reversed(history):
+        if message.get("role") == "assistant":
+            return (message.get("content") or "").strip()
+    return ""
+
+
+def _drain(task) -> None:
+    """Retrieve a late task's exception so it is never reported as unretrieved."""
+    task.add_done_callback(
+        lambda finished: None if finished.cancelled() else finished.exception()
+    )
+
+
+async def _collect_fabrications(task, deadline: float) -> list[str]:
+    """Take the judge's ids if they are ready, and wait only briefly if not.
+
+    The judge was started alongside the officer's reply and has had the whole
+    reply plus text-to-speech to finish in, so this is the tail case. A turn
+    must never be slowed, and must certainly never time out, over a scoring
+    signal: anything not ready in the grace window is dropped and the turn
+    reports nothing caught.
+    """
+    if task is None:
+        return []
+
+    loop = asyncio.get_running_loop()
+    grace = min(
+        config.TRAP_JUDGE_GRACE_SECONDS,
+        max(0.0, deadline - loop.time()),
+    )
+    done, _ = await asyncio.wait({task}, timeout=grace)
+    if task not in done:
+        print("[Sidecar] unsupported-detail judge was not ready in time; none recorded.")
+        _drain(task)
+        return []
+
+    try:
+        trap_ids, judge_ms = task.result()
+    except Exception as e:
+        print(f"[Sidecar] unsupported-detail judge failed: {e}")
+        return []
+
+    if trap_ids:
+        print(f"[Sidecar] unsupported details: {', '.join(trap_ids)} ({judge_ms}ms)")
+    return trap_ids
 
 
 def _begin_session_turn(session_id: str) -> int:
@@ -412,6 +477,7 @@ async def turn(
     pending_prosody_update = None
     tracked_session_id = None
     turn_reset_generation = 0
+    judge_task = None
     try:
         session_id = _validate_session_id(session_id)
         scene_instruction = _validate_scene_instruction(scene_instruction)
@@ -547,6 +613,25 @@ async def turn(
             else None
         )
 
+        # Started BEFORE the reply is awaited, so it overlaps the officer's own
+        # call and text-to-speech and costs no wall-clock time (docs/STORY_SCRIPT
+        # §7). It is collected after TTS rather than awaited here — see
+        # _collect_fabrications — so that a slow judge cannot eat the turn
+        # deadline. Skipped entirely when there is nothing to judge: an opening
+        # turn, a phase transition, or a silent recording.
+        if has_audio and transcript.strip() and active_scene_instruction:
+            judge_task = asyncio.ensure_future(
+                loop.run_in_executor(
+                    _judge_pool,
+                    partial(
+                        fabrication.judge,
+                        scene_instruction=active_scene_instruction,
+                        officer_question=_last_officer_question(history),
+                        transcript=transcript,
+                    ),
+                )
+            )
+
         reply_text, llm_ms = await _await_before_deadline(
             loop.run_in_executor(
                 _vendor_pool,
@@ -574,6 +659,9 @@ async def turn(
             deadline,
         )
         norm_pcm, norm_rate = audio_utils.normalize_to_canonical(pcm, rate, channels)
+
+        fabrications = await _collect_fabrications(judge_task, deadline)
+        judge_task = None
 
         # Only successful, playable turns become part of the session reference.
         # A failed TTS attempt may be retried with the same audio and must not be
@@ -610,6 +698,7 @@ async def turn(
             "audio_sample_rate": norm_rate, "audio_channels": 1,
             "stt_ms": stt_ms, "ser_ms": ser_ms, "llm_ms": llm_ms, "tts_ms": tts_ms,
             "total_ms": total_ms,
+            "fabrications": fabrications,
         })
         if affect_prompt_context is not None:
             result["affect_prompt_context"] = affect_prompt_context
@@ -626,6 +715,11 @@ async def turn(
         result["error"] = str(e) if is_input_error else "turn pipeline failed; retry the utterance"
         return JSONResponse(status_code=400 if is_input_error else 500, content=result)
     finally:
+        # A turn that failed after starting the judge (a TTS error, a timeout)
+        # leaves it in flight. Let it run to completion and drop the result
+        # rather than cancelling a vendor call mid-request.
+        if judge_task is not None:
+            _drain(judge_task)
         if tracked_session_id is not None:
             _finish_session_turn(tracked_session_id)
 

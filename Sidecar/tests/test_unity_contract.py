@@ -3,6 +3,7 @@ import re
 import unittest
 from typing import get_origin, get_type_hints
 
+import fabrication
 from prosody import ProsodySignal
 import ser
 
@@ -26,6 +27,10 @@ UNITY_CLIENT_PATH = (
 PCM_UTILITY_PATH = (
     Path(__file__).resolve().parents[2]
     / "Assets/_Project/Scripts/Audio/PcmUtility.cs"
+)
+TRAP_IDS_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Scripts/Flow/TrapIds.cs"
 )
 
 
@@ -96,6 +101,21 @@ class UnityContractTests(unittest.TestCase):
             _class_fields(self.source, "SidecarTurnResponse").get("session_ended"),
             "bool",
         )
+
+    def test_turn_response_carries_the_unsupported_detail_trap_ids(self):
+        self.assertEqual(
+            _class_fields(self.source, "SidecarTurnResponse").get("fabrications"),
+            "string[]",
+        )
+
+    def test_trap_ids_agree_between_the_judge_and_unity(self):
+        """The one that will actually rot. A trap renamed on one side alone
+        fails nothing at runtime: TrapIds.IsKnown simply stops recognising it,
+        SessionScore silently drops it, and §7 quietly stops working."""
+        source = TRAP_IDS_PATH.read_text(encoding="utf-8")
+        declared = set(re.findall(r'public\s+const\s+string\s+\w+\s*=\s*"([^"]+)"', source))
+
+        self.assertEqual(declared, set(fabrication.TRAP_IDS))
 
     def test_unity_sends_the_configured_client_key_on_turn_requests(self):
         client_source = UNITY_CLIENT_PATH.read_text(encoding="utf-8")

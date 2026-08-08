@@ -45,9 +45,9 @@ namespace FalsePositive.Core
         [Header("Microphone / VAD")]
         public int micTargetSampleRate = 16000;
         public int micRingBufferLengthSeconds = 10;
-        public float noiseFloorCalibrationSeconds = 1.0f;
+        public float noiseFloorCalibrationSeconds = 3.0f;
         public float vadEnterMultiplier = 2.0f;
-        public float vadExitMultiplier = 1.2f;
+        public float vadExitMultiplier = 1.5f;
         public float vadMinUtteranceSeconds = 0.3f;
         public float vadSilenceTimeoutSeconds = 0.7f;
         public float vadMaxUtteranceSeconds = 20f;
@@ -59,7 +59,7 @@ namespace FalsePositive.Core
 
         [Header("Voice calibration (A4) and the call-for-Nick loudness gate (A6)")]
         [Tooltip("Room-tone sampling window during calibration's first stage.")]
-        public float calibrationSilenceSeconds = 1.0f;
+        public float calibrationSilenceSeconds = 3.0f;
         [Tooltip("\"Speak normally\" sampling window during calibration's second stage.")]
         public float calibrationSpeechSeconds = 4.0f;
         [Tooltip("How long calibration waits for any signal above the noise floor before offering Retry.")]

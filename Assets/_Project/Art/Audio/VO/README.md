@@ -18,10 +18,17 @@ Voice casting (ElevenLabs Voice Library / premade voices, not custom clones):
 | Aaron | Eric | `cjVigY5qzO86Huf0OWal` |
 | "David" (wake calls) | River | `SAz9YHcvj6GT2YYXdXww` |
 
-**Render Spassky's clips with these settings**, or the pre-rendered lines will
-not match his live voice — model `eleven_multilingual_v2`, stability `0.15`,
-similarity_boost `1.00`, style `0.85`, speed `0.85`, then a `−1.5 dB` trim.
-Rationale in `docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md`.
+**Spassky's full line set is already rendered** — all 62 IDs from
+`docs/HUMAN_SCRIPT.md` are in `Artifacts/voice-lines/spassky/`, as 24 kHz mono
+WAVs named after their script IDs. Import from there rather than re-rendering.
+
+If a new Spassky line does need rendering, use `eleven_multilingual_v2` and the
+delivery register that matches it — `Artifacts/voice_guide/Spassky.md` §4.3 has
+the table, and `Artifacts/voice-lines/spassky/generate_spassky_voice_lines.py`
+applies it. The settings quoted here previously (stability `0.15`,
+similarity_boost `1.00`, style `0.85`, speed `0.85`, `−1.5 dB` trim) are the
+`LOW` register specifically, which is right for the verdict and ending lines but
+reads too heavy on a short press like "Then what?".
 
 **Render Nick's clips with these settings** — model `eleven_multilingual_v2`,
 stability `0.35`, similarity_boost `0.85`, style `0.55`, speed `0.95`. Looser

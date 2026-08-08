@@ -47,6 +47,15 @@ namespace FalsePositive.Editor
             // their base at local z=0, so y=0.75 (SM_Table top) seats them ON the table —
             // the old 0.78/0.82 sank them ~8cm through it. glass:true swaps the flat
             // placeholder colour for an actual transparent URP material.
+            //
+            // NOT scaled up despite the "make cups/bottles bigger" ask that
+            // prompted this pass (Aug 2026) — measured live first, per real-
+            // world reference (mug ~0.08x0.09m, beer bottle ~0.06x0.24m):
+            // individual mugs here already measure ~0.11-0.16m diameter x
+            // 0.14m tall, bottles ~0.06-0.09m diameter x 0.25m tall — both
+            // already close to real-world size. The wide-looking cluster
+            // footprint (up to ~1.6m spread) is 5 mugs distributed around a
+            // 2.2m-long table, not oversized individual meshes.
             InspectPoint cups = AddProp<InspectPoint>(root, "Prop_FiveCups", new Vector3(-3.0f, 0.75f, 2.15f),
                 new Vector3(0.35f, 0.15f, 0.35f), new Color(0.85f, 0.8f, 0.7f), "5 Cups",
                 "Look at the cups", MemoryFlagIds.SawFiveCups, glass: true);
@@ -71,9 +80,16 @@ namespace FalsePositive.Editor
             // clock's 0.125). The clock fits the 0.15 m strip outright; the
             // radio is 0.21 deep so it is biased forward to overhang the front
             // lip slightly rather than clip through the brickwork behind.
+            //
+            // interactionVolume: the placeholder box is only 0.3 x 0.2 x 0.15,
+            // so the E prompt used to only appear when the crosshair landed on
+            // the radio itself. Widened rather than moved — 0.9 x 0.7 x 0.6
+            // stays clear of Prop_MantelClock beside it so the clock's own
+            // prompt can't get stolen.
             RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.565f, 3.91f),
                 new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
-                "Tune the radio", null);
+                "Tune the radio", null,
+                interactionVolume: new Vector3(0.9f, 0.7f, 0.6f));
             WireRadioAudio(radio);
 
             InspectPoint clock = AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.505f, 3.93f),
@@ -296,6 +312,108 @@ namespace FalsePositive.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        /// <summary>Assets/Clock/Scripts/Clock.cs is a global-namespace
+        /// MonoBehaviour with no asmdef, so it compiles into Assembly-CSharp
+        /// — FalsePositive.Editor.asmdef can't reference that type directly.
+        /// GetComponent(string) sidesteps the assembly boundary (no
+        /// reflection needed) so this can still configure it via
+        /// SerializedObject, same pattern as the DoorInteractable/RadioTuner/
+        /// KeyPickup field-setting elsewhere in this file. Freezes the clock
+        /// at the story's existing "00:52" beat (MemoryFlagIds.SawClock,
+        /// prompt text above) instead of the prefab's default realTime=true,
+        /// which would otherwise show the player's actual system clock.</summary>
+        private static void ConfigureFrozenClock(GameObject clockRoot)
+        {
+            System.Type clockType = TypeByName("Clock");
+            Component clockComponent = clockType != null ? clockRoot.GetComponentInChildren(clockType) : null;
+            if (clockComponent == null)
+            {
+                Debug.LogWarning("[MemorySceneDressing] No 'Clock' component found under Prop_MantelClock — leaving default (real-time) clock behavior.");
+                return;
+            }
+
+            SerializedObject so = new SerializedObject(clockComponent);
+            so.FindProperty("realTime").boolValue = false;
+            so.FindProperty("hour").intValue = 0;
+            so.FindProperty("minutes").intValue = 52;
+            so.FindProperty("seconds").intValue = 0;
+            so.FindProperty("clockSpeed").floatValue = 0f;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>Assembly-CSharp is not referenceable from this asmdef —
+        /// System.Type.GetType with an assembly-qualified guess is the only
+        /// way to get a Type instance for GetComponentInChildren(Type)
+        /// without one. Assembly-CSharp is Unity's default predefined
+        /// assembly name for scripts with no asmdef, which is exactly
+        /// Clock.cs's situation (see ConfigureFrozenClock's doc).</summary>
+        private static System.Type TypeByName(string name)
+        {
+            return System.Type.GetType($"{name}, Assembly-CSharp");
+        }
+
+        /// <summary>Radio.prefab and Clock.prefab were both authored for the
+        /// Built-in Render Pipeline (`Standard`/`Standard (Specular setup)`
+        /// shaders — confirmed live) — this project is URP, where those
+        /// shaders render solid magenta (URP's "no SRP-compatible shader"
+        /// fallback), confirmed via an in-editor camera capture after the
+        /// first pass of this swap. `keepOriginalMaterials` therefore means
+        /// "keep the original textures/colors," not "keep the original
+        /// material asset verbatim" — this builds one URP Lit material per
+        /// distinct source material (cached by name so e.g. Radio_on isn't
+        /// rebuilt once per renderer) carrying over `_MainTex`/`_Color` and,
+        /// if present, `_BumpMap`, then reassigns it in place. Same
+        /// `_EMISSION`-always-on convention as ApplyMaterialRecursive, for
+        /// UI.InteractionPromptUI's look-highlight.</summary>
+        private static readonly System.Collections.Generic.Dictionary<string, Material> _urpMaterialCache = new();
+
+        private static void ConvertMaterialsToUrpRecursive(GameObject go)
+        {
+            foreach (Renderer renderer in go.GetComponentsInChildren<Renderer>())
+            {
+                Material[] originals = renderer.sharedMaterials;
+                Material[] converted = new Material[originals.Length];
+                for (int i = 0; i < originals.Length; i++)
+                {
+                    converted[i] = ConvertOneMaterialToUrp(originals[i]);
+                }
+                renderer.sharedMaterials = converted;
+            }
+        }
+
+        private static Material ConvertOneMaterialToUrp(Material original)
+        {
+            if (original == null) return null;
+            if (_urpMaterialCache.TryGetValue(original.name, out Material cached) && cached != null) return cached;
+
+            Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
+            Material urp = new Material(urpLit) { name = original.name + "_URP" };
+
+            Texture mainTex = original.HasProperty("_MainTex") ? original.GetTexture("_MainTex") : null;
+            if (mainTex != null) urp.SetTexture("_BaseMap", mainTex);
+            if (original.HasProperty("_Color")) urp.SetColor("_BaseColor", original.GetColor("_Color"));
+
+            Texture bump = original.HasProperty("_BumpMap") ? original.GetTexture("_BumpMap") : null;
+            if (bump != null)
+            {
+                urp.SetTexture("_BumpMap", bump);
+                urp.EnableKeyword("_NORMALMAP");
+            }
+
+            float smoothness = original.HasProperty("_Glossiness") ? original.GetFloat("_Glossiness") : 0.4f;
+            urp.SetFloat("_Smoothness", smoothness);
+            urp.SetFloat("_Metallic", original.HasProperty("_Metallic") ? original.GetFloat("_Metallic") : 0f);
+
+            // Same reasoning as ApplyMaterialRecursive: InteractionPromptUI's
+            // look-highlight only overrides an already-enabled _EmissionColor
+            // keyword via MaterialPropertyBlock, so _EMISSION must be on here.
+            urp.EnableKeyword("_EMISSION");
+            urp.SetColor("_EmissionColor", Color.black);
+
+            _urpMaterialCache[original.name] = urp;
+            return urp;
+        }
+
         private static void WireRadioAudio(RadioTuner radio)
         {
             AudioSource staticSource = radio.gameObject.AddComponent<AudioSource>();
@@ -403,17 +521,26 @@ namespace FalsePositive.Editor
 
         private static T AddProp<T>(
             GameObject parent, string name, Vector3 position, Vector3 size, Color color,
-            string labelText, string lookPrompt, string memoryFlag, bool glass = false) where T : Interactable
+            string labelText, string lookPrompt, string memoryFlag, bool glass = false,
+            GameObject overrideModel = null, bool keepOriginalMaterials = false,
+            Quaternion? rotation = null, Vector3? interactionVolume = null) where T : Interactable
         {
             GameObject go = new GameObject(name);
             go.transform.SetParent(parent.transform, false);
             go.transform.position = position;
+            if (rotation.HasValue) go.transform.rotation = rotation.Value;
 
             // Real low-poly model when one exists for this prop (built via
             // Blender MCP, see docs/GAME_COMPLETION_PLAN.md's model list) —
             // falls back to the labelled placeholder cube so a missing FBX
-            // never produces an invisible/unpickable prop.
-            GameObject modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ModelRoot + name + ".fbx");
+            // never produces an invisible/unpickable prop. `overrideModel`
+            // (Radio/Clock — real Asset-Store packs with their own PBR
+            // textures, see DressNight) bypasses the ModelRoot+name.fbx
+            // lookup entirely; `keepOriginalMaterials` skips the flat-color
+            // recolor below for the same reason.
+            GameObject modelPrefab = overrideModel != null
+                ? overrideModel
+                : AssetDatabase.LoadAssetAtPath<GameObject>(ModelRoot + name + ".fbx");
             GameObject visual;
             Bounds localBounds;
             if (modelPrefab != null)
@@ -422,7 +549,8 @@ namespace FalsePositive.Editor
                 visual.name = "Visual";
                 visual.transform.localPosition = Vector3.zero;
                 visual.transform.localRotation = Quaternion.identity;
-                ApplyMaterialRecursive(visual, color, glass);
+                if (keepOriginalMaterials) ConvertMaterialsToUrpRecursive(visual);
+                else ApplyMaterialRecursive(visual, color, glass);
                 localBounds = ComputeLocalBounds(visual, go.transform);
             }
             else
@@ -440,6 +568,27 @@ namespace FalsePositive.Editor
             BoxCollider collider = go.AddComponent<BoxCollider>();
             collider.center = localBounds.center;
             collider.size = Vector3.Max(localBounds.size, new Vector3(0.05f, 0.05f, 0.05f));
+
+            // Optional, larger, trigger-only hit volume for props whose real
+            // mesh bounds make them fiddly to aim InteractionRaycaster's
+            // zero-radius camera ray at (e.g. Prop_Radio — see DressNight).
+            // isTrigger keeps this from becoming a physics wall the player
+            // bumps into; the raycaster still hits it because
+            // ProjectSettings/DynamicsManager.asset has queriesHitTriggers on.
+            // It needs no script of its own — InteractionRaycaster resolves a
+            // hit via GetComponentInParent<Interactable>(), which walks up to
+            // this same GameObject's `interactable` component regardless of
+            // which of the two colliders the ray actually hit.
+            if (interactionVolume.HasValue)
+            {
+                GameObject volumeGo = new GameObject("InteractionVolume");
+                volumeGo.transform.SetParent(go.transform, false);
+                volumeGo.transform.localPosition = localBounds.center;
+                BoxCollider volumeCollider = volumeGo.AddComponent<BoxCollider>();
+                volumeCollider.isTrigger = true;
+                volumeCollider.center = Vector3.zero;
+                volumeCollider.size = interactionVolume.Value;
+            }
 
             // Floating TextMesh name labels used to live here — the game's
             // only on-screen identification for an interactable, per

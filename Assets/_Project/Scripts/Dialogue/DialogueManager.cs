@@ -329,6 +329,7 @@ namespace FalsePositive.Dialogue
                 decodeMs = decodeMs,
                 totalMs = _turnVadWaitMs
                     + Mathf.RoundToInt((Time.realtimeSinceStartup - _turnCapturedAt) * 1000f),
+                wireBytes = _sidecarClient != null ? _sidecarClient.LastDownloadBytes : 0,
             };
 
             LastTurnLatency = latency;

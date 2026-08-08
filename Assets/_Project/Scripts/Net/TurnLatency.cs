@@ -40,6 +40,18 @@ namespace FalsePositive.Net
         /// they stopped speaking to the moment the officer's voice starts.</summary>
         public int totalMs;
 
+        /// <summary>Bytes UnityWebRequest actually pulled off the wire.
+        ///
+        /// Here to settle one question the server cannot answer: the sidecar
+        /// gzips replies over 1KB, but only for a client that asked. Unity does
+        /// not expose whether it negotiated <c>Accept-Encoding</c>, and setting
+        /// that header by hand suppresses auto-decompression on some backends,
+        /// so this is measured rather than assumed. Measured 9 Aug against
+        /// us-central1, one reply was 205KB compressed and 323KB not — so a
+        /// number near 320KB means the compression is not reaching the player
+        /// and the ~110ms it saves is still on the table.</summary>
+        public int wireBytes;
+
         /// <summary>Everything on the wire that was not server work: TLS, the
         /// request body up, the reply body down. Large bodies pay the round trip
         /// several times over because TCP slow-start has to open the window, so
@@ -62,6 +74,6 @@ namespace FalsePositive.Net
         /// unknown reason.</summary>
         public override string ToString() =>
             $"vad={vadWaitMs}ms wire={wireMs}ms (net={TransportMs}ms server={serverMs}ms) " +
-            $"decode={decodeMs}ms TOTAL={totalMs}ms";
+            $"decode={decodeMs}ms down={wireBytes / 1024}KB TOTAL={totalMs}ms";
     }
 }

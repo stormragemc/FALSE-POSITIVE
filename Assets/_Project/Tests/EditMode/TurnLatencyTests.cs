@@ -79,5 +79,16 @@ namespace FalsePositive.Tests
             StringAssert.Contains("TOTAL=5666ms", text);
             StringAssert.Contains("net=1579ms", text);
         }
+
+        [Test]
+        public void ToStringReportsDownloadSizeSoGzipIsVisibleWithoutAProxy()
+        {
+            // 205KB is a gzipped reply, ~320KB is the same reply uncompressed.
+            // The overlay has to make those two distinguishable at a glance,
+            // because nothing else in the game can tell them apart.
+            var compressed = new TurnLatency { totalMs = 1, wireBytes = 210_432 };
+
+            StringAssert.Contains("down=205KB", compressed.ToString());
+        }
     }
 }

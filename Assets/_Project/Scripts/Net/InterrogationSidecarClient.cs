@@ -46,6 +46,11 @@ namespace FalsePositive.Net
         /// available without the caller having to hold on to the response.</summary>
         public int LastServerMs { get; private set; }
 
+        /// <summary>Bytes the last /turn actually pulled off the wire, which is
+        /// the only way to tell from inside the game whether the sidecar's gzip
+        /// is reaching this client — see TurnLatency.wireBytes.</summary>
+        public int LastDownloadBytes { get; private set; }
+
         /// <summary>Outcome of a health gate check. /health itself is
         /// deliberately unauthenticated (Sidecar/app.py exempts it), so a
         /// wrong or missing client key still returns 200 there — ServiceHealthy
@@ -280,6 +285,10 @@ namespace FalsePositive.Net
             float wireStart = Time.realtimeSinceStartup;
             yield return req.SendWebRequest();
             LastWireMs = Mathf.RoundToInt((Time.realtimeSinceStartup - wireStart) * 1000f);
+            // downloadedBytes counts what came off the socket, so it stays at the
+            // compressed size when the transport negotiated gzip even though
+            // downloadHandler.text is the decoded JSON. That gap is the signal.
+            LastDownloadBytes = (int)req.downloadedBytes;
 
             IsBusy = false;
 

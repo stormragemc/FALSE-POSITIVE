@@ -56,7 +56,24 @@ namespace FalsePositive.Audio
 
         private readonly List<float> _readScratch = new List<float>();
 
-        private float _calibrationMin;
+        /// <summary>Percentile of the calibration window taken as the noise
+        /// floor. The median is deliberately NOT the minimum: the minimum is the
+        /// quietest single frame in the window — a hard lower bound, not what the
+        /// room actually sounds like between words. Multiplying it by
+        /// vadExitMultiplier produced an exit threshold BELOW ambient room tone,
+        /// so silence was never detected and every utterance ran to
+        /// vadMaxUtteranceSeconds (20s) before the turn was sent. Measured in a
+        /// normal room: min 0.00098 against speech around 0.01-0.05, i.e. the
+        /// floor sat 10-50x under the signal it was supposed to be scaled
+        /// against, which is why the multipliers appeared to do nothing.
+        ///
+        /// A percentile keeps the property the minimum was chosen for — one
+        /// cough or chair-creak in the window is a handful of frames out of
+        /// ~130 and cannot drag it up — while still reflecting real room tone.
+        /// </summary>
+        private const float NoiseFloorPercentile = 0.5f;
+
+        private readonly List<float> _calibrationSamples = new List<float>();
         private int _calibrationSampleCount;
         private float _calibrationTimer;
         private float _calibrationDuration;
@@ -84,7 +101,7 @@ namespace FalsePositive.Audio
         {
             IsCalibrated = false;
             IsSpeaking = false;
-            _calibrationMin = float.MaxValue;
+            _calibrationSamples.Clear();
             _calibrationSampleCount = 0;
             _calibrationTimer = 0f;
             _calibrationDuration = Mathf.Max(0.05f, seconds);
@@ -154,25 +171,36 @@ namespace FalsePositive.Audio
             SpeakingStateChanged?.Invoke(speaking);
         }
 
+        /// <summary>Nth percentile of an unsorted sample set. Sorts in place —
+        /// the list is calibration-local and cleared straight after.</summary>
+        private static float PercentileOf(List<float> samples, float percentile)
+        {
+            if (samples == null || samples.Count == 0) return 0f;
+            samples.Sort();
+            int index = Mathf.Clamp(
+                Mathf.RoundToInt((samples.Count - 1) * Mathf.Clamp01(percentile)),
+                0, samples.Count - 1);
+            return samples[index];
+        }
+
         private void Calibrate(int newCount)
         {
             _calibrationTimer += Time.deltaTime;
             if (newCount > 0)
             {
-                // Minimum, not mean: a single cough/click/chair-creak during the
-                // "silent" window used to drag the average up and desensitise
-                // the VAD for the whole session. MinNoiseFloor below guards the
-                // opposite failure mode this introduces (see its own doc comment).
-                _calibrationMin = Mathf.Min(_calibrationMin, mic.CurrentRms);
+                _calibrationSamples.Add(mic.CurrentRms);
                 _calibrationSampleCount++;
             }
 
             if (_calibrationTimer >= _calibrationDuration)
             {
-                float measured = _calibrationSampleCount > 0 ? _calibrationMin : 0f;
+                float measured = PercentileOf(_calibrationSamples, NoiseFloorPercentile);
                 _noiseFloor = Mathf.Max(measured, MinNoiseFloor);
-                Debug.Log($"[VAD] Noise floor {_noiseFloor:F5} (min of {_calibrationSampleCount} " +
-                    $"frame(s) over {_calibrationDuration:F1}s, raw {measured:F5}).");
+                Debug.Log($"[VAD] Noise floor {_noiseFloor:F5} (p{NoiseFloorPercentile * 100f:F0} of " +
+                    $"{_calibrationSampleCount} frame(s) over {_calibrationDuration:F1}s, raw {measured:F5}). " +
+                    $"enter>={_noiseFloor * config.vadEnterMultiplier:F5}, " +
+                    $"exit<{_noiseFloor * config.vadExitMultiplier:F5}.");
+                _calibrationSamples.Clear();
                 _calibrating = false;
                 IsCalibrated = true;
                 CalibrationCompleted?.Invoke(_noiseFloor);

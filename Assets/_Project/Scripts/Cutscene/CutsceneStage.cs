@@ -163,11 +163,18 @@ namespace FalsePositive.Cutscene
             Vector3 standing = new Vector3(view.localPosition.x, 1.64f, view.localPosition.z);
             view.localPosition = seated;
 
-            // CutsceneRecipeBuilder gives StandFromChair a single 0.6s SFX
-            // beat (chair_creak) — this must finish within that window or
-            // the fade-in reveals the camera still mid-rise.
+            // A slow, heavy stand -- stretched from the original 0.5s to sell the
+            // same disorientation Wake gets from its drunk post-process/fade/sway
+            // (Rendering/DrunkEffectController.cs, Player/DrunkCameraSway.cs, both
+            // now also driven off CutsceneId.StandFromChair via a second
+            // Cutscene/DrunkCutsceneBinder instance in _Persistent). The recipe's
+            // chair_creak SFX beat alone is far shorter than this -- CutsceneRecipeBuilder
+            // pads it with a HoldBeat so the total beat time covers the rise;
+            // shortening this constant without shortening that pad (or vice versa)
+            // will make Finished fire while the camera is still mid-rise, or leave
+            // the beat holding on an empty room after the player is already standing.
             float t = 0f;
-            const float duration = 0.5f;
+            const float duration = 5f;
             while (t < duration)
             {
                 t += Time.deltaTime;

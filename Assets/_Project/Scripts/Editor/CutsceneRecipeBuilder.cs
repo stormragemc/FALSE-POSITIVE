@@ -141,6 +141,7 @@ namespace FalsePositive.Editor
             element.FindPropertyRelative("fadeOutSeconds").floatValue = recipe.fadeOutSeconds;
             element.FindPropertyRelative("fadeInSeconds").floatValue = recipe.fadeInSeconds;
             element.FindPropertyRelative("keepScreenLit").boolValue = recipe.keepScreenLit;
+            element.FindPropertyRelative("endsBlack").boolValue = recipe.endsBlack;
 
             SerializedProperty beatsProp = element.FindPropertyRelative("beats");
             beatsProp.arraySize = recipe.beats.Length;
@@ -152,9 +153,26 @@ namespace FalsePositive.Editor
                 beatProp.FindPropertyRelative("line").stringValue = beat.line ?? string.Empty;
                 beatProp.FindPropertyRelative("holdSecondsIfNoClip").floatValue = beat.holdSecondsIfNoClip;
                 beatProp.FindPropertyRelative("memoryFlagToSet").stringValue = beat.memoryFlagToSet ?? string.Empty;
-                // voClip intentionally preserved from `existing` by BuildRecipes, not overwritten here.
-                if (beatProp.FindPropertyRelative("voClip").objectReferenceValue == null && beat.voClip != null)
+                if (!string.IsNullOrEmpty(beat.line))
                 {
+                    // Dialogue beat -- voClip may still need to be filled in by
+                    // Step 7 (AttachVoClips), so only adopt a new value if one
+                    // was actually authored here (VoBeat); never clear an
+                    // already-attached clip back to null.
+                    if (beatProp.FindPropertyRelative("voClip").objectReferenceValue == null && beat.voClip != null)
+                    {
+                        beatProp.FindPropertyRelative("voClip").objectReferenceValue = beat.voClip;
+                    }
+                }
+                else
+                {
+                    // Wordless beat (SfxBeat/HoldBeat) -- the code above is the
+                    // sole source of truth for its clip, including clearing it
+                    // back to null. Needed because growing beatsProp.arraySize
+                    // duplicates a neighbouring slot's serialized data into each
+                    // newly created element -- without this, a HoldBeat added
+                    // next to an SfxBeat would silently inherit that SfxBeat's
+                    // clip instead of staying silent.
                     beatProp.FindPropertyRelative("voClip").objectReferenceValue = beat.voClip;
                 }
             }
@@ -165,6 +183,17 @@ namespace FalsePositive.Editor
             speaker = speaker,
             line = line,
             holdSecondsIfNoClip = hold,
+            memoryFlagToSet = flag,
+        };
+
+        /// <summary>A wordless, clipless beat that just waits — for padding a recipe's
+        /// total beat time past what its dialogue/SFX beats alone add up to, e.g. so
+        /// Finished doesn't fire while CutsceneStage is still mid-animation for a beat
+        /// with no VO of its own (see StandFromChair, stretched to a 5s stand-up in
+        /// CutsceneStage.cs but carrying only a sub-second chair_creak SFX beat).</summary>
+        private static CutsceneBeat HoldBeat(float seconds, string flag = null) => new CutsceneBeat
+        {
+            holdSecondsIfNoClip = seconds,
             memoryFlagToSet = flag,
         };
 
@@ -239,6 +268,24 @@ namespace FalsePositive.Editor
             beats = beats,
         };
 
+        /// <summary>Same as Recipe(), but the screen never fades back in at the
+        /// end — it fades to black, plays, and stays black (CutsceneRecipe.
+        /// endsBlack). For the four Fuzzy* recipes only: they ARE a scene
+        /// transition (§10: "the same asset, parameterised"), and every one of
+        /// their call sites immediately follows with GameFlowDirector.
+        /// AdvancePhase()/GoToPhase(), which fades back in itself once the new
+        /// scene is loaded. A plain Recipe() here used to fade back in for that
+        /// one idle moment and then immediately fade out again for the phase
+        /// transition — a visible flash of the old scene between two blacks.</summary>
+        private static CutsceneRecipe TransitionRecipe(CutsceneId id, float fadeOut, params CutsceneBeat[] beats) => new CutsceneRecipe
+        {
+            id = id,
+            fadeOutSeconds = fadeOut,
+            fadeInSeconds = 0f,
+            endsBlack = true,
+            beats = beats,
+        };
+
         /// <summary>Carries forward any voClip already assigned to a matching
         /// (id, beat index) pair from a previous run, so re-running this after
         /// Step 5/7 attaches VO never discards it.</summary>
@@ -273,12 +320,22 @@ namespace FalsePositive.Editor
                 // share one rewind-whoosh SFX, distinguished only by fade timing —
                 // FuzzyToNight is the reverse/rewind (long, disorienting), the
                 // other three are the forward return (shorter, snappier).
-                Recipe(CutsceneId.FuzzyToNight, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToNight, 1.2f,
                     SfxBeat("fuzzy_whoosh", 1.4f)),
                 // Screen-lit -- CutsceneStage stages this one (chair/actor pose)
                 // while the fade covered it before; that staging is now visible.
+                // Slow/echoed VO, the drunk post-process and DrunkCameraSway all
+                // ramp across this one too (a second Cutscene/DrunkCutsceneBinder
+                // instance in _Persistent keyed to this id) -- HoldBeat pads the
+                // total beat time to match CutsceneStage.StandFromChair()'s 5s
+                // rise. chair_creak.mp3 is 1.54s, played at the binder's 0.75x
+                // slow pitch during this beat (CutsceneDirector.PlayBeat divides
+                // hold by voSource.pitch) -> ~2.06s, so the pad is ~2.95s rather
+                // than 5 minus the raw 1.54s. Re-measure both if either the
+                // pitch or the SFX asset ever changes.
                 VisibleRecipe(CutsceneId.StandFromChair,
-                    SfxBeat("chair_creak", 0.6f)),
+                    SfxBeat("chair_creak", 0.6f),
+                    HoldBeat(2.95f)),
 
                 VisibleRecipe(CutsceneId.RadioClears,
                     Beat("RADIO", "…a snow storm. Please stay indoors during these times.", 3f,
@@ -294,9 +351,9 @@ namespace FalsePositive.Editor
                 // a future direct call never hits an empty stub.
                 VisibleRecipe(CutsceneId.CallForNick,
                     SfxBeat("wind_gust_roar", 1.8f)),
-                Recipe(CutsceneId.FuzzyToInterrogation, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToInterrogation, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
-                Recipe(CutsceneId.FuzzyToMorning, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToMorning, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
                 // Screen-lit -- CutsceneStage stages this one (actor poses) while
@@ -333,7 +390,7 @@ namespace FalsePositive.Editor
                     SfxBeat("body_settle_thud", 2f),
                     VoBeat("PRIYA", "Nick? Nick, can you hear me?", "priya_can_you_hear_me", 2.5f)),
 
-                Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToVerdict, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
                 // Spassky's scripted P3 beats. These play in the interrogation

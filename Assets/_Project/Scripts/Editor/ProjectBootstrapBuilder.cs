@@ -382,6 +382,17 @@ namespace FalsePositive.Editor
             // Cop's uLipSync at this during CutsceneId.SpasskyAnswer so the
             // mouth syncs to the real cutscene VO, not just live dialogue turns.
             ULS.uLipSyncAudioSource cutsceneVoLipSync = voSourceGo.AddComponent<ULS.uLipSyncAudioSource>();
+            // Disabled by default (no echo on ordinary VO) — DrunkCutsceneBinder
+            // enables it only across CutsceneId.Wake and disables it again on
+            // Finished. Lives on the shared VO source rather than a dedicated
+            // one because every cutscene's line already plays through this
+            // single AudioSource (see CutsceneDirector.PlayBeat).
+            AudioEchoFilter cutsceneVoEcho = voSourceGo.AddComponent<AudioEchoFilter>();
+            cutsceneVoEcho.enabled = false;
+            cutsceneVoEcho.delay = 180f;
+            cutsceneVoEcho.decayRatio = 0.35f;
+            cutsceneVoEcho.wetMix = 0.5f;
+            cutsceneVoEcho.dryMix = 1f;
             CutsceneDirector cutsceneDirector = cutsceneGo.AddComponent<CutsceneDirector>();
             SetField(cutsceneDirector, "fader", fader);
             SetField(cutsceneDirector, "subtitles", subtitleUi);
@@ -389,14 +400,41 @@ namespace FalsePositive.Editor
             SetField(cutsceneDirector, "voSourceLipSync", cutsceneVoLipSync);
 
             // DrunkEffectController + DrunkCutsceneBinder — drives the URP drunk
-            // post-process across CutsceneId.Wake (waking up at the interrogation
-            // table). Sibling of CutsceneDirector for the same reason: one
-            // instance for the whole game, in _Persistent.
+            // post-process, the slow fade-in, and the slowed/echoed VO across
+            // CutsceneId.Wake (waking up at the interrogation table). Sibling of
+            // CutsceneDirector for the same reason: one instance for the whole
+            // game, in _Persistent.
             GameObject drunkGo = new GameObject("DrunkEffectController");
             drunkGo.transform.SetParent(cutsceneGo.transform, false);
             DrunkEffectController drunkEffect = drunkGo.AddComponent<DrunkEffectController>();
             DrunkCutsceneBinder drunkBinder = drunkGo.AddComponent<DrunkCutsceneBinder>();
             SetField(drunkBinder, "effect", drunkEffect);
+            SetField(drunkBinder, "fader", fader);
+            SetField(drunkBinder, "voSource", cutsceneVoSource);
+            SetField(drunkBinder, "voEcho", cutsceneVoEcho);
+
+            // Second DrunkCutsceneBinder instance for CutsceneId.StandFromChair
+            // (M1_Night's own wake-up, stretched to a 5s stand in
+            // CutsceneStage.StandFromChair) — a separate GameObject rather than
+            // generalizing the binder to multiple ids, since Wake and
+            // StandFromChair never play concurrently and can safely share the
+            // same DrunkEffectController/ScreenFader/VO source underneath.
+            // Timings are slower than Wake's to match the longer beat: ramp in
+            // over roughly the first fifth of the rise, hold, then bleed out
+            // into the "Fix the radio" free-roam that follows.
+            GameObject drunkStandGo = new GameObject("DrunkCutsceneBinder (StandFromChair)");
+            drunkStandGo.transform.SetParent(cutsceneGo.transform, false);
+            DrunkCutsceneBinder drunkStandBinder = drunkStandGo.AddComponent<DrunkCutsceneBinder>();
+            SetField(drunkStandBinder, "cutsceneId", CutsceneId.StandFromChair);
+            SetField(drunkStandBinder, "effect", drunkEffect);
+            SetField(drunkStandBinder, "fader", fader);
+            SetField(drunkStandBinder, "voSource", cutsceneVoSource);
+            SetField(drunkStandBinder, "voEcho", cutsceneVoEcho);
+            SetField(drunkStandBinder, "rampInSeconds", 1f);
+            SetField(drunkStandBinder, "rampOutSeconds", 2f);
+            SetField(drunkStandBinder, "blackSnapSeconds", 0.15f);
+            SetField(drunkStandBinder, "fadeInSeconds", 4f);
+            SetField(drunkStandBinder, "slowPitch", 0.75f);
 
             // EventSystem — the project uses the new Input System exclusively
             // (Active Input Handling = Input System Package), so this must be

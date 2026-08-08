@@ -557,6 +557,60 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: -20, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &89264571
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 89264572}
+  - component: {fileID: 89264573}
+  m_Layer: 0
+  m_Name: DrunkCutsceneBinder (StandFromChair)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &89264572
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 89264571}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 724479247}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &89264573
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 89264571}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce6785d3a7a907e4f92a48991b93a2ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.DrunkCutsceneBinder
+  cutsceneId: 4
+  effect: {fileID: 1175079621}
+  rampInSeconds: 1
+  rampOutSeconds: 2
+  fader: {fileID: 411543006}
+  blackSnapSeconds: 0.15
+  fadeInSeconds: 4
+  voSource: {fileID: 1378186328}
+  voEcho: {fileID: 1378186329}
+  slowPitch: 0.75
 --- !u!1 &116133103
 GameObject:
   m_ObjectHideFlags: 0
@@ -7898,6 +7952,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 2
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -7910,9 +7965,10 @@ MonoBehaviour:
       holdSecondsIfNoClip: 8
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 3
     fadeOutSeconds: 1.2
-    fadeInSeconds: 1.2
+    fadeInSeconds: 0
     beats:
     - speaker: 
       line: 
@@ -7920,6 +7976,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.4
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 1
   - id: 4
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -7929,7 +7986,13 @@ MonoBehaviour:
       voClip: {fileID: 8300000, guid: be4b25939d31a964cb860276b1d7ecec, type: 3}
       holdSecondsIfNoClip: 0.6
       memoryFlagToSet: 
+    - speaker: 
+      line: 
+      voClip: {fileID: 0}
+      holdSecondsIfNoClip: 2.95
+      memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 5
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -7940,6 +8003,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 3
       memoryFlagToSet: heard_radio_warning
     keepScreenLit: 1
+    endsBlack: 0
   - id: 6
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -7950,6 +8014,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.5
       memoryFlagToSet: saw_door_close
     keepScreenLit: 1
+    endsBlack: 0
   - id: 7
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -7960,9 +8025,10 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.8
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 8
     fadeOutSeconds: 1.2
-    fadeInSeconds: 1.2
+    fadeInSeconds: 0
     beats:
     - speaker: 
       line: 
@@ -7970,9 +8036,10 @@ MonoBehaviour:
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 1
   - id: 9
     fadeOutSeconds: 1.2
-    fadeInSeconds: 1.2
+    fadeInSeconds: 0
     beats:
     - speaker: 
       line: 
@@ -7980,6 +8047,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 1
   - id: 10
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -7991,6 +8059,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 4
       memoryFlagToSet: saw_body
     keepScreenLit: 1
+    endsBlack: 0
   - id: 11
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8001,6 +8070,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 12
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8021,6 +8091,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 3
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 13
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8061,6 +8132,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.5
       memoryFlagToSet: heard_aaron_deflect
     keepScreenLit: 1
+    endsBlack: 0
   - id: 14
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8076,9 +8148,10 @@ MonoBehaviour:
       holdSecondsIfNoClip: 2.5
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 15
     fadeOutSeconds: 1.2
-    fadeInSeconds: 1.2
+    fadeInSeconds: 0
     beats:
     - speaker: 
       line: 
@@ -8086,6 +8159,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 0.9
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 1
   - id: 25
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8107,6 +8181,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 2.4
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 26
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8122,6 +8197,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 3
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 27
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8132,6 +8208,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.6
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 23
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8172,6 +8249,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 2
       memoryFlagToSet: saw_coat_swap
     keepScreenLit: 1
+    endsBlack: 0
   - id: 24
     fadeOutSeconds: 0
     fadeInSeconds: 0
@@ -8227,6 +8305,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 1.2
       memoryFlagToSet: 
     keepScreenLit: 1
+    endsBlack: 0
   - id: 16
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
@@ -8237,6 +8316,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
   - id: 17
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
@@ -8247,6 +8327,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
   - id: 18
     fadeOutSeconds: 0.5
     fadeInSeconds: 0.5
@@ -8257,6 +8338,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 5
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
   - id: 19
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -8267,6 +8349,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
   - id: 20
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -8277,6 +8360,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
   - id: 21
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -8287,6 +8371,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
   - id: 22
     fadeOutSeconds: 0.4
     fadeInSeconds: 0.6
@@ -8297,6 +8382,7 @@ MonoBehaviour:
       holdSecondsIfNoClip: 4
       memoryFlagToSet: 
     keepScreenLit: 0
+    endsBlack: 0
 --- !u!4 &724479247
 Transform:
   m_ObjectHideFlags: 0
@@ -8312,6 +8398,7 @@ Transform:
   m_Children:
   - {fileID: 1378186327}
   - {fileID: 1175079619}
+  - {fileID: 89264572}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &729077004
@@ -12130,6 +12217,12 @@ MonoBehaviour:
   effect: {fileID: 1175079621}
   rampInSeconds: 0.4
   rampOutSeconds: 1.5
+  fader: {fileID: 411543006}
+  blackSnapSeconds: 0.15
+  fadeInSeconds: 3
+  voSource: {fileID: 1378186328}
+  voEcho: {fileID: 1378186329}
+  slowPitch: 0.75
 --- !u!114 &1175079621
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12142,10 +12235,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b28d1fa2117e66149a1f7dfaac799a89, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Rendering.DrunkEffectController
-  overlayColor: {r: 0.55, g: 0.15, b: 0.65, a: 1}
-  pulseSpeed: 3
+  overlayColor: {r: 0.5079, g: 0.8866, b: 0.9528, a: 1}
+  pulseSpeed: 2
   pulseEnabled: 1
-  trailBlurStrength: 0.6
+  trailBlurStrength: 0.85
+  maxOverlayIntensity: 0
 --- !u!1 &1184705294
 GameObject:
   m_ObjectHideFlags: 0
@@ -13594,6 +13688,7 @@ GameObject:
   - component: {fileID: 1378186327}
   - component: {fileID: 1378186328}
   - component: {fileID: 1378186326}
+  - component: {fileID: 1378186329}
   m_Layer: 0
   m_Name: CutsceneVoSource
   m_TagString: Untagged
@@ -13725,6 +13820,19 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!168 &1378186329
+AudioEchoFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1378186325}
+  m_Enabled: 0
+  serializedVersion: 2
+  m_Delay: 180
+  m_DecayRatio: 0.35
+  m_WetMix: 0.5
+  m_DryMix: 1
 --- !u!1 &1382496013
 GameObject:
   m_ObjectHideFlags: 0

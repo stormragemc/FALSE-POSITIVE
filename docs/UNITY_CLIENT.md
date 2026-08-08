@@ -186,10 +186,26 @@ black or plays over the live scene:
   `P3AfterGoodYears`, `P3WhoDavid`, `GoodYears`, `WhenItWentWrong`.
 - **Fades to black** — these *are* scene transitions, not cutscenes to be
   watched: `FuzzyToNight`, `FuzzyToInterrogation`, `FuzzyToMorning`,
-  `FuzzyToVerdict`.
+  `FuzzyToVerdict`. Authored via `TransitionRecipe(...)`, which also sets
+  `CutsceneRecipe.endsBlack` — see below.
 - **Stays black by design** — a held black frame with one diegetic sound or
   an ending card, not something to watch: `FlashbackAaron/Ivy/Priya`,
   `EndingDavid/Aaron/Ivy/Priya`.
+
+A `TransitionRecipe` fades to black, plays its beat, and stops there —
+`endsBlack` skips `PlayRoutine`'s trailing `FadeFromBlack`. Every one of its
+call sites (`PhaseDialogueController`, `M1NightController`,
+`M2MorningController`) immediately follows with
+`GameFlowDirector.AdvancePhase()`, whose own `TransitionRoutine` fades back
+in once the new scene is active. Without `endsBlack`, the cutscene's own
+fade-in and the transition's fade-out ran back to back with nothing new on
+screen — a visible flash of the old scene between two blacks. `ScreenFader.
+Fade` also now no-ops when it's already at the requested alpha (exposed via
+`ScreenFader.Alpha`), so `TransitionRoutine`'s leading `FadeToBlack` costs
+nothing when the screen is already black on arrival — the same fix collapses
+the equivalent double-fade in `MemoryInterludeRoutine` for free. **If you add
+a new recipe that hands off to a scene swap, use `TransitionRecipe`, not
+`Recipe` — plain `Recipe` will reproduce the double-fade.**
 
 Going screen-lit exposes whatever `Cutscene/CutsceneStage.cs` stages while
 the beat plays (actors teleporting into position, doors swinging) — it used
@@ -218,6 +234,100 @@ cutscene using it. `Cutscene/DrunkCutsceneBinder.cs` is the only caller
 today — it ramps the effect up on `CutsceneDirector.Started(CutsceneId.Wake)`
 and back down on `Finished`, so it's active only across the player waking up
 at the interrogation table.
+
+The default colour/pulse/trail values, and the `maxOverlayIntensity` cap
+(0.1) that `RampTo`'s 0..1 gameplay ramp scales into, are copied from the
+vendor package's own shipped demo profile (recovered from the cached
+`.unitypackage` in `AppData/Roaming/Unity/Asset Store-5.x/`, since the
+original `Assets/DrunkColorPulse/Demo/` was deleted along with the rest of
+the PPv2 package — see above). A first pass at this port drove
+`_OverLayMaxIntensity` straight off the raw 0..1 ramp in an invented purple;
+at full ramp that lerps the entire frame to solid colour rather than tinting
+it, which is why it looked flatly pink/magenta rather than woozy.
+`maxOverlayIntensity` exists specifically so the ramp's 0..1 stays inside the
+vendor's actual 0..0.1 overlay range. These are all serialized fields on
+`DrunkEffectController`, tunable per-need without a code change — just keep
+`maxOverlayIntensity` well under 1 when doing so.
+
+**Selling the wake-up beyond the post-process.** Three more pieces ramp
+alongside the drunk post-process across `CutsceneId.Wake`, all driven off the
+same `CutsceneDirector.Started`/`Finished` pair:
+
+- **Camera sway** — `Player/DrunkCameraSway.cs`, on the `SeatedLook`
+  GameObject in `Interrogation.unity` (hand-authored in-scene like the rest of
+  the Player rig, not built by `ProjectBootstrapBuilder.cs` — add it the same
+  way if a scene rebuild ever drops it). Runs in `LateUpdate`, multiplying a
+  three-axis sine wobble (mismatched frequencies per axis so it never
+  reads as a metronome) onto `playerCamera.localRotation` on top of whatever
+  `SeatedCameraRig.Update()` wrote that frame. It lives on the Player rig
+  rather than `_Persistent` because it needs that scene-local camera
+  transform, which a persistent singleton can't hold a reference to.
+- **A slow fade in from black** — `DrunkCutsceneBinder` drives `ScreenFader`
+  directly (a quick snap to black, then a slow `FadeFromBlack`) rather than
+  through `CutsceneRecipe.fadeOutSeconds`/`fadeInSeconds`. `Wake` is still
+  `keepScreenLit` (so `CutsceneDirector.PlayRoutine` never touches the fader
+  for it, and the drunk post-process stays visible per its original intent);
+  the recipe's own fade fields would be a one-shot pre/post-cutscene fade,
+  not the "reveal while the cutscene plays" effect wanted for eyes opening.
+- **Slowed, echoed VO** — `DrunkCutsceneBinder` sets the shared
+  `CutsceneVoSource` `AudioSource.pitch` down (`slowPitch`, default 0.75) and
+  enables an `AudioEchoFilter` on it for the duration of `Wake`, then resets
+  both on `Finished`. `AudioClip.length` doesn't change with pitch, so
+  `CutsceneDirector.PlayBeat` divides each beat's hold by `voSource.pitch` —
+  otherwise the slowed clip would get cut off mid-word when the next beat
+  reassigns the shared source's `clip`. This is a no-op for every other
+  cutscene, which never touches pitch.
+
+**Verifying any of this changed rendered camera rotation:** don't trust a
+value read back from a *different* coroutine/script a frame later — Update
+(`SeatedCameraRig`) always runs before LateUpdate (`DrunkCameraSway`) in the
+same frame, so an external read timed against `yield return null` can land in
+the brief window after `SeatedCameraRig` has reset the rotation but before
+`DrunkCameraSway` reapplies it, reading exactly zero every time despite the
+sway genuinely working. `ScreenCapture.CaptureScreenshot` (the actual
+rendered frame) is the reliable way to confirm — `Unity_Camera_Capture` with
+no camera ID captures the *Scene* view, not the game camera, and is not a
+substitute here.
+
+**The same four pieces, ported to `CutsceneId.StandFromChair`** (M1_Night's own
+wake-up, standing from the chair — `CutsceneStage.StandFromChair()`,
+`Editor/CutsceneRecipeBuilder.cs`). Rather than generalizing `DrunkCutsceneBinder`
+and `DrunkCameraSway` to handle multiple ids, each got a **second instance**,
+since `Wake` and `StandFromChair` never play concurrently and can safely share
+the same `DrunkEffectController`/`ScreenFader`/VO source underneath:
+
+- `_Persistent`'s `CutsceneDirector` GameObject carries a second
+  `DrunkCutsceneBinder (StandFromChair)`, wired to the same singletons as
+  `Wake`'s but with slower timings (`rampInSeconds 1`, `rampOutSeconds 2`,
+  `fadeInSeconds 4`) to match the longer beat.
+- `DrunkCameraSway` is added directly to
+  `Assets/_Project/CabinNight/Prefabs/Player_FirstPerson.prefab` (the prefab
+  asset itself, in `Editor/CabinNightCharacterBuilder.cs`'s `ConvertToRouterRig`
+  — not just the `Memory_CabinNight.unity` scene instance), reusing the exact
+  same amplitude/frequency defaults as `Wake`'s. Adding a component to a
+  prefab asset propagates to existing scene instances automatically — no
+  "Apply to Prefab" step needed, unlike changing an existing serialized value.
+- `CutsceneStage.StandFromChair()`'s stand-up animation is stretched from
+  0.5s to 5s. Its recipe (`VisibleRecipe(CutsceneId.StandFromChair, ...)`) has
+  only a sub-second `chair_creak` SFX beat, so a new `HoldBeat(seconds)` helper
+  (wordless, clipless, just waits) pads the total beat time to match — without
+  it, `Finished` (and the effects' ramp-out) fires while the camera is still
+  mid-rise. The pad has to account for `voSource.pitch`: `chair_creak.mp3` is
+  1.54s, played at 0.75x during this beat, so its actual hold is ~2.06s, not
+  the raw clip length — re-measure both if the pitch or the SFX asset changes.
+
+**A real `CutsceneRecipeBuilder` bug this surfaced:** `SerializedProperty`
+array growth (`beatsProp.arraySize = N`) duplicates the *last* element's
+serialized data into each newly created slot rather than zeroing it. Adding
+`HoldBeat` as `StandFromChair`'s second beat meant the array grew from 1 to 2,
+and the new slot silently inherited beat 0's `chair_creak` clip instead of
+staying null — `WriteRecipe`'s old preserve-existing-clip check
+(`if (existing voClip == null && new voClip != null)`) doesn't catch this
+because the *duplicated* value isn't null. Fixed by only trusting that
+preserve logic for beats that carry a `line` (dialogue beats, which
+`Bootstrap/7 - Attach VO Clips` re-attaches from a table every run anyway);
+wordless beats (`SfxBeat`/`HoldBeat`) now always take the value the code
+computed, including clearing it back to null.
 
 **Known pre-existing bug, not touched by the above:** `CutsceneStage.GoodYears()`'s
 staging coroutine runs on its own hardcoded `WaitForSeconds` schedule

@@ -19,10 +19,30 @@ namespace FalsePositive.Rendering
     /// </summary>
     public sealed class DrunkEffectController : MonoBehaviour
     {
-        [SerializeField] private Color overlayColor = new Color(0.55f, 0.15f, 0.65f, 1f);
-        [SerializeField, Range(0.01f, 100f)] private float pulseSpeed = 3f;
+        // Defaults match the vendor's own shipped demo profile (Assets/DrunkColorPulse/Demo/
+        // Main Camera Profile.asset, before that package was deleted -- see
+        // Shaders/DrunkColorPulse.shader's header) rather than the package's C# script
+        // defaults, which are a more aggressive red/0.2 preset never actually shown anywhere
+        // in the asset's own demo. A first port of this drove _OverLayMaxIntensity straight
+        // off the 0..1 gameplay ramp in an invented purple -- at full ramp that lerped the
+        // whole screen to solid colour (reported as "pink"). maxOverlayIntensity below is
+        // what fixes that: the ramp now scales into the vendor's actual 0..0.1 range instead
+        // of 0..1. overlayColor/pulseSpeed/pulseEnabled are kept (and still serialized) purely
+        // so the colour lerp can be dialled back on later -- with maxOverlayIntensity at 0 the
+        // shader's `if (_OverLayMaxIntensity > 0.0)` branch never runs, so none of them do
+        // anything right now. Only the previous-frame trail smear is visible.
+        [SerializeField] private Color overlayColor = new Color(0.5079f, 0.8866f, 0.9528f, 1f);
+        [SerializeField, Range(0.01f, 100f)] private float pulseSpeed = 2f;
         [SerializeField] private bool pulseEnabled = true;
-        [SerializeField, Range(0f, 0.99f)] private float trailBlurStrength = 0.6f;
+        [SerializeField, Range(0f, 0.99f)] private float trailBlurStrength = 0.85f;
+
+        /// <summary>Caps how far RampTo's 0..1 gameplay intensity is allowed to push
+        /// _OverLayMaxIntensity. 0 turns the colour overlay off entirely (trail smear
+        /// only) -- raise this above 0 to bring the tint back; the vendor demo profile
+        /// shipped at 0.1. A full-strength overlay lerp (level near 1) washes the whole
+        /// frame to overlayColor, which reads as a flat colour flash rather than a tint,
+        /// so keep this well under 1 if it's raised.</summary>
+        [SerializeField, Range(0f, 1f)] private float maxOverlayIntensity = 0f;
 
         /// <summary>What DrunkColorPulseFeature's pass actually reads. Struct, not
         /// class, so a reader never sees a half-written ramp step from another
@@ -115,7 +135,7 @@ namespace FalsePositive.Rendering
         private void Publish()
         {
             CurrentSettings = new Settings(overlayColor, pulseSpeed, pulseEnabled,
-                trailBlurStrength * _currentIntensity, _currentIntensity);
+                trailBlurStrength * _currentIntensity, maxOverlayIntensity * _currentIntensity);
         }
 
         private void PublishStopped()

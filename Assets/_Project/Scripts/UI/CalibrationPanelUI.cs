@@ -87,7 +87,7 @@ namespace FalsePositive.UI
             switch (calibration.Stage)
             {
                 case CalibrationStage.SamplingRoom:
-                    statusText.text = "One moment — listening to the room.";
+                    statusText.text = "Stay quiet for a few seconds — listening to the room.";
                     break;
                 case CalibrationStage.SamplingVoice:
                     statusText.text = "Speak normally for a few seconds. Say anything.";

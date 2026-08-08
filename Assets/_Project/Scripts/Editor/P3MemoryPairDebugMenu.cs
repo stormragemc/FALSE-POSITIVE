@@ -11,6 +11,11 @@ namespace FalsePositive.EditorTools
     /// through P1, M1, P2 and M2 first — several minutes per attempt, which is
     /// not a sane edit/test loop for blocking that will need nudging.
     ///
+    /// The straight "jump to a phase" items now live in
+    /// PhaseJumpDebugMenu.cs (P1/P2/P3/P4, under the same Debug/ root) --
+    /// this file keeps only what's specific to the memory pair: playing
+    /// CS-16A/B in isolation and asserting M1's borrowed cast was handed back.
+    ///
     /// Editor-only and play-mode-only: every item validates on
     /// Application.isPlaying, so none of this can fire in a build or against a
     /// scene that has no live GameFlowDirector.
@@ -30,24 +35,10 @@ namespace FalsePositive.EditorTools
             return flow;
         }
 
-        [MenuItem(Root + "Jump to P3_Verdict", true)]
         [MenuItem(Root + "Play CS-16A (Good Years)", true)]
         [MenuItem(Root + "Play CS-16B (When It Went Wrong)", true)]
         [MenuItem(Root + "Check M1 staging was restored", true)]
         private static bool RequiresPlayMode() => Application.isPlaying;
-
-        /// <summary>Drops straight into P3, which runs the memory pair as its
-        /// opening beat. Everything earlier in the playthrough is skipped, so
-        /// MemoryFlags and SessionScore will be empty — fine for looking at
-        /// blocking, misleading if you are judging what the officer says.</summary>
-        [MenuItem(Root + "Jump to P3_Verdict", false, 100)]
-        private static void JumpToP3()
-        {
-            GameFlowDirector flow = Flow();
-            if (flow == null) return;
-            Debug.Log("[P3Debug] GoToPhase(P3_Verdict) — memory flags/score are empty on this path.");
-            flow.GoToPhase(GamePhase.P3_Verdict);
-        }
 
         /// <summary>Plays one memory in isolation: cut to the cabin, run the
         /// cutscene, cut back. No dialogue phase, so this is the cheapest way

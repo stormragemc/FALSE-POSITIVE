@@ -20,6 +20,7 @@ namespace FalsePositive.UI
 
         [SerializeField] private MicrophoneService mic;
         [SerializeField] private VoiceActivityDetector vad;
+        [SerializeField] private UtteranceRecorder recorder;
         [SerializeField] private InterrogationConfig config;
         [SerializeField] private Text label;
         [SerializeField] private Image dot;
@@ -34,9 +35,48 @@ namespace FalsePositive.UI
 
         private float _displayLevel;
 
+        /// <summary>True from the moment VAD says "speaking" until the resulting
+        /// utterance is either sent (UtteranceCaptured) or thrown away
+        /// (UtteranceDiscarded) — drives the meter's green/grey, replacing a
+        /// per-frame level-vs-threshold comparison that used to flicker on
+        /// every transient and go grey mid-sentence during syllable gaps.</summary>
+        private bool _utteranceActive;
+
+        private void OnEnable()
+        {
+            if (vad != null) vad.SpeakingStateChanged += OnSpeakingStateChanged;
+            if (recorder != null)
+            {
+                recorder.UtteranceCaptured += OnUtteranceResolved;
+                recorder.UtteranceDiscarded += OnUtteranceDiscarded;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (vad != null) vad.SpeakingStateChanged -= OnSpeakingStateChanged;
+            if (recorder != null)
+            {
+                recorder.UtteranceCaptured -= OnUtteranceResolved;
+                recorder.UtteranceDiscarded -= OnUtteranceDiscarded;
+            }
+        }
+
+        private void OnSpeakingStateChanged(bool speaking)
+        {
+            if (speaking) _utteranceActive = true;
+        }
+
+        // UtteranceCaptured's signature carries the samples/sampleRate the
+        // recorder just flushed — unused here, only the "it was sent" fact matters.
+        private void OnUtteranceResolved(float[] samples, int sampleRate) => _utteranceActive = false;
+
+        private void OnUtteranceDiscarded() => _utteranceActive = false;
+
         private void Update()
         {
             bool active = mic != null && mic.IsCapturing && (vad == null || !vad.Gated);
+            if (!active) _utteranceActive = false; // gated/stopped mic can't leave the bar stuck green
 
             if (label != null) label.text = active ? ActiveText : InactiveText;
             if (dot != null) dot.color = active ? activeColor : inactiveColor;
@@ -56,8 +96,7 @@ namespace FalsePositive.UI
             fillTransform.anchorMax = anchorMax;
 
             bool tooLoud = rms >= tooLoudRms;
-            bool accepted = vad != null && vad.IsCalibrated && rms >= vad.SpeechThresholdRms;
-            levelMeterFill.color = tooLoud ? tooLoudColor : accepted ? activeColor : tooQuietColor;
+            levelMeterFill.color = tooLoud ? tooLoudColor : _utteranceActive ? activeColor : tooQuietColor;
         }
 
         /// <summary>Maps the useful microphone range logarithmically. Human

@@ -26,15 +26,15 @@ MonoBehaviour:
   fadeDurationSeconds: 0.25
   micTargetSampleRate: 16000
   micRingBufferLengthSeconds: 10
-  noiseFloorCalibrationSeconds: 1
+  noiseFloorCalibrationSeconds: 3
   vadEnterMultiplier: 2
-  vadExitMultiplier: 1.8
+  vadExitMultiplier: 1.6
   vadMinUtteranceSeconds: 0.3
   vadSilenceTimeoutSeconds: 0.7
   vadMaxUtteranceSeconds: 20
   micTooLoudRms: 0.25
   ttsEchoGateTailSeconds: 0.25
-  calibrationSilenceSeconds: 1
+  calibrationSilenceSeconds: 3
   calibrationSpeechSeconds: 4
   calibrationTimeoutSeconds: 10
   loudReferencePercentile: 0.9

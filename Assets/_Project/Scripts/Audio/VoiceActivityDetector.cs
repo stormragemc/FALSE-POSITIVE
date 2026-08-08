@@ -48,9 +48,15 @@ namespace FalsePositive.Audio
             : float.PositiveInfinity;
         public bool IsCalibrated { get; private set; }
 
+        /// <summary>Floor applied to the calibrated noise floor so a dead-silent
+        /// room (or, since Calibrate takes a minimum, a single near-zero frame
+        /// from mic warm-up/a buffer gap) can't collapse it to ~0 and latch the
+        /// VAD permanently on. Shared by Calibrate and ApplyCalibration.</summary>
+        private const float MinNoiseFloor = 0.0005f;
+
         private readonly List<float> _readScratch = new List<float>();
 
-        private float _calibrationSum;
+        private float _calibrationMin;
         private int _calibrationSampleCount;
         private float _calibrationTimer;
         private float _calibrationDuration;
@@ -78,7 +84,7 @@ namespace FalsePositive.Audio
         {
             IsCalibrated = false;
             IsSpeaking = false;
-            _calibrationSum = 0f;
+            _calibrationMin = float.MaxValue;
             _calibrationSampleCount = 0;
             _calibrationTimer = 0f;
             _calibrationDuration = Mathf.Max(0.05f, seconds);
@@ -90,7 +96,7 @@ namespace FalsePositive.Audio
         /// scene reload) and a fresh silent-room sample isn't needed.</summary>
         public void ApplyCalibration(float noiseFloor)
         {
-            _noiseFloor = Mathf.Max(noiseFloor, 0.0005f);
+            _noiseFloor = Mathf.Max(noiseFloor, MinNoiseFloor);
             _calibrating = false;
             IsCalibrated = true;
         }
@@ -153,15 +159,20 @@ namespace FalsePositive.Audio
             _calibrationTimer += Time.deltaTime;
             if (newCount > 0)
             {
-                _calibrationSum += mic.CurrentRms;
+                // Minimum, not mean: a single cough/click/chair-creak during the
+                // "silent" window used to drag the average up and desensitise
+                // the VAD for the whole session. MinNoiseFloor below guards the
+                // opposite failure mode this introduces (see its own doc comment).
+                _calibrationMin = Mathf.Min(_calibrationMin, mic.CurrentRms);
                 _calibrationSampleCount++;
             }
 
             if (_calibrationTimer >= _calibrationDuration)
             {
-                _noiseFloor = _calibrationSampleCount > 0 ? _calibrationSum / _calibrationSampleCount : 0f;
-                // Floor so a dead-silent room doesn't yield a zero threshold.
-                _noiseFloor = Mathf.Max(_noiseFloor, 0.0005f);
+                float measured = _calibrationSampleCount > 0 ? _calibrationMin : 0f;
+                _noiseFloor = Mathf.Max(measured, MinNoiseFloor);
+                Debug.Log($"[VAD] Noise floor {_noiseFloor:F5} (min of {_calibrationSampleCount} " +
+                    $"frame(s) over {_calibrationDuration:F1}s, raw {measured:F5}).");
                 _calibrating = false;
                 IsCalibrated = true;
                 CalibrationCompleted?.Invoke(_noiseFloor);

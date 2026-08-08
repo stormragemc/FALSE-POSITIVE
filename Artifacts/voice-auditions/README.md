@@ -2,11 +2,7 @@
 
 This directory preserves historical ElevenLabs audition metadata and playback scripts. Generated audition WAVs are removed after a character's voice is finalized; rerunning a historical player requires regenerating its referenced files.
 
-<<<<<<< HEAD
-Finalized production voices: Priya uses Aaira and Ivy uses Laura, both with Eleven V3 Natural stability. Their complete ID-based production sets and settings are in `../voice-lines/priya/` and `../voice-lines/ivy/`. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
-=======
-Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. Officer Spassky's finalized production voice is Maksim; his set is in `../voice-lines/spassky/`. No other character has been finalized. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
->>>>>>> 1013b3247cd915b1d060ac68ca9a2833fcbf00b5
+Finalized production voices are Priya as Aaira, Ivy as Laura, and Officer Spassky as Maksim. Nick's selected voice is Ivan Energetic, and the radio announcer's selected voice is Roger; their complete production sets have not yet been rendered. Full casting and delivery decisions are in `../voice_guide/`. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
 
 ## Running an audition
 
@@ -45,16 +41,32 @@ Final selection: **Maksim — "Raw, unpolished, deep"** (`6sXsAlJKKBf265ucBSRt`)
 ### Nick
 
 - `nick/play_nick_line_01_fire_argument.py`
+- `nick/play_nick_line_02_two_years.py`
+- `nick/play_nick_final_decider.py`
 
 Candidates: 1 Ivan, 2 Denis, 3 Ivan Energetic, 4 Alexei, 5 Oleg, 6 Guy, 7 Alex Bell, 8 Escobar.
+
+Final selection: **Ivan Energetic** (`JKtNvDNrWu33P1xzttP2`), Eleven V3 with Natural stability. He was candidate 3 in the original rounds and finalist 1 in the Ivan-Energetic-versus-Alexei decider. Production rendering is pending; see `../voice_guide/Nick.md`.
 
 ### Aaron
 
 - `aaron/play_aaron_line_01_body.py`
 - `aaron/play_aaron_line_02_deflection.py`
 - `aaron/play_aaron_line_03_command.py`
+- `aaron/play_aaron_jock_line_01_body.py`
+- `aaron/play_aaron_jock_line_02_deflection.py`
+- `aaron/play_aaron_jock_line_03_command.py`
+- `aaron/play_aaron_jock_line_04_two_years.py`
 
 Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Roger.
+
+The four `play_aaron_jock_*` entry points form the revised grounded-jock round.
+They use Eleven V3 Natural settings and cover `AARON-001`, `AARON-002`,
+`AARON-003`, and `AARON-005`.
+
+Final selection: **Liam** (`TX3LPaxmHKxFdv7VOQHJ`), Eleven V3 with Natural
+stability. He was candidate 5 in the revised grounded-jock round. Production
+rendering is pending; see `../voice_guide/Aaron.md`.
 
 ### Ivy
 
@@ -84,8 +96,18 @@ Final selection: Aaira (`1XNFRxE3WBB7iI0jnm7p`), Eleven V3 Natural stability. Pr
 ### Radio announcer
 
 - `radio-announcer/play_radio_announcer_line_01_storm_warning.py`
+- `radio-announcer/play_radio_announcer_v3_natural_line_01_storm_warning.py`
+- `radio-announcer/play_radio_announcer_roger_line_03_stay_indoors.py`
 
 Candidates: 1 Roger, 2 Sarah, 3 Daniel, 4 Matilda, 5 George, 6 Jessica, 7 Chris, 8 Alice.
+
+The `v3_natural` entry point is the current clean casting round. It uses Eleven
+V3 Natural settings with no synthesized static, filtering, labels, or candidate
+numbers. The older entry point preserves the historical V2 audition metadata.
+
+Final selection: **Roger** (`CwhRBWXzGAHq8TQ4Fs17`). The `RADIO-001` and
+`RADIO-003` audition takes are approved; `RADIO-002` and `RADIO-004` still need
+production renders. See `../voice_guide/RadioAnnouncer.md`.
 
 ## Generation reference
 

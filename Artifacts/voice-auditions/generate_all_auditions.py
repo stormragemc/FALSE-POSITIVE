@@ -1,9 +1,10 @@
-"""Generate any missing FALSE POSITIVE voice audition WAV files.
+"""Generate missing FALSE POSITIVE voice audition WAV files.
 
 The ElevenLabs API key must be supplied through ELEVENLABS_API_KEY. The key is
 read from the process environment and is never written to disk.
 """
 
+from argparse import ArgumentParser
 from pathlib import Path
 import os
 import sys
@@ -146,6 +147,10 @@ AUDITIONS = (
                 "Not tonight, David. I can't do this with you right now. I need "
                 "some air.",
             ),
+            (
+                "line-02-two-years",
+                "You've been saying \"after this trip\" for two years.",
+            ),
         ),
     ),
     (
@@ -209,6 +214,15 @@ def write_wav(path: Path, pcm: bytes) -> None:
 
 
 def main() -> int:
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--character",
+        action="append",
+        choices=tuple(audition[0] for audition in AUDITIONS),
+        help="Generate only this character; may be supplied more than once.",
+    )
+    args = parser.parse_args()
+
     api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
     if not api_key:
         print("ELEVENLABS_API_KEY is not set.", file=sys.stderr)
@@ -218,6 +232,9 @@ def main() -> int:
     failures: list[str] = []
 
     for character, candidates, lines in AUDITIONS:
+        if args.character and character not in args.character:
+            continue
+
         for line_slug, text in lines:
             for file_slug, voice_name, voice_id in candidates:
                 output_path = BASE_DIR / character / line_slug / f"{file_slug}.wav"

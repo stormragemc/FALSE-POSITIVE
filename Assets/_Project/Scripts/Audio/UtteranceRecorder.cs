@@ -21,6 +21,13 @@ namespace FalsePositive.Audio
 
         public event Action<float[], int> UtteranceCaptured;
 
+        /// <summary>Fires when a speech span ended WITHOUT being sent — too short
+        /// (under vadMinUtteranceSeconds) or empty. Mutually exclusive with
+        /// UtteranceCaptured; exactly one of the two fires per speaking span.
+        /// MicIndicator uses this to avoid latching its meter green forever on
+        /// a discarded span.</summary>
+        public event Action UtteranceDiscarded;
+
         private readonly List<float> _buffer = new List<float>();
         private int _sampleRate;
 
@@ -57,6 +64,10 @@ namespace FalsePositive.Audio
             if (_buffer.Count > 0 && durationSeconds >= config.vadMinUtteranceSeconds)
             {
                 UtteranceCaptured?.Invoke(_buffer.ToArray(), _sampleRate);
+            }
+            else
+            {
+                UtteranceDiscarded?.Invoke();
             }
             _buffer.Clear();
         }

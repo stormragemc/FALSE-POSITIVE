@@ -220,6 +220,7 @@ namespace FalsePositive.Editor
             MicIndicator micIndicator = micIndGo.AddComponent<MicIndicator>();
             SetField(micIndicator, "mic", mic);
             SetField(micIndicator, "vad", vad);
+            SetField(micIndicator, "recorder", recorder);
             SetField(micIndicator, "config", config);
             SetField(micIndicator, "label", micIndText);
             SetField(micIndicator, "dot", micIndDot);

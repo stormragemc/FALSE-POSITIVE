@@ -197,6 +197,18 @@ def _get_client() -> genai.Client:
     return _client
 
 
+def get_client() -> genai.Client:
+    """The shared Vertex client, for other sidecar modules (fabrication.py).
+
+    Deliberately just an alias: sharing the client means the judge inherits the
+    same project, location and HTTP timeout, so it is bounded for free. No
+    judge configuration is read in this module — tests/test_llm_prompt_boundary
+    stubs `config` with a fixed attribute list, and a new read here would raise
+    AttributeError there.
+    """
+    return _get_client()
+
+
 def _format_witness_transcript(text: str) -> str:
     spoken = (text or "").strip() or SILENT_WITNESS_TEXT
     escaped = html.escape(spoken, quote=False)

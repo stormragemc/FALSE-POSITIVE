@@ -43,6 +43,22 @@ class ContainerContractTests(unittest.TestCase):
         self.assertIn("tools/", ignored)
         self.assertIn("**/__pycache__/", ignored)
 
+    def test_the_unsupported_detail_prompt_is_shipped_in_the_image(self):
+        """G3 keeps this prompt in a file rather than a Python literal, which
+        means the image has to carry it. A future 'trim the context' commit
+        adding prompts/ to .dockerignore would disable §7 detection in
+        production only — every offline test would still pass."""
+        prompt = SIDECAR_DIR / "prompts" / "unsupported_detail_judge.txt"
+        self.assertTrue(prompt.exists(), "the §7 judge prompt must exist")
+
+        ignored = (SIDECAR_DIR / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        for line in ignored:
+            self.assertNotIn(
+                "prompts",
+                line,
+                "prompts/ must stay in the Docker context — see this test's docstring",
+            )
+
     def test_windows_launcher_warning_names_current_required_configuration(self):
         launcher = (SIDECAR_DIR / "run_sidecar.bat").read_text(encoding="utf-8")
 

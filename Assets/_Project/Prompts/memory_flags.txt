@@ -6,7 +6,7 @@
 # MemoryFlagIds.cs — a missing row means that trap or clue is silently
 # unreachable in every playthrough.
 
-saw_clock | The witness looked at the mantel clock and could know the time was 00:52. | The witness never looked at a clock; any specific time they give is invented, not observed.
+saw_clock | The witness looked at the mantel clock and could know the time was 00:52. | The witness never looked at a clock; any specific time they give is not something they observed.
 saw_five_cups | The witness noticed five cups on the table, meaning nobody had come in from outside. | The witness never counted the cups on the table.
 saw_coat_swap | The witness is aware they were wearing Nick's coat, having swapped earlier in the night. | The witness has not consciously registered that they were wearing Nick's coat.
 heard_radio_warning | The witness heard the radio's storm warning to stay indoors. | The witness never heard the radio's storm warning.

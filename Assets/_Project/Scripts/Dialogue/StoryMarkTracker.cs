@@ -38,6 +38,10 @@ namespace FalsePositive.Dialogue
 
         public bool IsCovered(StoryMarkId id) => _covered.Contains(id);
         public int CoveredCount => _covered.Count;
+
+        /// <summary>The seven marks of docs/STORY_SCRIPT.md §6, so callers
+        /// scoring coverage don't hard-code the count.</summary>
+        public static int TotalMarks => AllMarks.Length;
         public bool AllCovered => _covered.Count >= AllMarks.Length;
 
         public IReadOnlyList<StoryMarkId> Uncovered

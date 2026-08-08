@@ -59,7 +59,12 @@ namespace FalsePositive.Flow
         {
             new MemoryFlagEntry(MemoryFlagIds.SawClock,
                 "The witness looked at the mantel clock and could know the time was 00:52.",
-                "The witness never looked at a clock; any specific time they give is invented, not observed."),
+                // Deliberately not the word "invented": this sentence is fed to
+                // the officer on every P2/P3 turn, and llm._UNSAFE_SPOKEN_REPLY
+                // blocks invent* — he would echo the briefing's own word and
+                // lose the whole line to the fallback, at the exact moment the
+                // clock trap lands.
+                "The witness never looked at a clock; any specific time they give is not something they observed."),
             new MemoryFlagEntry(MemoryFlagIds.SawFiveCups,
                 "The witness noticed five cups on the table, meaning nobody had come in from outside.",
                 "The witness never counted the cups on the table."),

@@ -21,3 +21,4 @@ saw_body | The witness saw Nick's body outside, face down in the snow. | The wit
 heard_ivy_alibi | The witness heard Ivy volunteer, unprompted, that she was with Aaron all night. | The witness did not hear Ivy say anything about her or Aaron's whereabouts overnight.
 heard_aaron_deflect | The witness heard Aaron deflect Priya's question about who locked the door. | The witness did not hear anyone discuss who locked the door.
 carried_body | The witness helped carry Nick's body inside, so their own hands and prints are on it. | The witness did not physically touch or move the body.
+saw_aaron_learn | The witness saw Aaron realise, that night, that Nick and Ivy had been involved for two years. This establishes motive, not proof that Aaron did anything. | The witness did not see Aaron learn anything about Nick and Ivy.

@@ -315,6 +315,73 @@ namespace FalsePositive.Editor
                 Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
+                // Spassky's scripted P3 beats. These play in the interrogation
+                // room with the mic down, so they are pre-rendered rather than
+                // live TTS — same treatment as spassky_answer, and it keeps the
+                // longest lines off the live turn budget. VisibleRecipe because
+                // §4 cuts hard between the room and the memories rather than
+                // fading. No CutsceneStage staging: nothing moves in the room,
+                // and CutsceneStage only lives in the memory scenes anyway.
+                VisibleRecipe(CutsceneId.P3Photograph,
+                    VoBeat("SPASSKY", "That's what I don't understand.", "spassky_p3_dont_understand", 2f),
+                    VoBeat("SPASSKY", "Old friends. An anniversary. Drinks. From the way they tell it, things were going well.", "spassky_p3_old_friends", 5f),
+                    VoBeat("SPASSKY", "So when did it all go wrong?", "spassky_p3_when_wrong", 2.4f)),
+
+                VisibleRecipe(CutsceneId.P3AfterGoodYears,
+                    VoBeat("SPASSKY", "And somewhere between that photograph and sunrise, Nick ended up dead.", "spassky_p3_photo_sunrise", 4.4f),
+                    VoBeat("SPASSKY", "If it wasn't you, David — who killed Nick?", "spassky_p3_who_killed_nick", 3f)),
+
+                VisibleRecipe(CutsceneId.P3WhoDavid,
+                    VoBeat("SPASSKY", "Who, David?", "spassky_p3_who_david", 1.6f)),
+
+                // The P3 memory pair (docs/STORY_SCRIPT.md §4 P3_VERDICT, §5
+                // CS-16A/CS-16B). VisibleRecipe, not Recipe: the script calls
+                // for a hard cut into the photograph and a hard cut back on the
+                // glasses touching / the door slamming, so these must not fade
+                // to black at either end the way the fuzzy transitions do.
+                //
+                // Cutscene.CutsceneStage.GoodYears/WhenItWentWrong stage the
+                // cabin underneath these beats and hand the scene back exactly
+                // as M1_Night left it.
+                //
+                // Priya's three lines and Aaron's two are not rendered yet —
+                // VoBeat falls back to a silent hold and logs which file is
+                // missing, so the pair is playable now and completes itself
+                // when the clips land under Art/Audio/VO with these names.
+                VisibleRecipe(CutsceneId.GoodYears,
+                    VoBeat("PRIYA", "Fifteen years and you two still act exactly the same.", "priya_fifteen_years", 2.4f),
+                    VoBeat("NICK", "He was worse at seventeen.", "nick_worse_at_seventeen", 1.6f),
+                    VoBeat("PRIYA", "And two years for these two.", "priya_two_years_these_two", 1.8f),
+                    VoBeat("AARON", "Barely survived it.", "aaron_barely_survived", 1.4f),
+                    VoBeat("PRIYA", "To us. Somehow.", "priya_to_us_somehow", 1.4f),
+                    VoBeat("NICK", "Unfortunately.", "nick_unfortunately", 1.2f),
+                    // The coat swap is now witnessed rather than inferred from
+                    // the coat on the chair, which is why §9's clue 3 lists the
+                    // good-years memory as a source alongside M1 and M2.
+                    VoBeat("NICK", "Here. You look fucking freezing.", "nick_you_look_freezing", 2f, MemoryFlagIds.SawCoatSwap)),
+
+                VisibleRecipe(CutsceneId.WhenItWentWrong,
+                    // The radio warning from M1 bleeds under the fragment in
+                    // three broken pieces. These are cuts of radio_storm_warning
+                    // rather than new lines; until they are cut, each is a
+                    // subtitled silent hold.
+                    VoBeat("RADIO", "…snow storm…", "radio_bleed_storm", 1.2f),
+                    VoBeat("NICK", "You've been saying 'after this trip' for two years.", "nick_after_this_trip", 2.6f),
+                    // Aaron does not shout and does not approach. This one quiet
+                    // question is his entire visible reaction, and the moment the
+                    // player is being handed motive.
+                    VoBeat("AARON", "…Two years?", "aaron_two_years", 1.6f, MemoryFlagIds.SawAaronLearn),
+                    VoBeat("RADIO", "…please stay indoors…", "radio_bleed_indoors", 1.2f),
+                    // David is heard only through the player's microphone, so
+                    // his half of the argument is subtitle-only by design — a
+                    // plain Beat with no VO name, never a missing-clip warning.
+                    Beat("DAVID", "You need to tell him.", 1.8f),
+                    VoBeat("NICK", "He already knows.", "nick_he_already_knows", 1.6f),
+                    Beat("DAVID", "Then say it to his face.", 1.8f),
+                    VoBeat("NICK", "I need some air.", "nick_i_need_some_air", 1.6f),
+                    VoBeat("RADIO", "…during these times.", "radio_bleed_these_times", 1.2f),
+                    SfxBeat("door_latch_close", 1.2f)),
+
                 // Accusation flashbacks (docs/STORY_SCRIPT.md §4 P3_VERDICT):
                 // "heavily degraded, no dialogue" — the cheap form is a held
                 // black frame with a single diegetic sound doing the work.

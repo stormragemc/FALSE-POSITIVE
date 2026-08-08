@@ -56,7 +56,7 @@ blackout, not an alibi.
 |---|---|---|
 | **David** (player) | Witness/suspect. First person, never seen, never heard except through the mic. | The player's own |
 | **Officer Spassky** | The interrogator. Male. Terse, watchful, unhurried. | ElevenLabs, live TTS from the LLM |
-| **Nick** | The dead one. Warm, careless, talked too much. | ElevenLabs, one pre-rendered line (fire argument) |
+| **Nick** | The dead one. Warm, careless, talked too much. | ElevenLabs, pre-rendered memory lines |
 | **Aaron** | Killed Nick and locked the door. Quiet, controlled, hosts the trip. | ElevenLabs, pre-rendered |
 | **Ivy** | Aaron's wife. Two years with Nick. Saw Aaron come in. Cannot speak without becoming the motive. | ElevenLabs, pre-rendered |
 | **Priya** | Passed out early. Finds the body. Calls the police. Knows nothing. | ElevenLabs, pre-rendered |
@@ -267,16 +267,150 @@ The sofa — they lay Nick down. Priya dials. Fuzzy → S1.
 
 Free voice. The player defends themselves, blames someone, or does neither. If they claim
 innocence, the officer **fact-checks against the ground truth and the player's own earlier turns**
-before accepting anything, then:
+before accepting anything.
 
-> **SPASSKY:** *"If it's not you, then tell me who did it."*
+Spassky does not immediately ask for a name. He looks down at the folder, turns one page, then
+slides a **printed group photograph** across the table toward David. It was taken earlier that
+night: all five of them crowded together, drunk and smiling.
+
+> **SPASSKY:** *"That's what I don't understand."*
+>
+> **SPASSKY:** *"Old friends. An anniversary. Drinks. From the way they tell it, things were going
+> well."*
+>
+> **SPASSKY:** *"So when did it all go wrong?"*
+
+**The microphone stays inactive.** David looks down at the photograph.
+
+The fluorescent hum softens into laughter. The photograph fills the frame, then becomes motion.
+
+→ **memory fragment A — THE GOOD YEARS, ~13 s.** This is warm, stable and almost entirely
+undistorted. No horror treatment yet. The point is to establish **who everyone is to each other**
+without an exposition dump, and to let the later memory destroy this version of the group.
+
+**0–4 s — old friends.** Earlier that evening, ~21:00. Warm fireplace light. Bottles and half-full
+glasses across the table. Nick has David in a loose one-armed headlock while Priya holds up an old
+school photograph of the two of them, both much younger.
+
+> **PRIYA:** *"Fifteen years and you two still act exactly the same."*
+>
+> **NICK:** *"He was worse at seventeen."*
+
+Nick grins toward David. David's camera bumps him away; everyone laughs. No David VO.
+
+**4–8 s — Aaron and Ivy.** Priya swipes to another photograph on her phone: **Aaron and Ivy on
+their wedding day.** She turns the screen toward them.
+
+> **PRIYA:** *"And two years for these two."*
+>
+> **AARON:** *"Barely survived it."*
+
+Ivy laughs and leans into Aaron; he puts an arm around her. It reads immediately as a comfortable
+married couple. Nick raises his glass toward them. For less than half a second, **Nick and Ivy look
+at each other instead of at Aaron.** David notices; the camera drops to the table before the moment
+can linger.
+
+**8–11 s — the toast.** Priya lifts her glass.
+
+> **PRIYA:** *"To us. Somehow."*
+>
+> **NICK:** *"Unfortunately."*
+
+Five glasses meet in the middle of frame. Laughter. This is the cleanest image of the friend group
+the player will ever see.
+
+**11–13 s — the coat swap.** As everyone breaks from the toast, Nick notices David's thin jacket
+and pulls off his own heavy parka.
+
+> **NICK:** *"Here. You look fucking freezing."*
+
+He throws the parka at David. David catches it and tosses his thin jacket back. Nick puts it on
+with exaggerated pride while Priya laughs. The exchange reads as an ordinary best-friend joke.
+
+**Hard cut back to the interrogation room on the sound of the glasses touching.**
+
+The printed photograph is still on the table. Spassky watches David look at it. He lets the silence
+sit for one beat.
+
+> **SPASSKY:** *"And somewhere between that photograph and sunrise, Nick ended up dead."*
+
+He pulls the photograph back into the folder.
+
+> **SPASSKY:** *"If it wasn't you, David — who killed Nick?"*
+
+**The microphone still does not activate.**
+
+The instant Spassky says **"Nick"**, the warm laughter from the first memory returns — slowed,
+stretched and wrong. The interrogation room begins to become the cabin again, but this time the
+transition is violent: light flickers, the photograph disappears, the table is suddenly littered
+with empty bottles, and the fire is much lower.
+
+→ **memory fragment B — WHEN IT WENT WRONG, ~13 s.** This is the answer to Spassky's question, but
+not an answer David can simply give him. The memory supplies **motive and sequence, not proof of
+murder**. Each beat hard-cuts forward in time while the cabin remains spatially recognisable.
+
+The radio warning from M1 bleeds underneath the fragment in broken pieces:
+
+> **RADIO (memory bleed):** *"…snow storm…"*
+
+**0–5 s — Aaron learns the truth, ~23:40.** Nick and Ivy stand too close near the table. Nick,
+drunk and careless, says something he should not say while Aaron is close enough to hear:
+
+> **NICK:** *"You've been saying 'after this trip' for two years."*
+
+Ivy freezes. She looks at Nick, then at Aaron.
+
+Aaron has stopped moving. **He does not shout. He does not approach them.** His whole visible
+reaction is one quiet question:
+
+> **AARON:** *"…Two years?"*
+
+Ivy says nothing.
+
+> **RADIO (memory bleed):** *"…please stay indoors…"*
+
+David turns toward the fireplace.
+
+**5–11 s — the argument, ~00:50.** Hard jump forward. The party is over without anyone having left
+the room: empty bottles, dying fire, chairs abandoned. David and Nick are by the fireplace.
+David's remembered side of the conversation appears only as subtitle fragments — **no prerecorded
+David VO**, preserving that David is heard only through the player's microphone.
+
+> **DAVID (memory subtitle only):** *"You need to tell him."*
+>
+> **NICK:** *"He already knows."*
+>
+> **DAVID (memory subtitle only):** *"Then say it to his face."*
+
+Nick looks back at David, angry and humiliated. He grabs a bottle from the table.
+
+**11–13 s — Nick goes outside.** Nick turns toward the front door. The shot deliberately catches
+the jacket from the earlier memory: **he is still wearing David's thin jacket.**
+
+> **NICK:** *"I need some air."*
+
+He opens the door onto the whiteout.
+
+> **RADIO (memory bleed):** *"…during these times."*
+
+The door **slams**.
+
+**Hard return to the interrogation room on the slam.** David is facing the interrogation-room
+door. The fluorescent hum snaps back. Spassky has not moved.
+
+One beat.
+
+> **SPASSKY:** *"Who, David?"*
+
+**The microphone activates.**
 
 The system watches for exactly three names: **Aaron · Ivy · Priya.** On a **single unambiguous**
 name (not "maybe Aaron or Ivy"):
 
 > **SPASSKY:** *"So you think it's [X], huh? Tell me why."*
 
-→ accusation flashback, one of three, ~6 s each, no dialogue, heavily degraded:
+→ accusation flashback, one of three, **~3 s each**, no dialogue, heavily degraded. These remain
+brief evidence fragments rather than another full memory beat:
 
 - **Aaron** — the landing at night, seen from the sofa, upside down: a figure crossing to the door.
   A bolt or key sound. He does not look back.
@@ -317,7 +451,9 @@ turn numbers. **It never says they lied.** (G6.)
 
 ## 5. Complete cutscene list
 
-18 Timeline assets. "Cheap form" is the degradation each falls back to under `GAME_COMPLETION_PLAN.md`
+> **P3 memory-pair rule:** `CS-16A` and `CS-16B` are deliberately split by Spassky dialogue. `CS-16A` establishes the social baseline; `CS-16B` corrupts that exact baseline with the affair, motive and final argument. They should reuse the same cabin staging wherever possible so the difference is carried by blocking, props, lighting and performance rather than a new environment.
+
+20 Timeline assets. "Cheap form" is the degradation each falls back to under `GAME_COMPLETION_PLAN.md`
 §10.
 
 | ID | Name | Scene | ~sec | Contents | Cheap form |
@@ -338,8 +474,10 @@ turn numbers. **It never says they lied.** (G6.)
 | CS-13 | **The carry** | S3 | 25 | Backward walking camera, body in frame, 7 VO lines | Fade + VO, camera static at sofa |
 | CS-14 | The sofa / Priya dials | S3 | 8 | Lay down, phone, dial tone | Static + VO |
 | CS-15 | Fuzzy → verdict | S3→S1 | 3 | As CS-03 | Fade to black |
-| CS-16a/b/c | Accusation flashback ×3 | S1 | 6 ea | Degraded memory, no dialogue | Still frame + SFX |
-| CS-17a/b/c/d | Endings ×4 | S1 | 15–25 ea | Per §4 | Still + VO + card |
+| CS-16A | The good years | S1 | 13 | Group-photo trigger → old school photo / David + Nick → Aaron + Ivy anniversary → five-person toast → coat swap → hard return to Spassky | One warm cabin setup + still-photo inserts + 4 short VO lines |
+| CS-16B | When it went wrong | S1 | 13 | "Who killed Nick?" trigger → Aaron learns about Nick + Ivy → David / Nick fire argument → Nick exits in the thin jacket → hard return to Spassky | Same cabin setup, darker lighting + hard cuts + VO/subtitles + radio bleed |
+| CS-17a/b/c | Accusation flashback ×3 | S1 | 3 ea | Brief degraded evidence fragment after the player names Aaron / Ivy / Priya | Still frame + SFX |
+| CS-18a/b/c/d | Endings ×4 | S1 | 15–25 ea | Per §4 | Still + VO + card |
 
 ---
 
@@ -393,7 +531,7 @@ Three tracked quantities, all computed from the interrogation, none of them ever
 | Ending | Condition |
 |---|---|
 | `E_DAVID` | `credibility < 0.45` **or** two-plus caught fabrications **or** no name given in P3 |
-| `E_AARON` | `credibility ≥ 0.6`, named **Aaron**, and cited **≥ 2** of: door locked / key inside / grille intact / thin jacket / Ivy's volunteered alibi / Aaron proposing the move |
+| `E_AARON` | `credibility ≥ 0.6`, named **Aaron**, and cited **≥ 2** of: door locked / key inside / grille intact / thin jacket / Aaron learning about the affair / Ivy's volunteered alibi / Aaron proposing the move |
 | `E_IVY` | `credibility ≥ 0.6`, named **Ivy** |
 | `E_PRIYA` | `credibility ≥ 0.6`, named **Priya** |
 
@@ -409,11 +547,12 @@ which is exactly the trap in §7. `composure` never decides an ending on its own
 |---|---|---|
 | 1 | Five cups. Nobody came in from outside. | M1 table |
 | 2 | The radio warned everyone to stay in. | M1, radio clears |
-| 3 | Nick left in a thin jacket because David had his coat. | M1 coat, M2 body |
+| 3 | Nick left in a thin jacket because David had his coat. | P3 good-years memory, M1 coat, M2 body |
 | 4 | David left the door **unlocked**. | M1, call for Nick |
 | 5 | The door was **locked** in the morning. | M2 door |
 | 6 | The key is on a hook **inside**. Only someone inside could lock it. | M2 key |
 | 7 | The grille is intact and the shards are **inside** — nobody came through the window. | M2 window |
-| 8 | Ivy volunteers an alibi **for Aaron**, unprompted. | M2, the carry |
-| 9 | Aaron is the one who proposes moving the body. | M2, out into the snow / the carry |
-| 10 | The mantel clock read 00:52. | M1, optional |
+| 8 | Nick and Ivy had been involved for **two years**, and Aaron learned about it that night. This establishes motive, not proof of murder. | P3, when-it-went-wrong memory |
+| 9 | Ivy volunteers an alibi **for Aaron**, unprompted. | M2, the carry |
+| 10 | Aaron is the one who proposes moving the body. | M2, out into the snow / the carry |
+| 11 | The mantel clock read 00:52. | M1, optional |

@@ -11,6 +11,7 @@ Voice casting (ElevenLabs Voice Library / premade voices, not custom clones):
 | Character | Voice | Voice ID |
 |---|---|---|
 | Officer Spassky | Maksim — "Raw, unpolished, deep", Russian | `6sXsAlJKKBf265ucBSRt` |
+| Nick | Artem Lebedev — "Podcast Pro", Russian | `rQOBu7YxCDxGiFdTm28w` |
 | Radio | Daniel | `onwK4e9ZLuTAKqWW03F9` |
 | Priya | Jessica | `cgSgspJ2msm6clMCkdW9` |
 | Ivy | Lily | `pFZP5JQG7iQjIQuC4Bku` |
@@ -21,6 +22,13 @@ Voice casting (ElevenLabs Voice Library / premade voices, not custom clones):
 not match his live voice — model `eleven_multilingual_v2`, stability `0.15`,
 similarity_boost `1.00`, style `0.85`, speed `0.85`, then a `−1.5 dB` trim.
 Rationale in `docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md`.
+
+**Render Nick's clips with these settings** — model `eleven_multilingual_v2`,
+stability `0.35`, similarity_boost `0.85`, style `0.55`, speed `0.95`. Looser
+than Spassky so he reads drunk and careless rather than composed, but not so
+loose that the accent wanders. Cast Russian per `docs/HUMAN_SCRIPT.md`'s accent
+table, and auditioned against Maksim so the two Russian voices stay clearly
+distinct — Nick is younger and warmer, Spassky deeper and slower.
 
 Spassky's *live* in-game dialogue is generated turn-by-turn by the sidecar at
 runtime (`Sidecar/tts.py`), not from a file here — the non-offline Spassky

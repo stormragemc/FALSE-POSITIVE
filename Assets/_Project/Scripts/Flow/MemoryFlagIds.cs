@@ -24,6 +24,7 @@ namespace FalsePositive.Flow
         public const string HeardIvyAlibi = "heard_ivy_alibi";
         public const string HeardAaronDeflect = "heard_aaron_deflect";
         public const string CarriedBody = "carried_body";
+        public const string SawAaronLearn = "saw_aaron_learn";
 
         /// <summary>All ids, in the order they appear in STORY_SCRIPT.md — used by
         /// MemoryFlagCatalog to validate the prompt file covers every flag, and
@@ -33,7 +34,7 @@ namespace FalsePositive.Flow
             SawClock, SawFiveCups, SawCoatSwap, HeardRadioWarning, SawDoorClose,
             CalledForNick, LeftDoorUnlocked, FoundDoorLocked, FoundKeyInside,
             SawGrilleIntact, SawGlassInside, SawBody, HeardIvyAlibi,
-            HeardAaronDeflect, CarriedBody,
+            HeardAaronDeflect, CarriedBody, SawAaronLearn,
         };
     }
 }

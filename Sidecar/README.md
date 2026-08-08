@@ -117,6 +117,8 @@ hosted.
 | `FP_CLIENT_KEY` | yes | The shared key every request must present. Empty means *deny everything*, never *allow everything*. |
 | `ELEVENLABS_API_KEY` | yes | From elevenlabs.io. Free tier is enough for light testing only. |
 | `ELEVENLABS_VOICE_ID` | yes | See the voice note below — not just any stock voice. |
+| `ELEVENLABS_MODEL_ID` | — | Defaults to `eleven_multilingual_v2`, cast by ear for the accent. `eleven_flash_v2_5` renders in ~215ms against multilingual's ~925ms; set it here to A/B that trade on a live build without a code change. |
+| `TTS_SAMPLE_RATE` | — | Defaults to 24000, the quality setting — part of the accent sits in sibilance above 8kHz. `16000` drops the reply body by a third (~185ms of download on a 216KB line) and is the right trade on a thin connection. Anything ElevenLabs does not render natively falls back to the default. |
 | `STT_MODEL` | — | Defaults to `long`. Pinned deliberately (roadmap S7); do not swap in a floating alias. `short` cleans disfluencies, which this pipeline needs — see the filler-word note below. |
 | `STT_LANGUAGE` | — | Defaults to `en-US`. |
 | `MAX_TURNS_PER_SESSION` | — | Defaults to 40. |
@@ -125,6 +127,7 @@ hosted.
 | `MAX_TURN_REQUEST_BYTES` | — | Defaults to 700000 and is capped below 1 MB; enforced before multipart parsing. |
 | `SESSION_IDLE_TTL_SECONDS` | — | Defaults to 3600. Text and affect state expire after one idle hour. |
 | `TURN_DEADLINE_SECONDS` | — | Defaults to 50 and is capped at 55, below Unity's 60-second timeout. |
+| `HUBERT_MAX_SECONDS` | — | Defaults to 8. Bounds the emotion model only; the classical features and STT still read the whole utterance. Was 20 — equal to `SIDECAR_MAX_AUDIO_SECONDS`, so it never truncated anything and HuBERT became the slowest stage of the turn. |
 
 Everything else is optional and documented in `.env.example`.
 

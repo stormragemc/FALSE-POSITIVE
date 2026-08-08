@@ -243,6 +243,12 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(4, 3, 0.4)
         self.app._session_reset_generations.clear()
         self.app._active_session_turns.clear()
+        # Was missing: _scene_instructions is module-level state, same as
+        # the dicts cleared above, and every other one of them is reset
+        # here. Without this, a scene_instruction legitimately stored by
+        # one test (e.g. via a reused "session-a" id) leaked into whichever
+        # test happened to run next, independent of what that later test
+        # actually sent.
         self.app._scene_instructions.clear()
         if hasattr(self.app, "limits"):
             self.app._turn_limiter = self.app.limits.TurnLimiter(40, 2000)

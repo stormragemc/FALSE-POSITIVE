@@ -11,6 +11,7 @@ the tier question is harmless to the rest of the pipeline.
 import io
 import time
 
+from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 
@@ -18,11 +19,29 @@ import config
 
 _client: ElevenLabs | None = None
 
-# Low-latency model family — a 1-2s difference on the critical turn-latency
-# path versus the high-quality multilingual models. Confirm this is still the
-# current flash/turbo model id via ElevenLabs' /v1/models endpoint if TTS
-# calls start failing with an unknown-model error.
-_MODEL_ID = "eleven_flash_v2_5"
+# The multilingual model, chosen over eleven_flash_v2_5 by ear in an A/B at
+# matched settings: it is materially the more Russian-sounding of the two, and
+# the accent is the casting brief. It costs 950-2100ms per line against flash's
+# ~215ms, which is the 1-2s turn-latency difference this comment used to warn
+# about — accepted deliberately, see §4.6 of the design spec for what that
+# costs a full playthrough. Confirm the id via ElevenLabs' /v1/models endpoint
+# if TTS calls start failing with an unknown-model error.
+_MODEL_ID = "eleven_multilingual_v2"
+
+# Spassky's delivery: contained anger, not shouting — slow and held down rather
+# than loud. Low stability keeps the emotional variance (and the accent, which
+# high stability flattens toward neutral English); similarity_boost at 1.00 is
+# the strongest accent carrier available and measured free.
+#
+# This is the LOW register of the design spec's §4.3 table, applied uniformly.
+# Script-driven register selection is specced but not yet implemented; until it
+# is, every line is delivered in this one.
+_VOICE_SETTINGS = VoiceSettings(
+    stability=0.15,
+    similarity_boost=1.00,
+    style=0.85,
+    speed=0.85,
+)
 
 
 def _get_client() -> ElevenLabs:
@@ -57,6 +76,7 @@ def _fetch_audio(client: ElevenLabs, text: str) -> tuple[bytes, int, int]:
             text=text,
             model_id=_MODEL_ID,
             output_format="pcm_24000",
+            voice_settings=_VOICE_SETTINGS,
         )
         raw = b"".join(chunks)
         if not raw:
@@ -80,6 +100,9 @@ def _fetch_audio(client: ElevenLabs, text: str) -> tuple[bytes, int, int]:
             text=text,
             model_id=_MODEL_ID,
             output_format="mp3_44100_128",
+            # Same settings as the PCM path above: the fallback must not be
+            # audibly a different performance from the primary.
+            voice_settings=_VOICE_SETTINGS,
         )
         mp3_bytes = b"".join(chunks)
         return _decode_mp3_to_pcm16(mp3_bytes)

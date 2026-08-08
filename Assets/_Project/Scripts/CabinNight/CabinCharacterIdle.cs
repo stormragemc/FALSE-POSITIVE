@@ -17,9 +17,9 @@ namespace FalsePositive.CabinNight
     }
 
     /// <summary>
-    /// Adds restrained, deterministic movement to the static o3n character poses.
-    /// Multiple matching bones are supported because the body, clothes, and hair
-    /// use separate but identically named skeletons.
+    /// Adds restrained, deterministic movement to the static cabin character poses.
+    /// Multiple matching bones remain supported for the o3n player/accessory setup;
+    /// the staged named cast uses one shared Avaturn skeleton per character.
     /// </summary>
     public sealed class CabinCharacterIdle : MonoBehaviour
     {

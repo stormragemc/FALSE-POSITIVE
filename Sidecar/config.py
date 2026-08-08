@@ -10,7 +10,12 @@ _ENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=_ENV_PATH)
 
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
+# Maksim — "Raw, unpolished, deep", Russian accent. Defaulted in source rather
+# than left to .env so the officer sounds the same on every machine without
+# anyone hand-copying an undocumented ID; a Voice Library ID is public, not a
+# secret (the API key above still is). Casting rationale and the sharing-terms
+# check are in docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md.
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "6sXsAlJKKBf265ucBSRt")
 FP_CLIENT_KEY = os.environ.get("FP_CLIENT_KEY", "").strip()
 MAX_TURNS_PER_SESSION = max(1, int(os.environ.get("MAX_TURNS_PER_SESSION", "40")))
 MAX_TURNS_PER_DAY = max(1, int(os.environ.get("MAX_TURNS_PER_DAY", "2000")))

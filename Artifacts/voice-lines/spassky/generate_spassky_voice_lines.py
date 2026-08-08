@@ -31,6 +31,7 @@ PEAK_CEILING = 0.97
 
 _LINE_RE = re.compile(r"^\*\*\[(SPASSKY-\d+)\][^*]*\*\*\s*(.+?)\s*$")
 _SCENE_RE = re.compile(r"^##\s+Scene\s+(\d+)\b")
+_DAVID_RE = re.compile(r"\bDavid\b", re.IGNORECASE)
 
 # Which interrogation phase each script scene belongs to. Phase selects the LOW
 # register for the verdict and the endings; everything else is text-driven.
@@ -92,6 +93,14 @@ def choose(text: str, phase: str | None) -> Delivery:
     if text.endswith("?") and len(words) <= 5:
         return PRESS
     return FLAT
+
+
+def apply_pronunciation_aliases(text: str) -> str:
+    """Enforce DAY-vid without changing the canonical script text."""
+    return _DAVID_RE.sub(
+        lambda match: "DAY-VID" if match.group(0).isupper() else "Day-vid",
+        text,
+    )
 
 
 def read_lines() -> list[tuple[str, str, str | None, Delivery]]:
@@ -194,7 +203,7 @@ def main() -> int:
 
         chunks = client.text_to_speech.convert(
             voice_id=VOICE_ID,
-            text=text,
+            text=apply_pronunciation_aliases(text),
             model_id=MODEL_ID,
             output_format=OUTPUT_FORMAT,
             voice_settings=delivery.voice_settings(),

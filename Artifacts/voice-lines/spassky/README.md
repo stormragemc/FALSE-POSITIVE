@@ -26,6 +26,15 @@ terms checked before committing to a Voice Library voice are in
 The API key is read from `ELEVENLABS_API_KEY` at runtime and is never stored in
 this directory.
 
+All occurrences of `David` use the synthesis-only alias `Day-vid` to enforce
+the standard **DAY-vid** pronunciation. Canonical text and subtitles remain
+unchanged.
+
+`SPASSKY-001`, `SPASSKY-002`, `SPASSKY-003`, `SPASSKY-061`, and
+`SPASSKY-062` were regenerated with this alias on 9 Aug 2026. `SPASSKY-001`
+and `SPASSKY-002` are approved; `SPASSKY-003`, `SPASSKY-061`, and
+`SPASSKY-062` remain pending re-review. All other Spassky takes are unchanged.
+
 ## Delivery registers
 
 Per-line delivery follows the register table in `Artifacts/voice_guide/Spassky.md`
@@ -71,9 +80,9 @@ replaying into a different route does not hear a bit-identical line.
 
 | ID | Phase | Register | Length | Dialogue |
 |---|---|---|---|---|
-| `SPASSKY-001` | P1_TUTORIAL | `FLAT` | 0.93 s | David. |
-| `SPASSKY-002` | P1_TUTORIAL | `FLAT` | 0.93 s | David. |
-| `SPASSKY-003` | P1_TUTORIAL | `RAISED` | 0.88 s | David! |
+| `SPASSKY-001` | P1_TUTORIAL | `FLAT` | 1.07 s | David. |
+| `SPASSKY-002` | P1_TUTORIAL | `FLAT` | 1.02 s | David. |
+| `SPASSKY-003` | P1_TUTORIAL | `RAISED` | 0.93 s | David! |
 | `SPASSKY-004` | P1_TUTORIAL | `PRESS` | 1.02 s | You with me? |
 | `SPASSKY-005` | P1_TUTORIAL | `LOW` | 12.68 s | I'm Officer Spassky. Nick is dead, and right now you're one of the suspects. I've already spoken to the others. Take your time and tell me everything you remember from last night. |
 | `SPASSKY-006` | P2_RECALL | `FLAT` | 2.32 s | So. What's the last thing you remember? |
@@ -112,8 +121,8 @@ replaying into a different route does not hear a bit-identical line.
 | `SPASSKY-058` | P3_VERDICT | `LOW` | 5.94 s | Old friends. An anniversary. Drinks. From the way they tell it, things were going well. |
 | `SPASSKY-059` | P3_VERDICT | `LOW` | 1.81 s | So when did it all go wrong? |
 | `SPASSKY-060` | P3_VERDICT | `LOW` | 7.43 s | And somewhere between that photograph and sunrise, Nick ended up dead. |
-| `SPASSKY-061` | P3_VERDICT | `LOW` | 2.93 s | If it wasn't you, David — who killed Nick? |
-| `SPASSKY-062` | P3_VERDICT | `LOW` | 1.30 s | Who, David? |
+| `SPASSKY-061` | P3_VERDICT | `LOW` | 3.20 s | If it wasn't you, David — who killed Nick? |
+| `SPASSKY-062` | P3_VERDICT | `LOW` | 1.35 s | Who, David? |
 | `SPASSKY-038` | P3_VERDICT | `LOW` | 13.00 s | You were wearing Nick's coat. Your hands were on the body, the door, and the key. You knew what Nick had done, and you kept it quiet. Why should I trust the part that clears you? |
 | `SPASSKY-039` | P3_VERDICT | `LOW` | 2.69 s | If it's not you, then tell me who did it. |
 | `SPASSKY-040` | P3_VERDICT | `LOW` | 2.93 s | So you think it's Aaron, huh? Tell me why. |

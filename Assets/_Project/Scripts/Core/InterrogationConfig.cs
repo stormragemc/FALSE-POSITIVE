@@ -46,6 +46,17 @@ namespace FalsePositive.Core
         public int micTargetSampleRate = 16000;
         public int micRingBufferLengthSeconds = 10;
         public float noiseFloorCalibrationSeconds = 3.0f;
+        [Tooltip("Hold a key to talk instead of letting the VAD decide from loudness. " +
+            "Removes the whole calibrated-threshold problem: no noise floor, no multipliers, " +
+            "no room dependence. The thresholds below are then unused for capture (LoudnessGate " +
+            "still uses its own calibrated reference for the call-for-Nick beat).")]
+        public bool pushToTalk = true;
+        [Tooltip("Held to record while pushToTalk is on. V by default: the game already " +
+            "uses WASD, Left Shift (sprint), E (interact), Escape and F1/F2/F3, and Space is " +
+            "bound to Jump/Sprint in InputSystem_Actions — holding it to talk would also " +
+            "sprint during the cabin free-roam.")]
+        public UnityEngine.InputSystem.Key pushToTalkKey = UnityEngine.InputSystem.Key.V;
+
         public float vadEnterMultiplier = 2.0f;
         public float vadExitMultiplier = 1.5f;
         public float vadMinUtteranceSeconds = 0.3f;

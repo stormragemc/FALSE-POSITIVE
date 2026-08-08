@@ -1,8 +1,10 @@
 # Priya — voice and script-driven delivery
 
-**Status:** voice and eight production WAVs **finalized in the working tree** 8 Aug 2026
-(§4.1–4.3). Three good-years memory WAVs were generated after the 8 Aug script pull and are
-pending review. Unity import and cutscene wiring are not yet implemented (§4.4). Supersedes the
+**Status:** voice finalized. Eleven production WAVs exist in the working tree
+(§4.1–4.3). `PRIYA-002` through `PRIYA-008` are approved; `PRIYA-001` is pending
+re-review after its 9 Aug **DAY-vid** pronunciation correction, and the three
+good-years memory WAVs remain pending review. Unity import and cutscene wiring
+are not yet implemented (§4.4). Supersedes the
 Jessica casting and six legacy Priya clip names in `Assets/_Project/Art/Audio/VO/README.md` where
 they conflict with this document.
 
@@ -35,7 +37,7 @@ Verified against the working tree on 8 Aug 2026.
 | Source | Current reality |
 |---|---|
 | `docs/HUMAN_SCRIPT.md` | Canonical spoken script. Priya owns `PRIYA-001` through `PRIYA-008` and the good-years memory lines `PRIYA-014` through `PRIYA-016`. |
-| `Artifacts/voice-lines/priya/` | Contains eleven Aaira WAVs named after those IDs: eight approved and three pending review. |
+| `Artifacts/voice-lines/priya/` | Contains eleven Aaira WAVs named after those IDs: seven approved and four pending review. |
 | `Assets/_Project/Art/Audio/VO/README.md` | Still names Jessica as Priya's voice and is stale. |
 | `Assets/_Project/Art/Audio/VO/` | Contains six legacy Priya MP3s with descriptive stems, not the new ID filenames. |
 | `CutsceneRecipeBuilder.cs` | Refers to old stems such as `priya_screams` and `priya_door_locked`; several Priya beats are still plain subtitle `Beat` entries. |
@@ -174,9 +176,10 @@ Artifacts/voice-lines/priya/PRIYA-015.wav
 Artifacts/voice-lines/priya/PRIYA-016.wav
 ```
 
-`PRIYA-001` through `PRIYA-008` are approved takes. `PRIYA-014` through
-`PRIYA-016` have the selected voice and documented prompts but remain pending
-audition approval.
+`PRIYA-002` through `PRIYA-008` are approved takes. `PRIYA-001` was regenerated
+with the project-wide synthesis alias `DAY-VID` and is pending re-review.
+`PRIYA-014` through `PRIYA-016` have the selected voice and documented prompts
+but remain pending audition approval.
 
 `Artifacts/voice-lines/priya/README.md` is the compact production manifest.
 `generate_priya_voice_lines.py` stores the public voice ID, model, settings, and exact prompts. It

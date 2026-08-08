@@ -27,8 +27,10 @@ MonoBehaviour:
   micTargetSampleRate: 16000
   micRingBufferLengthSeconds: 10
   noiseFloorCalibrationSeconds: 3
+  pushToTalk: 1
+  pushToTalkKey: 36
   vadEnterMultiplier: 2.5
-  vadExitMultiplier: 1.6
+  vadExitMultiplier: 1.5
   vadMinUtteranceSeconds: 0.3
   vadSilenceTimeoutSeconds: 0.7
   vadMaxUtteranceSeconds: 20

@@ -1,7 +1,8 @@
 # Priya — voice and script-driven delivery
 
 **Status:** voice and eight production WAVs **finalized in the working tree** 8 Aug 2026
-(§4.1–4.3). Unity import and cutscene wiring are not yet implemented (§4.4). Supersedes the
+(§4.1–4.3). Three good-years memory WAVs were generated after the 8 Aug script pull and are
+pending review. Unity import and cutscene wiring are not yet implemented (§4.4). Supersedes the
 Jessica casting and six legacy Priya clip names in `Assets/_Project/Art/Audio/VO/README.md` where
 they conflict with this document.
 
@@ -33,15 +34,15 @@ Verified against the working tree on 8 Aug 2026.
 
 | Source | Current reality |
 |---|---|
-| `docs/HUMAN_SCRIPT.md` | Canonical spoken script. Every line has a stable per-character ID; Priya owns `PRIYA-001` through `PRIYA-008`. |
-| `Artifacts/voice-lines/priya/` | Contains exactly eight finalized Aaira WAVs named after those IDs. |
+| `docs/HUMAN_SCRIPT.md` | Canonical spoken script. Priya owns `PRIYA-001` through `PRIYA-008` and the good-years memory lines `PRIYA-014` through `PRIYA-016`. |
+| `Artifacts/voice-lines/priya/` | Contains eleven Aaira WAVs named after those IDs: eight approved and three pending review. |
 | `Assets/_Project/Art/Audio/VO/README.md` | Still names Jessica as Priya's voice and is stale. |
 | `Assets/_Project/Art/Audio/VO/` | Contains six legacy Priya MP3s with descriptive stems, not the new ID filenames. |
 | `CutsceneRecipeBuilder.cs` | Refers to old stems such as `priya_screams` and `priya_door_locked`; several Priya beats are still plain subtitle `Beat` entries. |
 
 ### 2.1 Canonical line set
 
-Priya has eight lines in the current human script:
+Priya has eleven lines in the current human script:
 
 | ID | Dialogue |
 |---|---|
@@ -53,11 +54,15 @@ Priya has eight lines in the current human script:
 | `PRIYA-006` | Nick? Nick, can you hear me? |
 | `PRIYA-007` | Police? Our friend is hurt. We found him outside in the snow. Please send someone. Please hurry. |
 | `PRIYA-008` | What happened? Why won't anyone tell me what happened? |
+| `PRIYA-014` | Fifteen years and you two still act exactly the same. |
+| `PRIYA-015` | And two years for these two. |
+| `PRIYA-016` | To us. Somehow. |
 
-The legacy Unity set covers only six approximate equivalents. It has no current clip for the
-police call (`PRIYA-007`) or Priya's spoken ending line (`PRIYA-008`). Two legacy strings also
+The original legacy Unity set covered only six approximate equivalents. It had no current clip for
+the police call (`PRIYA-007`) or Priya's spoken ending line (`PRIYA-008`). Two legacy strings also
 differ from canon: "What could have happened here?" became "How did this happen?", and "Who locked
-the door?" became "Who locked it?".
+the door?" became "Who locked it?". The pulled Unity directory now also contains descriptive MP3s
+for `PRIYA-014` through `PRIYA-016`; the approved Aaira WAVs remain the production source of truth.
 
 ### 2.2 Audition evidence
 
@@ -93,7 +98,7 @@ between the original eight-voice round and the six-voice V3 round.
 | D2 | Model is **`eleven_v3`** with Natural stability | V3 handled line-specific delivery directions and punctuation more naturally than `eleven_multilingual_v2`. These clips are pre-rendered, so latency is irrelevant. |
 | D3 | Every production file is named after its `HUMAN_SCRIPT.md` ID | `PRIYA-005.wav` maps directly to `[PRIYA-005]`; no separate stem lookup is required. |
 | D4 | Spoken words remain canonical; tags, casing, and punctuation carry direction | Prevents performance tuning from silently rewriting the story. |
-| D5 | Delivery is authored per line, not selected from a global register | Priya's eight lines cover materially different thought changes despite occurring close together. |
+| D5 | Delivery is authored per line, not selected from a global register | Priya's eleven lines cover materially different thought changes across the morning and memory scenes. |
 | D6 | Do not use `[breathless]` | Auditioning showed that it adds conspicuous inhalations. Panic comes from pace, contour, and punctuation instead. |
 | D7 | Approved WAVs are preserved and generation skips existing files by default | ElevenLabs output is nondeterministic; an approved take must not be replaced accidentally. |
 | D8 | The production source of truth is `Artifacts/voice-lines/priya/` | Unity still contains stale Jessica clips. Integration is an explicit later step, not an implicit overwrite. |
@@ -149,20 +154,29 @@ Audio tags and punctuation below are synthesis instructions. They are not additi
 | `PRIYA-006` | Tentative call, listening pause, close concern | `[softly] Nick? ... Nick, can you hear me?` |
 | `PRIYA-007` | Panicked but intelligible report; urgent final plea | `[panicked but clear] Police? Our friend is hurt! We found him outside—in the snow. Please send someone. Please hurry!` |
 | `PRIYA-008` | Disorientation, longer pause, hurt frustration | `[shaken] What happened...? Why won’t anyone tell me what happened?` |
+| `PRIYA-014` | Warmly tease two old friends over their school photograph | `[warmly amused] Fifteen years—and you two still act exactly the same.` |
+| `PRIYA-015` | Playfully redirect the toast toward Aaron and Ivy | `[playfully] And two years for these two.` |
+| `PRIYA-016` | Warm toast with a lightly wry finish | `[warm, lightly wistful] To us... somehow.` |
 
 The repeated words in `PRIYA-002` are deliberately separated by `?!`, unlike the connected em-dash
 take. The broken contour is the selected panic performance, not a typographical change to the
 canonical script.
 
-### 4.3 Assets and reproducibility — FINALIZED
+### 4.3 Assets and reproducibility — PARTIALLY REVIEWED
 
 Production files:
 
 ```
 Artifacts/voice-lines/priya/PRIYA-001.wav
-...
 Artifacts/voice-lines/priya/PRIYA-008.wav
+Artifacts/voice-lines/priya/PRIYA-014.wav
+Artifacts/voice-lines/priya/PRIYA-015.wav
+Artifacts/voice-lines/priya/PRIYA-016.wav
 ```
+
+`PRIYA-001` through `PRIYA-008` are approved takes. `PRIYA-014` through
+`PRIYA-016` have the selected voice and documented prompts but remain pending
+audition approval.
 
 `Artifacts/voice-lines/priya/README.md` is the compact production manifest.
 `generate_priya_voice_lines.py` stores the public voice ID, model, settings, and exact prompts. It
@@ -194,7 +208,7 @@ mapping. Direct stems are preferred because they preserve the invariant establis
 
 Integration also needs to:
 
-1. Copy or import the eight WAVs into Unity's authored VO directory without transcoding the
+1. Copy or import the eleven WAVs into Unity's authored VO directory without transcoding the
    approved takes.
 2. Replace the Jessica casting row in `Assets/_Project/Art/Audio/VO/README.md` with Aaira and the
    V3 settings from §4.1.
@@ -203,11 +217,8 @@ Integration also needs to:
 5. Add `PRIYA-008` before Spassky's line in `EndingPriya`.
 6. Ensure each spoken Priya beat uses `VoBeat` or otherwise receives the correct clip; several
    current beats are plain `Beat` entries.
-7. Rebuild and verify serialized cutscene recipes after the mapping changes.
-
-The three extra Priya lines in the separate `GoodYears` memory recipe are not in the current
-`HUMAN_SCRIPT.md` line set. They are deliberately not assigned IDs or synthesized here; reconcile
-that script drift before treating them as production dialogue.
+7. Map `PRIYA-014` through `PRIYA-016` into the `GoodYears` memory recipe.
+8. Rebuild and verify serialized cutscene recipes after the mapping changes.
 
 ### 4.5 Loudness and in-game mix
 
@@ -226,8 +237,7 @@ panic calls and erase intentional dynamics.
 
 Completed offline checks:
 
-- `docs/HUMAN_SCRIPT.md` contains 114 spoken IDs and all 114 are unique.
-- Priya owns exactly `PRIYA-001` through `PRIYA-008`.
+- Priya owns exactly `PRIYA-001` through `PRIYA-008` and `PRIYA-014` through `PRIYA-016`.
 - The production directory contains one WAV for every Priya ID, with no missing or extra ID.
 - Every production WAV opens as mono, 24 kHz, 16-bit PCM.
 - The generation and individual-playback utilities compile under the project's Sidecar Python.
@@ -252,9 +262,8 @@ Required Unity-side tests after §4.4 ships:
 - **Importing or wiring the files in Unity.** §4.4 describes the work but does not perform it.
 - **Deleting tracked legacy Unity VO.** Those files may still be referenced by serialized scenes;
   remove them only as part of the integration change.
-- **Generating other characters.** Teammates own those casting and delivery decisions.
-- **The `GoodYears` script-only Priya lines.** They must first be reconciled with the canonical
-  human script and assigned IDs.
+- **Generating additional characters beyond Priya and Ivy.** Those casting and delivery decisions
+  remain separate work.
 - **Live or dynamic Priya TTS.** All current Priya dialogue is pre-rendered.
 - **Per-line mastering.** Preserve the selected dynamics and handle level in Unity's mixer.
 

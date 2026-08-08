@@ -1,8 +1,8 @@
 # FALSE POSITIVE voice auditions
 
-This directory preserves historical ElevenLabs audition metadata and playback scripts. The generated audition WAVs were removed after Priya's voice was finalized; rerunning a historical player requires regenerating its referenced files.
+This directory preserves historical ElevenLabs audition metadata and playback scripts. Generated audition WAVs are removed after a character's voice is finalized; rerunning a historical player requires regenerating its referenced files.
 
-Priya's finalized production voice is Aaira with Eleven V3 Natural stability. Her complete ID-based production set and settings are in `../voice-lines/priya/`. No other character was finalized in this workflow. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
+Finalized production voices: Priya uses Aaira and Ivy uses Laura, both with Eleven V3 Natural stability. Their complete ID-based production sets and settings are in `../voice-lines/priya/` and `../voice-lines/ivy/`. David's auditions were reference-only because the canonical game normally uses the player's microphone for his dialogue.
 
 ## Running an audition
 
@@ -55,8 +55,12 @@ Candidates: 1 Brian, 2 Daniel, 3 George, 4 Eric, 5 Liam, 6 Will, 7 Callum, 8 Rog
 - `ivy/play_ivy_line_01_shock.py`
 - `ivy/play_ivy_line_02_alibi.py`
 - `ivy/play_ivy_line_03_confirmation.py`
+- `ivy/play_ivy_final_decider.py`
+- `ivy/play_ivy_long_final_decider.py`
 
 Candidates: 1 Jessica, 2 Matilda, 3 Laura, 4 Lily, 5 Sarah, 6 Alice, 7 Aria, 8 Charlotte.
+
+Final selection: Laura (`FGY2WhTYpPnrIDTdsKH5`), Eleven V3 Natural stability. Production files are `../voice-lines/ivy/IVY-001.wav` through `IVY-004.wav`.
 
 ### Priya
 

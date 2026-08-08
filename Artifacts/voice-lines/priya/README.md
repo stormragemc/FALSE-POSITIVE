@@ -1,7 +1,10 @@
 # Priya production voice lines
 
-This directory contains Priya's finalized dialogue, one 24 kHz mono 16-bit PCM
-WAV per spoken line. Filenames match the stable IDs in `docs/HUMAN_SCRIPT.md`.
+This directory contains Priya's selected-voice dialogue, one 24 kHz mono 16-bit
+PCM WAV per spoken line. Filenames match the stable IDs in
+`docs/HUMAN_SCRIPT.md`. `PRIYA-001` through `PRIYA-008` are approved;
+`PRIYA-014` through `PRIYA-016` were generated after the 8 Aug script pull and
+are pending review.
 
 ## Selected voice model
 
@@ -32,6 +35,9 @@ this directory.
 | `PRIYA-006` | Nick? Nick, can you hear me? | Tentative first call, a short listening pause, then close concern. |
 | `PRIYA-007` | Police? Our friend is hurt. We found him outside in the snow. Please send someone. Please hurry. | Panicked but intelligible. Report the facts quickly, then make the final plea urgent. |
 | `PRIYA-008` | What happened? Why won't anyone tell me what happened? | Shaken disorientation, a longer pause, then hurt frustration rather than anger. |
+| `PRIYA-014` | Fifteen years and you two still act exactly the same. | Warmly teasing two old friends while holding up their school photograph. |
+| `PRIYA-015` | And two years for these two. | Playful affection as she shifts the group's attention to Aaron and Ivy. |
+| `PRIYA-016` | To us. Somehow. | A warm toast with a faintly wry, reflective turn on “somehow.” |
 
 ## Exact synthesis prompts
 
@@ -46,6 +52,9 @@ spoken dialogue.
 - `PRIYA-006`: `[softly] Nick? ... Nick, can you hear me?`
 - `PRIYA-007`: `[panicked but clear] Police? Our friend is hurt! We found him outside—in the snow. Please send someone. Please hurry!`
 - `PRIYA-008`: `[shaken] What happened...? Why won’t anyone tell me what happened?`
+- `PRIYA-014`: `[warmly amused] Fifteen years—and you two still act exactly the same.`
+- `PRIYA-015`: `[playfully] And two years for these two.`
+- `PRIYA-016`: `[warm, lightly wistful] To us... somehow.`
 
 ## Utilities
 

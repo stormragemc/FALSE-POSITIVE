@@ -33,7 +33,7 @@ Nick.
 | Character | State | Selected voice |
 |---|---|---|
 | Officer Spassky | Finalized, full production set exists | Maksim — `6sXsAlJKKBf265ucBSRt` |
-| Priya | Aaira selected; `PRIYA-001`–`008` approved and `014`–`016` pending review | Aaira — `1XNFRxE3WBB7iI0jnm7p` |
+| Priya | Aaira selected; `PRIYA-002`–`008` approved, `001` and `014`–`016` pending review | Aaira — `1XNFRxE3WBB7iI0jnm7p` |
 | Ivy | Finalized, full production set exists | Laura — `FGY2WhTYpPnrIDTdsKH5` |
 | Nick | Casting finalized; production rendering pending | Ivan Energetic — `JKtNvDNrWu33P1xzttP2` |
 | Aaron | Audition in progress | Not selected |

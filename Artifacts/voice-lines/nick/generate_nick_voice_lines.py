@@ -1,4 +1,4 @@
-"""Generate Priya's production dialogue with the selected Aaira voice."""
+"""Generate Nick's production dialogue with the selected Ivan Energetic voice."""
 
 from argparse import ArgumentParser
 from pathlib import Path
@@ -12,10 +12,12 @@ from elevenlabs.client import ElevenLabs
 
 
 OUTPUT_DIRECTORY = Path(__file__).resolve().parent
-VOICE_ID = "1XNFRxE3WBB7iI0jnm7p"  # Aaira
+VOICE_ID = "JKtNvDNrWu33P1xzttP2"  # Ivan Energetic
 MODEL_ID = "eleven_v3"
 OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
+SAMPLE_WIDTH = 2
+CHANNELS = 1
 _DAVID_RE = re.compile(r"\bDavid\b", re.IGNORECASE)
 
 VOICE_SETTINGS = VoiceSettings(
@@ -29,40 +31,43 @@ VOICE_SETTINGS = VoiceSettings(
 # Tags and punctuation direct the performance without changing the spoken words.
 LINES = (
     (
-        "PRIYA-001",
-        "[worried] Guys—help! Something’s happened to Nick.\n\n"
-        "IVY! AARON! DAVID!\n\nPlease—come here!",
+        "NICK-001",
+        "[frustrated, avoiding the conversation] Not tonight, David. "
+        "I can’t do this with you right now. I need some air.",
     ),
-    ("PRIYA-002", "[panicked] What do we do?! What do we do?!"),
-    ("PRIYA-003", "[stunned] How did this happen?"),
-    ("PRIYA-004", "[skeptical] All night?"),
-    ("PRIYA-005", "[realizing] The door was locked... who locked it?"),
-    ("PRIYA-006", "[softly] Nick? ... Nick, can you hear me?"),
+    ("NICK-002", "[fondly teasing] He was worse at seventeen."),
+    ("NICK-003", "[dryly, joking] Unfortunately."),
+    ("NICK-004", "[warm, teasing] Here. You look fucking freezing."),
     (
-        "PRIYA-007",
-        "[panicked but clear] Police? Our friend is hurt! We found him "
-        "outside—in the snow. Please send someone. Please hurry!",
+        "NICK-005",
+        "[slightly drunk, careless] You’ve been saying “after this trip” "
+        "for two years.",
     ),
+    ("NICK-006", "[angry, humiliated] He already knows."),
     (
-        "PRIYA-008",
-        "[shaken] What happened...? Why won’t anyone tell me what happened?",
+        "NICK-007",
+        "[tense, trying to end the argument] I need some air.",
     ),
-    (
-        "PRIYA-014",
-        "[warmly amused] Fifteen years—and you two still act exactly the same.",
-    ),
-    ("PRIYA-015", "[playfully] And two years for these two."),
-    ("PRIYA-016", "[warm, lightly wistful] To us... somehow."),
 )
 
 
-def write_wav(path: Path, pcm: bytes) -> None:
-    """Write raw 24 kHz mono PCM returned by ElevenLabs to a WAV container."""
-    with wave.open(str(path), "wb") as output:
-        output.setnchannels(1)
-        output.setsampwidth(2)
-        output.setframerate(SAMPLE_RATE)
-        output.writeframes(pcm)
+def write_wav_safely(path: Path, pcm: bytes) -> None:
+    """Write raw mono PCM to a temporary WAV, then atomically replace the target."""
+    if not pcm:
+        raise ValueError("Cannot write an empty PCM response.")
+    if len(pcm) % SAMPLE_WIDTH:
+        raise ValueError("PCM response does not contain complete 16-bit samples.")
+
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    try:
+        with wave.open(str(temporary_path), "wb") as output:
+            output.setnchannels(CHANNELS)
+            output.setsampwidth(SAMPLE_WIDTH)
+            output.setframerate(SAMPLE_RATE)
+            output.writeframes(pcm)
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def apply_pronunciation_aliases(text: str) -> str:
@@ -103,6 +108,7 @@ def main() -> int:
         print("ELEVENLABS_API_KEY is not set.", file=sys.stderr)
         return 2
 
+    OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     client = ElevenLabs(api_key=api_key)
     for line_id, prompt in lines:
         output_path = OUTPUT_DIRECTORY / f"{line_id}.wav"
@@ -120,7 +126,7 @@ def main() -> int:
         pcm = b"".join(chunks)
         if not pcm:
             raise RuntimeError(f"Empty audio response for {line_id}")
-        write_wav(output_path, pcm)
+        write_wav_safely(output_path, pcm)
         print(f"GENERATED {output_path.name}", flush=True)
 
     return 0

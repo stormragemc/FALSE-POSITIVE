@@ -2,9 +2,10 @@
 
 This directory contains Priya's selected-voice dialogue, one 24 kHz mono 16-bit
 PCM WAV per spoken line. Filenames match the stable IDs in
-`docs/HUMAN_SCRIPT.md`. `PRIYA-001` through `PRIYA-008` are approved;
-`PRIYA-014` through `PRIYA-016` were generated after the 8 Aug script pull and
-are pending review.
+`docs/HUMAN_SCRIPT.md`. `PRIYA-002` through `PRIYA-008` are approved.
+`PRIYA-001` was regenerated on 9 Aug 2026 for the standardized **DAY-vid**
+pronunciation and is pending re-review; `PRIYA-014` through `PRIYA-016` are
+also pending review.
 
 ## Selected voice model
 
@@ -22,6 +23,10 @@ are pending review.
 
 The API key is read from `ELEVENLABS_API_KEY` at runtime and is never stored in
 this directory.
+
+`PRIYA-001` uses the synthesis-only alias `DAY-VID` for the name `David`,
+enforcing the project-wide **DAY-vid** pronunciation without changing the
+canonical words.
 
 ## Line manifest
 
@@ -68,6 +73,12 @@ Regenerate every line intentionally:
 
 ```powershell
 Sidecar\.venv\Scripts\python.exe Artifacts\voice-lines\priya\generate_priya_voice_lines.py --force
+```
+
+Regenerate one line intentionally:
+
+```powershell
+Sidecar\.venv\Scripts\python.exe Artifacts\voice-lines\priya\generate_priya_voice_lines.py --force --only PRIYA-001
 ```
 
 Review one line without opening a media-player window:

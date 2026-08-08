@@ -278,6 +278,14 @@ timbre, age, pace, vocal weight, and social energy. Do not rely only on volume o
 accent. In particular, voices sharing an accent must still have separate
 identities.
 
+### 6.5 Project name pronunciation
+
+The character name **David** is always pronounced **DAY-vid** (`/ˈdeɪvɪd/`).
+Production generators may substitute the synthesis-only spelling `Day-vid` (or
+`DAY-VID` in an already-capitalized call) to enforce that pronunciation. The
+canonical script, subtitles, manifests, stable IDs, and filenames must continue
+to use `David`.
+
 ---
 
 ## 7. Prompt construction

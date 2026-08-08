@@ -237,7 +237,7 @@ Both paths render subtitles through the same `SubtitleUI` so the two never look 
 | ID | Task | Dep |
 |---|---|---|
 | A1 | `GameFlowDirector` + `GamePhase` + `MemoryFlags` (incl. `Describe()`) + `SessionScore`, phase transitions as **activate/deactivate over additive scenes** with `ScreenFader` on both sides, single `SessionId` for the whole playthrough. | T02 |
-| A2 | `MainMenu` scene: Play / Settings / Quit, `SettingsStore` (PlayerPrefs), storm bed audio, cabin exterior still or slow camera. | A1 |
+| A2 | `MainMenu` scene: Begin / Offline Demo / How to Play / Settings / Credits / Quit (TextMeshPro, framed popups for Quit confirm / Credits / How to Play), `SettingsStore` (PlayerPrefs), storm bed audio, 3D cabin exterior at night with falling snow and slow camera drift (see `docs/TRACK_A_EDITOR_SETUP.md` §3). | A1 |
 | A3 | `MicConsentFlow` — the diegetic card (`STORY_SCRIPT.md` §3.4 copy verbatim), device enumeration, Back. **This is ROADMAP S8.** | A2 |
 | A4 | `MicCalibration` — 5 s sample, noise floor → `vadEnterMultiplier`/`vadExitMultiplier`, store `loudReferenceRms`. Failure path with device dropdown + Retry. Persist to `InterrogationConfig` at runtime (not to the asset). | A3 |
 | A5 | `MicIndicator` (active/inactive, never "recording") + `SpeechPrompt` UI + `SubtitleUI`. | A3 |
@@ -274,7 +274,7 @@ be walkable tonight.** If it is not, cut per §10 tomorrow morning, not on the 8
 | A12 | `OutputGuard` — client-side second layer before any reply reaches TTS or subtitles: length cap, strip markdown/stage directions, block persona-leak phrases. **This is ROADMAP S1**, which the never-cut list names explicitly. | A7 |
 | A13 | Fault UX: F1 empty transcript → officer re-asks, turn not consumed; F5 mic lost → blocking in-fiction card with Retry; F6 backend unreachable → menu-level "Interrogation service offline" with the exact command. All in-fiction, all labelled. | A7 |
 | A14 | Backend integration: swap client fallbacks for real fields **if** §7's B1–B4 landed; `X-FP-Client-Key` header + `backendBaseUrl` on `InterrogationConfig` for the cloud migration. Keep both paths working. | §7 |
-| A15 | Settings persistence, pause menu (Esc), quit-to-menu, full session reset (`POST /session/reset`). | A2 |
+| A15 | Settings persistence, pause menu (Esc), quit-to-menu, full session reset (`POST /session/reset`). `SettingsPanel` is already restyled and fade-ready for this reuse (`MenuWindow`-style `CanvasGroup` fade on `Time.unscaledDeltaTime`) — the Esc-triggered open/close during gameplay itself is not yet wired. | A2 |
 
 **Track B**
 
@@ -399,6 +399,20 @@ Every row maps to a ROADMAP §5 item or a global constraint.
 | No secrets | `git log -p` for `.env`; `InterrogationConfig.asset` ships with an empty client key |
 | Clean machine | Z1 — full playthrough on the machine that did not build it, twice |
 | Standalone build | Z2 — mic works in the **build**, not only the Editor |
+
+**Bootstrap ordering rule (learned the hard way, 8 Aug):**
+`ProjectBootstrapBuilder.BuildPersistentScene()` ("1 - Build _Persistent Scene") rebuilds
+`CutsceneDirector` from an empty scene, resetting its `recipes` array to `[]`. Running that step
+alone — instead of as part of `Build Everything`, or without immediately following it with
+`CutsceneRecipeBuilder.PopulateRecipes()` ("6") then `.AttachVoClips()` ("7") — silently turns
+every one of the 33 cutscene beats into an ~0.8 s black-screen blink with no VO or subtitle. Any
+rebuild of `_Persistent` must always run 1 → 6 → 7 in that order, never 1 alone.
+
+**Debug-hotkey reservation:** `F1` = `DebugOverlayUI` toggle. `F2` = `GameFlowDirector`'s dev-only
+phase-skip (`AdvancePhase()`, §9 above). `F3` = `SimulatedSpeechButton`'s offline-demo
+simulate-speech hotkey. These must never share a keybinding — F2 and F3 used to both be bound to
+F2, so one press force-advanced a whole phase *and* simulated speech at once, which is how a
+tester's single F3-equivalent press skipped the entire `M1_Night` cabin scene, cutscenes included.
 
 ---
 

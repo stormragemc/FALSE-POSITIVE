@@ -61,10 +61,7 @@ namespace FalsePositive.Cop
 
         private void Awake()
         {
-            if (spine != null) _spineRest = spine.localRotation;
-            if (spine1 != null) _spine1Rest = spine1.localRotation;
-            if (neck != null) _neckRest = neck.localRotation;
-            if (head != null) _headRest = head.localRotation;
+            CacheRestRotations();
 
             // Random per-instance seed so multiple cops (if ever) don't
             // breathe/drift in lockstep.
@@ -74,8 +71,24 @@ namespace FalsePositive.Cop
             _weightTimer = Random.Range(0f, weightShiftIntervalSeconds);
         }
 
+        /// <summary>Re-caches the rest rotations from the bones' CURRENT local
+        /// rotation, not just the one baked into the FBX. Called from OnEnable
+        /// (not just Awake) so that something that drives these bones while
+        /// this component is disabled — e.g. CutsceneAnimationDirector's
+        /// Timeline clip — hands back a pose this component treats as "no
+        /// offset" instead of snapping to the original bind rotation the
+        /// instant it re-enables.</summary>
+        private void CacheRestRotations()
+        {
+            if (spine != null) _spineRest = spine.localRotation;
+            if (spine1 != null) _spine1Rest = spine1.localRotation;
+            if (neck != null) _neckRest = neck.localRotation;
+            if (head != null) _headRest = head.localRotation;
+        }
+
         private void OnEnable()
         {
+            CacheRestRotations();
             if (dialogueManager != null) dialogueManager.StateChanged += OnDialogueStateChanged;
         }
 

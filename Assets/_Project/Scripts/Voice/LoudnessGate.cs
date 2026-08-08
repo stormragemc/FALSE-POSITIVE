@@ -34,6 +34,11 @@ namespace FalsePositive.Voice
             _thresholdRms = Mathf.Max(0f, loudReferenceRms) * Mathf.Max(0f, factor);
             Attempts = 0;
             IsArmed = true;
+            // Idempotent: unsubscribe first so a re-arm (e.g. two RequestSpokenPrompt
+            // calls in a row without a Disarm between them) can never double-subscribe
+            // and fire OnUtteranceCaptured twice per utterance. -= on a handler that
+            // was never added is a legal no-op.
+            recorder.UtteranceCaptured -= OnUtteranceCaptured;
             recorder.UtteranceCaptured += OnUtteranceCaptured;
         }
 

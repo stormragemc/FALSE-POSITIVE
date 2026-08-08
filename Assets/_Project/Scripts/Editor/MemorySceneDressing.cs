@@ -42,12 +42,16 @@ namespace FalsePositive.Editor
             // Phase 2b), not the old Assets\Cabin pack's — SM_Table top is
             // at (-3.0, 0.75, 2.3), the mantel runs along the +Z fireplace
             // wall, the coat hanger is BO_CoatHanger at (-1.4, 0, -4.5).
-            InspectPoint cups = AddProp<InspectPoint>(root, "Prop_FiveCups", new Vector3(-3.0f, 0.78f, 2.15f),
+            // Both meshes are authored (Blender MCP, ArtSource/Props_Drinks.blend) with
+            // their base at local z=0, so y=0.75 (SM_Table top) seats them ON the table —
+            // the old 0.78/0.82 sank them ~8cm through it. glass:true swaps the flat
+            // placeholder colour for an actual transparent URP material.
+            InspectPoint cups = AddProp<InspectPoint>(root, "Prop_FiveCups", new Vector3(-3.0f, 0.75f, 2.15f),
                 new Vector3(0.35f, 0.15f, 0.35f), new Color(0.85f, 0.8f, 0.7f), "5 Cups",
-                "Look at the cups", MemoryFlagIds.SawFiveCups);
-            AddProp<InspectPoint>(root, "Prop_Bottles", new Vector3(-2.7f, 0.82f, 2.4f),
+                "Look at the cups", MemoryFlagIds.SawFiveCups, glass: true);
+            AddProp<InspectPoint>(root, "Prop_Bottles", new Vector3(-2.7f, 0.75f, 2.4f),
                 new Vector3(0.12f, 0.3f, 0.12f), new Color(0.15f, 0.4f, 0.2f), "Bottles",
-                "Look at the bottles", null);
+                "Look at the bottles", null, glass: true);
 
             // Mantel — fireplace runs the +Z wall (x in [-0.9,0.9], z~4.3).
             RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.35f, 3.45f),
@@ -296,7 +300,7 @@ namespace FalsePositive.Editor
 
         private static T AddProp<T>(
             GameObject parent, string name, Vector3 position, Vector3 size, Color color,
-            string labelText, string lookPrompt, string memoryFlag) where T : Interactable
+            string labelText, string lookPrompt, string memoryFlag, bool glass = false) where T : Interactable
         {
             GameObject go = new GameObject(name);
             go.transform.SetParent(parent.transform, false);
@@ -315,7 +319,7 @@ namespace FalsePositive.Editor
                 visual.name = "Visual";
                 visual.transform.localPosition = Vector3.zero;
                 visual.transform.localRotation = Quaternion.identity;
-                ApplyMaterialRecursive(visual, color);
+                ApplyMaterialRecursive(visual, color, glass);
                 localBounds = ComputeLocalBounds(visual, go.transform);
             }
             else
@@ -326,7 +330,7 @@ namespace FalsePositive.Editor
                 visual.name = "Visual";
                 visual.transform.SetParent(go.transform, false);
                 visual.transform.localScale = size;
-                ApplyMaterialRecursive(visual, color);
+                ApplyMaterialRecursive(visual, color, glass);
                 localBounds = new Bounds(Vector3.zero, size);
             }
 
@@ -368,10 +372,33 @@ namespace FalsePositive.Editor
             return new Bounds(localCenter, localSize);
         }
 
-        private static void ApplyMaterialRecursive(GameObject go, Color color)
+        private static void ApplyMaterialRecursive(GameObject go, Color color, bool glass = false)
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             Material material = new Material(shader) { color = color };
+            if (glass)
+            {
+                // Blender's Transmission/IOR glass doesn't survive FBX — the props'
+                // transparency comes entirely from this material. Setting _Surface
+                // alone is a common trap: URP Lit's Blend command reads _SrcBlend/
+                // _DstBlend directly, not _Surface/_Blend (those are only metadata
+                // the Inspector's ShaderGUI uses to populate them), so both must be
+                // set explicitly or the material silently renders opaque.
+                Color tint = color;
+                tint.a = 0.3f;
+                material.color = tint;
+                material.SetFloat("_Surface", 1f); // Transparent
+                material.SetFloat("_Blend", 0f);   // Alpha
+                material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                material.SetFloat("_ZWrite", 0f);
+                material.SetFloat("_Smoothness", 0.9f);
+                material.SetOverrideTag("RenderType", "Transparent");
+                material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                material.DisableKeyword("_ALPHATEST_ON");
+                material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
             // UI.InteractionPromptUI drives a looked-at highlight purely via
             // MaterialPropertyBlock (no per-instance material), which can
             // only override an existing shader keyword's value, not enable

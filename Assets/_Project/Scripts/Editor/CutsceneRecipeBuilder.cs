@@ -245,7 +245,12 @@ namespace FalsePositive.Editor
                     Beat("???", "David.", 1.0f),
                     Beat("???", "David!", 1.0f)),
 
-                Recipe(CutsceneId.SpasskyAnswer, 0.3f, 0.5f,
+                // Kept lit (not the fade-to-black cheap form every other
+                // beat here uses) so the player watches Spassky deliver the
+                // line and see CutsceneAnimationDirector's Cop_Talk clip
+                // play, instead of hearing 8s of VO over a black screen.
+                // This is the game's first cutscene.
+                VisibleRecipe(CutsceneId.SpasskyAnswer,
                     Beat("SPASSKY",
                         "I'm Officer Spassky. You're one of the suspects involved in the death of Nick. " +
                         "We have just finished interrogating the rest of your friends. So here we are. " +

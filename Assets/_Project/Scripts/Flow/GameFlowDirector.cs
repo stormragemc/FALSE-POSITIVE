@@ -301,6 +301,15 @@ namespace FalsePositive.Flow
         {
             CancelSpokenPrompt(); // tear down anything a previous phase left pending
             prompt?.Show(promptText);
+            // Under push-to-talk the prompt has to say how, not just what: the
+            // player is being asked to speak and nothing else on screen tells
+            // them a key is involved. The loud path overwrites this with its own
+            // "Louder" hint on a failed attempt, which is the more useful
+            // instruction at that point.
+            if (config != null && config.pushToTalk)
+            {
+                prompt?.SetHint($"Hold [{config.pushToTalkKey}] to speak");
+            }
             vad.SetGated(false);
             AwaitingSpokenPrompt = true;
             GamePhase requestedIn = Phase;

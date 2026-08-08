@@ -17,6 +17,9 @@ namespace FalsePositive.UI
     {
         private const string ActiveText = "Microphone active";
         private const string InactiveText = "Microphone inactive";
+        // Push-to-talk needs an instruction, not a status: "Microphone inactive"
+        // is true but tells a first-time player nothing about what to do.
+        private const string PushToTalkFormat = "Hold [{0}] to speak";
 
         [SerializeField] private MicrophoneService mic;
         [SerializeField] private VoiceActivityDetector vad;
@@ -73,12 +76,26 @@ namespace FalsePositive.UI
 
         private void OnUtteranceDiscarded() => _utteranceActive = false;
 
+        /// <summary>Cached because Update runs every frame and string.Format
+        /// would otherwise allocate a new string per frame for a label that
+        /// changes only when the config does.</summary>
+        private string _idleText;
+
+        private string IdleText()
+        {
+            if (_idleText != null) return _idleText;
+            _idleText = config != null && config.pushToTalk
+                ? string.Format(PushToTalkFormat, config.pushToTalkKey)
+                : InactiveText;
+            return _idleText;
+        }
+
         private void Update()
         {
             bool active = mic != null && mic.IsCapturing && (vad == null || !vad.Gated);
             if (!active) _utteranceActive = false; // gated/stopped mic can't leave the bar stuck green
 
-            if (label != null) label.text = active ? ActiveText : InactiveText;
+            if (label != null) label.text = active ? ActiveText : IdleText();
             if (dot != null) dot.color = active ? activeColor : inactiveColor;
 
             if (levelMeterRoot != null) levelMeterRoot.SetActive(active);

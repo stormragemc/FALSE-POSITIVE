@@ -77,7 +77,17 @@ echo "==> Deploying ${SHA}"
 # --- Build and push ---------------------------------------------------------
 # Both tags point at the same digest: the SHA tag is the durable answer to
 # "what is running", ":v1" stays only so older docs/commands keep working.
-docker build -t "${IMAGE}" -t "${REPO}:v1" .
+#
+# --platform is load-bearing on a laptop and a no-op in CI, which is exactly why
+# it was missing: the Actions runner is amd64, so the default was always right
+# there. On Apple Silicon the default is arm64, and Cloud Run rejects it only at
+# the very end, after the whole build and push are already paid for:
+#   Container manifest type 'application/vnd.oci.image.index.v1+json'
+#   must support amd64/linux
+# --provenance=false drops the attestation manifest that nothing here reads and
+# that makes the index harder to reason about. The cross-build runs under
+# emulation and is slow; that is a laptop-only cost.
+docker build --platform linux/amd64 --provenance=false -t "${IMAGE}" -t "${REPO}:v1" .
 docker push "${IMAGE}"
 docker push "${REPO}:v1"
 

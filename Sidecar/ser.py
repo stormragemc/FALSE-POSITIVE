@@ -185,6 +185,22 @@ def _normalize_level(audio: np.ndarray) -> np.ndarray:
     return np.clip(audio * (_TARGET_RMS / rms), -1.0, 1.0).astype(np.float32)
 
 
+def _bounded_window(audio: np.ndarray) -> np.ndarray:
+    """The head of a long answer is all HuBERT reads.
+
+    Transformer cost grows with input length and this is the slowest stage of a
+    turn, so the emotion label is formed from the first HUBERT_MAX_SECONDS.
+    Enforced here rather than by the caller so the bound holds for every entry
+    point, and split out of _analyze_impl so it is testable without a loaded
+    model. The classical features deliberately do not share this window — they
+    read the whole utterance; see app.py:_flag_hubert_window.
+    """
+    maximum_samples = int(round(config.HUBERT_MAX_SECONDS * 16000))
+    if audio.size > maximum_samples:
+        return audio[:maximum_samples]
+    return audio
+
+
 def _analyze_impl(audio_f32_16k: np.ndarray) -> HubertObservation:
     audio = np.asarray(audio_f32_16k, dtype=np.float32).reshape(-1)
     if audio.size == 0:
@@ -192,11 +208,7 @@ def _analyze_impl(audio_f32_16k: np.ndarray) -> HubertObservation:
     if not np.all(np.isfinite(audio)):
         raise ValueError("HuBERT audio contains non-finite samples")
 
-    maximum_samples = int(round(config.HUBERT_MAX_SECONDS * 16000))
-    if audio.size > maximum_samples:
-        audio = audio[:maximum_samples]
-
-    audio = _normalize_level(_trim_silence(audio))
+    audio = _normalize_level(_trim_silence(_bounded_window(audio)))
 
     t0 = time.perf_counter()
     inputs = _feature_extractor(audio, sampling_rate=16000, return_tensors="pt")

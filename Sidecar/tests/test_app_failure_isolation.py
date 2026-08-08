@@ -50,7 +50,11 @@ class _FakeFastAPI:
         self.get_paths = []
         self.post_paths = []
         self.middlewares = []
+        self.installed_middleware = []
         self.exception_handlers = {}
+
+    def add_middleware(self, factory, **options):
+        self.installed_middleware.append((factory, options))
 
     def get(self, path):
         def register(function):
@@ -132,6 +136,10 @@ class AppFailureIsolationTests(unittest.TestCase):
             "starlette.exceptions",
             HTTPException=starlette_http_exception,
         )
+        starlette_gzip = _module(
+            "starlette.middleware.gzip",
+            GZipMiddleware=type("GZipMiddleware", (), {}),
+        )
         config = _module(
             "config",
             validate=lambda: None,
@@ -151,6 +159,8 @@ class AppFailureIsolationTests(unittest.TestCase):
             HUBERT_MODEL_ID="test/hubert",
             HUBERT_MAX_SECONDS=20.0,
             SIDECAR_MAX_AUDIO_SECONDS=20.0,
+            TTS_SAMPLE_RATE=24000,
+            ELEVENLABS_MODEL_ID="eleven_multilingual_v2",
             MAX_TURN_REQUEST_BYTES=700000,
             HOST="127.0.0.1",
             PORT=8765,
@@ -206,7 +216,10 @@ class AppFailureIsolationTests(unittest.TestCase):
                 np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
             ),
             resample_float32=lambda audio, _source, _target: audio,
-            normalize_to_canonical=lambda pcm, rate, _channels: (pcm, rate),
+            normalize_to_canonical=lambda pcm, rate, _channels, target=None: (
+                pcm,
+                target or rate,
+            ),
             float32_to_pcm16_bytes=lambda audio: (
                 (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
             ),
@@ -232,6 +245,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             "fastapi.exceptions": fastapi_exceptions,
             "fastapi.responses": fastapi_responses,
             "starlette.exceptions": starlette_exceptions,
+            "starlette.middleware.gzip": starlette_gzip,
             "llm": llm,
             "ser": ser,
             "stt": stt,
@@ -927,7 +941,15 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
         self.assertEqual(len(self.app._session_store.history("session-a")), 2)
 
-    def test_affect_and_classical_features_use_same_bounded_audio_window(self):
+    def test_classical_features_read_whole_utterance_while_hubert_stays_bounded(self):
+        """The two analysers read different windows, on purpose.
+
+        HuBERT is the slowest stage of a turn and its cost scales with input
+        length, so it takes the head of the answer. The classical DSP is numpy
+        and costs tens of milliseconds on a full buffer, so it takes all of it —
+        which is what keeps duration, pauses and speech rate describing the
+        whole answer rather than its first few seconds.
+        """
         sample_count = 16000 * 2
         pcm = (np.sin(np.arange(sample_count) * 0.1) * 8000).astype("<i2").tobytes()
         observed_lengths = {}
@@ -938,7 +960,11 @@ class AppFailureIsolationTests(unittest.TestCase):
             return real_extract(audio, sample_rate)
 
         def capture_hubert(audio):
-            observed_lengths["hubert"] = len(audio)
+            # app.py hands over the whole buffer on purpose: the cap is ser.py's
+            # to apply, so it holds for every caller. That the cap itself works
+            # is test_ser_load.test_bounded_window_caps_long_audio, which needs
+            # a real torch import and so only runs in the container image.
+            observed_lengths["handed_to_ser"] = len(audio)
             raise RuntimeError("forced HuBERT failure after length capture")
 
         with patch.object(self.app.config, "HUBERT_MAX_SECONDS", 1.0), patch.object(
@@ -949,7 +975,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             )
 
         self.assertTrue(result["ok"])
-        self.assertEqual(observed_lengths, {"features": 16000, "hubert": 16000})
+        self.assertEqual(observed_lengths, {"features": 32000, "handed_to_ser": 32000})
         self.assertEqual(result["prosody"]["duration_seconds"], 2.0)
         self.assertIn("affect_window_truncated", result["prosody"]["flags"])
 

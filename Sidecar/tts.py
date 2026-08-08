@@ -24,9 +24,9 @@ _client: ElevenLabs | None = None
 # the accent is the casting brief. It costs 950-2100ms per line against flash's
 # ~215ms, which is the 1-2s turn-latency difference this comment used to warn
 # about — accepted deliberately, see §4.6 of the design spec for what that
-# costs a full playthrough. Confirm the id via ElevenLabs' /v1/models endpoint
-# if TTS calls start failing with an unknown-model error.
-_MODEL_ID = "eleven_multilingual_v2"
+# costs a full playthrough. Now config.ELEVENLABS_MODEL_ID so that trade can be
+# re-tested on a live build by env var; the default is unchanged. Confirm the id
+# via ElevenLabs' /v1/models endpoint if TTS calls fail with unknown-model.
 
 # Spassky's delivery: contained anger, not shouting — slow and held down rather
 # than loud. Low stability keeps the emotional variance (and the accent, which
@@ -70,18 +70,19 @@ def _is_voice_permission_error(e: Exception) -> bool:
 
 def _fetch_audio(client: ElevenLabs, text: str) -> tuple[bytes, int, int]:
     voice_id = config.ELEVENLABS_VOICE_ID
+    rate = config.TTS_SAMPLE_RATE
     try:
         chunks = client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            model_id=_MODEL_ID,
-            output_format="pcm_24000",
+            model_id=config.ELEVENLABS_MODEL_ID,
+            output_format=f"pcm_{rate}",
             voice_settings=_VOICE_SETTINGS,
         )
         raw = b"".join(chunks)
         if not raw:
             raise ValueError("empty PCM response")
-        return raw, 24000, 1
+        return raw, rate, 1
     except Exception as e:
         if _is_voice_permission_error(e):
             # Fail loud and specific rather than retrying into the same 402
@@ -98,7 +99,7 @@ def _fetch_audio(client: ElevenLabs, text: str) -> tuple[bytes, int, int]:
         chunks = client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            model_id=_MODEL_ID,
+            model_id=config.ELEVENLABS_MODEL_ID,
             output_format="mp3_44100_128",
             # Same settings as the PCM path above: the fallback must not be
             # audibly a different performance from the primary.

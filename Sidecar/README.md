@@ -334,12 +334,17 @@ spread of that player's early reference turns. Only a successfully synthesized
 turn is committed, preventing TTS retries from double-counting it. Low-quality
 readings are visible in debug data but suppressed from Gemini, and witness text
 is escaped into a separate trust block so it cannot imitate the sensor marker.
-HuBERT and the classical features inspect the same `HUBERT_MAX_SECONDS` prefix;
-STT still receives the complete bounded utterance for transcription.
-When a turn exceeds that affect window, its full duration remains observable,
-the signal is flagged `affect_window_truncated`, and session speech-rate
-comparison is suppressed rather than mixing full-transcript words with a
-partial acoustic window.
+Only HuBERT is bounded, to the `HUBERT_MAX_SECONDS` prefix; STT and the
+classical features both receive the complete accepted utterance. The windows
+were identical until 8 Aug, when HuBERT was measured as the slowest stage of
+the whole turn — 1934ms against STT's 1336ms on a 9.6s answer, growing with
+input length. Its window shrank to 8s; the classical DSP kept the full buffer
+because it costs ~37ms on a 20s one, so bounding it bought nothing and cost the
+signal. A turn longer than the affect window is flagged
+`affect_window_truncated`, meaning the emotion label was formed from the head of
+the answer. Speech-rate comparison is unaffected: transcript and classical
+features now cover the same full utterance, so the pacing clause survives on
+exactly the long answers where it reads most.
 
 All controls are optional and documented in `.env.example`. The quickest
 rollback is `PROSODY_ENABLED=false`: STT, Gemini, and TTS continue normally

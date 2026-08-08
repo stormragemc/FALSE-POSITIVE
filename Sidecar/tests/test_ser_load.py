@@ -193,6 +193,22 @@ class AudioConditioningTests(unittest.TestCase):
         tiny = self._tone(0.01)
         self.assertIs(ser._trim_silence(tiny), tiny)
 
+    def test_bounded_window_caps_long_audio(self):
+        """HuBERT reads the head of a long answer, and enforces that itself.
+
+        The cap lives here rather than in the caller so it holds for every entry
+        point, and so app.py can hand over the whole buffer — the classical
+        features need all of it, HuBERT does not.
+        """
+        with patch.object(ser.config, "HUBERT_MAX_SECONDS", 8.0):
+            long_answer = np.zeros(16000 * 20, dtype=np.float32)
+            self.assertEqual(ser._bounded_window(long_answer).size, 16000 * 8)
+
+    def test_bounded_window_leaves_short_audio_untouched(self):
+        with patch.object(ser.config, "HUBERT_MAX_SECONDS", 8.0):
+            short_answer = np.zeros(16000 * 3, dtype=np.float32)
+            self.assertIs(ser._bounded_window(short_answer), short_answer)
+
 
 if __name__ == "__main__":
     unittest.main()

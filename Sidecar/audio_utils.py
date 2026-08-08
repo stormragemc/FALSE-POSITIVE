@@ -8,8 +8,9 @@ known sample rate — never a container format — so every conversion lives her
 import numpy as np
 import soxr
 
-# Canonical output format returned to Unity for every TTS reply, regardless of
-# what the mic recorded at or what ElevenLabs actually handed back.
+# Fallback output rate for callers that don't name one. The live value is
+# config.TTS_SAMPLE_RATE, which app.py passes in; this module stays free of
+# config so it remains a leaf that anything can import.
 TARGET_SR = 24000
 
 
@@ -32,11 +33,20 @@ def resample_float32(arr: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarra
     return soxr.resample(arr, orig_sr, target_sr).astype(np.float32)
 
 
-def normalize_to_canonical(pcm_bytes: bytes, sample_rate: int, channels: int) -> tuple[bytes, int]:
+def normalize_to_canonical(
+    pcm_bytes: bytes,
+    sample_rate: int,
+    channels: int,
+    target_sr: int = TARGET_SR,
+) -> tuple[bytes, int]:
     """Collapse whatever TTS gave us (any rate, mono or stereo) down to the
-    one format Unity always receives: PCM16 LE mono @ TARGET_SR."""
+    one format Unity always receives: PCM16 LE mono @ target_sr.
+
+    tts.py asks ElevenLabs for target_sr directly, so the resample below is a
+    no-op on the happy path and only earns its keep on the MP3 fallback, which
+    always arrives at 44100."""
     arr = pcm16_bytes_to_float32(pcm_bytes)
     if channels == 2 and arr.size > 0:
         arr = arr.reshape(-1, 2).mean(axis=1)
-    arr = resample_float32(arr, sample_rate, TARGET_SR)
-    return float32_to_pcm16_bytes(arr), TARGET_SR
+    arr = resample_float32(arr, sample_rate, target_sr)
+    return float32_to_pcm16_bytes(arr), target_sr

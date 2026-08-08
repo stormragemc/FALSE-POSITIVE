@@ -243,10 +243,16 @@ class ProsodyTracker:
             if centroid is not None
             else 0.0
         )
-        speech_rate_available = "affect_window_truncated" not in flags
-        speech_rate = self._speech_rate(transcript, features) if speech_rate_available else 0.0
+        # Whole-utterance on both sides now: the transcript covers the full answer
+        # and so do the classical features, because only HuBERT is bounded by
+        # HUBERT_MAX_SECONDS (see app.py:_flag_hubert_window). Before that split
+        # this divided full-utterance words by a truncated speech_ratio, so the
+        # rate had to be suppressed on any answer longer than the affect window —
+        # which silently removed the pacing clause from exactly the long answers
+        # where it reads most.
+        speech_rate = self._speech_rate(transcript, features)
         speech_rate_delta = 0.0
-        if centroid is not None and speech_rate_available and self._reference_speech_rates:
+        if centroid is not None and self._reference_speech_rates:
             reference_rate = float(np.mean(self._reference_speech_rates))
             if reference_rate > 1e-6:
                 speech_rate_delta = float(np.clip(speech_rate / reference_rate - 1.0, -2.0, 2.0))
@@ -266,8 +272,7 @@ class ProsodyTracker:
             self._recent_tension = self._recent_tension[-5:]
             if self.reference_count < self.reference_target:
                 self._reference_embeddings.append(embedding.copy())
-                if speech_rate_available:
-                    self._reference_speech_rates.append(speech_rate)
+                self._reference_speech_rates.append(speech_rate)
                 if self.reference_count == self.reference_target:
                     flags.append("reference_established")
 

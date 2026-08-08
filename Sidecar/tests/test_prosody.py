@@ -169,7 +169,14 @@ class ProsodyTrackerTests(unittest.TestCase):
 
         self.assertGreater(high_pitch.arousal, low_pitch.arousal + 0.10)
 
-    def test_truncated_affect_window_does_not_claim_speech_rate_change(self):
+    def test_truncated_affect_window_still_reports_speech_rate_change(self):
+        """A bounded HuBERT window must not cost the pacing signal.
+
+        affect_window_truncated now means only that the emotion label was formed
+        from the head of the answer. Speech rate comes from the transcript and
+        the classical features, both of which still cover the whole utterance,
+        so it stays valid — and it matters most on exactly these long answers.
+        """
         tracker = ProsodyTracker(reference_turns=1, minimum_confidence=0.25)
         tracker.update(features(), observation(), "one two three four five six", 0)
         signal = tracker.update(
@@ -180,9 +187,8 @@ class ProsodyTrackerTests(unittest.TestCase):
         )
 
         prompt = signal.prompt_context(0.25).lower()
-        self.assertEqual(signal.speech_rate_delta, 0.0)
-        self.assertNotIn("faster than", prompt)
-        self.assertNotIn("slower than", prompt)
+        self.assertGreater(signal.speech_rate_delta, 0.0)
+        self.assertIn("faster than", prompt)
 
     def test_unavailable_hubert_keeps_audio_debug_context(self):
         signal = ProsodyTracker().update(

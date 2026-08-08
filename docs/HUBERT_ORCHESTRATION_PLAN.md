@@ -14,6 +14,19 @@
 > reference all carry over untouched. See
 > [`ROADMAP.md` §9](ROADMAP.md#9-distribution-hosted-backend-migration-record).
 
+> **⚠ Amended 8 Aug 2026 — the two affect windows are no longer the same.** This document
+> describes HuBERT and the classical features reading one shared `HUBERT_MAX_SECONDS` prefix.
+> They now read different windows: HuBERT takes the prefix (default lowered 20 → 8), and the
+> classical DSP takes the whole utterance, alongside STT. The reason is latency. Measured on a
+> 9.6s answer, HuBERT cost 1934ms against STT's 1336ms — it had quietly become the slowest stage
+> of the turn, and because the old default equalled `SIDECAR_MAX_AUDIO_SECONDS`, nothing was ever
+> actually truncated, so the cost grew linearly with how long the player rambled. The classical
+> features stayed whole because they are numpy and cost ~37ms on a full 20s buffer: bounding them
+> saved nothing measurable and cost a real signal, since `speech_rate` divides full-transcript
+> words by the classical `speech_ratio` and had to be suppressed whenever the two disagreed.
+> Consequence: `affect_window_truncated` now means only "the emotion label saw the head of this
+> answer", and no longer suppresses speech-rate comparison.
+
 ## Problem
 
 The vertical slice already runs `superb/hubert-base-superb-er` beside Whisper and sends one
@@ -175,7 +188,7 @@ Document environment variables with safe defaults:
 - `HUBERT_MODEL_ID=superb/hubert-base-superb-er`
 - `HUBERT_DEVICE=auto`
 - `HUBERT_HIDDEN_LAYER=9`
-- `HUBERT_MAX_SECONDS=20`
+- `HUBERT_MAX_SECONDS=8` (was 20; see the 8 Aug amendment)
 - `PROSODY_ENABLED=true`
 - `PROSODY_BASELINE_TURNS=3`
 - `PROSODY_MIN_CONFIDENCE=0.40`
@@ -278,11 +291,12 @@ The review changed the implementation in these places:
 4. Empty/NaN hidden states, label-map differences, device selection, and reference-vector shape
    changes fail closed to no comparison or an unavailable signal rather than emitting fabricated
    values.
-5. Hidden-state analysis is bounded by `HUBERT_MAX_SECONDS`; all inference uses
-   `torch.inference_mode()` and the existing single-worker model pool. Classical affect features
-   use the same bounded prefix, while STT retains the full accepted utterance. Over-window turns
-   retain their full duration and an explicit truncation flag, but do not participate in
-   speech-rate comparison.
+5. Hidden-state analysis is bounded by `HUBERT_MAX_SECONDS`, enforced inside `ser.py` so the cap
+   holds for every caller; all inference uses `torch.inference_mode()` and the existing
+   single-worker model pool. STT and the classical affect features both retain the full accepted
+   utterance — **amended 8 Aug 2026**, see the note at the top of this document. Over-window turns
+   carry an explicit truncation flag describing the emotion label's window, and still participate
+   in speech-rate comparison.
 6. The early-session centroid is called a **reference**, never a neutral baseline. Only usable
    turns enter it, and relative claims wait until it is ready.
 7. The richer HTTP payload is additive; the original `emotion` and `emotion_confidence` fields

@@ -23,6 +23,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.gzip import GZipMiddleware
 
 import audio_utils
 import auth
@@ -129,6 +130,15 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+# The reply body is base64 PCM, and base64 spends 8 bits per 6 bits of payload —
+# so roughly a quarter of what we ship is encoding overhead that gzip gets back
+# almost for free, plus whatever the PCM itself compresses. Measured 8 Aug the
+# download was 216KB and 565ms of a 3.4s turn. Inert for clients that don't send
+# Accept-Encoding: gzip, so it can never break an older build. minimum_size
+# keeps it off the small JSON error bodies, where framing would cost more than
+# it saves.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 @app.middleware("http")
@@ -360,7 +370,7 @@ def _commit_history(
         _scene_instructions.pop(evicted_id, None)
 
 
-def _analyze_affect(audio_f32: object, full_duration_seconds: float | None = None):
+def _analyze_affect(audio_f32: object):
     try:
         features = features_classical.extract(audio_f32, 16000)
     except Exception as exc:
@@ -368,16 +378,15 @@ def _analyze_affect(audio_f32: object, full_duration_seconds: float | None = Non
             f"[Sidecar] Classical audio features unavailable ({type(exc).__name__}); "
             "continuing turn."
         )
-        features = _with_full_duration(
-            _unavailable_features(audio_f32, "feature_extraction_failed"),
-            full_duration_seconds,
+        features = _flag_hubert_window(
+            _unavailable_features(audio_f32, "feature_extraction_failed")
         )
         return (
             features,
             None,
             "feature_extraction_failed",
         )
-    features = _with_full_duration(features, full_duration_seconds)
+    features = _flag_hubert_window(features)
     if not config.PROSODY_ENABLED:
         return features, None, "prosody_disabled"
     if not _prosody_model_available:
@@ -406,14 +415,23 @@ def _unavailable_features(audio_f32: object, reason: str):
     )
 
 
-def _with_full_duration(features, full_duration_seconds: float | None):
-    if full_duration_seconds is None or full_duration_seconds <= features.duration_seconds + 1e-4:
+def _flag_hubert_window(features):
+    """Mark turns where the emotion label saw only the head of the utterance.
+
+    The two analysers deliberately read different windows. The classical DSP is
+    numpy and costs ~37ms on a full 20s buffer, so it gets everything and its
+    duration, pauses and speech ratio describe the whole answer. HuBERT is a
+    transformer whose cost grows with input length — at 9.6s it was the single
+    slowest stage of the turn, above even STT — so ser.py bounds it to
+    HUBERT_MAX_SECONDS on its own. This flag records that asymmetry for the
+    debug overlay; it does not suppress speech rate, which is derived from the
+    transcript and the classical features and is therefore still whole-utterance.
+    """
+    if features.duration_seconds <= config.HUBERT_MAX_SECONDS + 1e-4:
         return features
-    flags = tuple(dict.fromkeys((*features.flags, "affect_window_truncated")))
     return replace(
         features,
-        duration_seconds=round(max(0.0, full_duration_seconds), 4),
-        flags=flags,
+        flags=tuple(dict.fromkeys((*features.flags, "affect_window_truncated"))),
     )
 
 
@@ -546,10 +564,6 @@ async def turn(
             audio_f32 = audio_utils.pcm16_bytes_to_float32(raw_bytes)
             if sample_rate != 16000:
                 audio_f32 = audio_utils.resample_float32(audio_f32, sample_rate, 16000)
-            affect_maximum_samples = int(round(config.HUBERT_MAX_SECONDS * 16000))
-            affect_audio_f32 = audio_f32[:affect_maximum_samples]
-            full_duration_seconds = len(audio_f32) / 16000.0
-
             # Re-encode from the resampled buffer rather than reusing raw_bytes:
             # a client uploading at 48kHz would otherwise send 48kHz samples
             # labelled 16kHz, which Google accepts and transcribes as garbage.
@@ -562,8 +576,7 @@ async def turn(
                     loop.run_in_executor(
                         _ser_pool,
                         _analyze_affect,
-                        affect_audio_f32,
-                        full_duration_seconds,
+                        audio_f32,
                     ),
                     return_exceptions=True,
                 ),
@@ -574,10 +587,9 @@ async def turn(
             transcript, stt_ms = stt_result
 
             if isinstance(affect_result, BaseException):
-                features = _unavailable_features(
-                    affect_audio_f32, "affect_pipeline_failed"
+                features = _flag_hubert_window(
+                    _unavailable_features(audio_f32, "affect_pipeline_failed")
                 )
-                features = _with_full_duration(features, full_duration_seconds)
                 observation = None
                 unavailable_reason = "affect_pipeline_failed"
             else:
@@ -658,7 +670,9 @@ async def turn(
             ),
             deadline,
         )
-        norm_pcm, norm_rate = audio_utils.normalize_to_canonical(pcm, rate, channels)
+        norm_pcm, norm_rate = audio_utils.normalize_to_canonical(
+            pcm, rate, channels, config.TTS_SAMPLE_RATE
+        )
 
         fabrications = await _collect_fabrications(judge_task, deadline)
         judge_task = None

@@ -16,6 +16,22 @@ ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 # secret (the API key above still is). Casting rationale and the sharing-terms
 # check are in docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md.
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "6sXsAlJKKBf265ucBSRt")
+# eleven_multilingual_v2 was cast by ear for Maksim's Russian accent (spec
+# 2026-08-07) and stays the committed default. It is also the slowest option:
+# measured 925ms against eleven_flash_v2_5's ~215ms on the same line. Left as an
+# env var so the trade can be A/B'd on a live build — ELEVENLABS_MODEL_ID=
+# eleven_flash_v2_5 — without a code change or a re-cast of the voice.
+ELEVENLABS_MODEL_ID = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
+# The rate ElevenLabs renders at and the rate Unity is handed, kept equal so a
+# reply is never resampled on the way through. 24000 is the quality default:
+# part of the officer's accent sits in sibilance above 8kHz, which 16000 cannot
+# represent, and the voice was cast by ear. 16000 is the latency option — it
+# drops the reply body by a third, ~185ms of download on a 216KB line — and is
+# the right trade on a thin connection. Values outside what ElevenLabs renders
+# natively fall back to the default rather than forcing a resample.
+TTS_SAMPLE_RATE = int(os.environ.get("TTS_SAMPLE_RATE", "24000"))
+if TTS_SAMPLE_RATE not in {16000, 22050, 24000, 44100}:
+    TTS_SAMPLE_RATE = 24000
 FP_CLIENT_KEY = os.environ.get("FP_CLIENT_KEY", "").strip()
 MAX_TURNS_PER_SESSION = max(1, int(os.environ.get("MAX_TURNS_PER_SESSION", "40")))
 MAX_TURNS_PER_DAY = max(1, int(os.environ.get("MAX_TURNS_PER_DAY", "2000")))
@@ -58,7 +74,14 @@ HUBERT_MODEL_REVISION = os.environ.get(
 HUBERT_LOCAL_FILES_ONLY = _env_bool("HUBERT_LOCAL_FILES_ONLY", False)
 HUBERT_DEVICE = os.environ.get("HUBERT_DEVICE", "auto")
 HUBERT_HIDDEN_LAYER = int(os.environ.get("HUBERT_HIDDEN_LAYER", "9"))
-HUBERT_MAX_SECONDS = max(1.0, float(os.environ.get("HUBERT_MAX_SECONDS", "20")))
+# Bounds HuBERT only — the classical features read the whole utterance
+# (app.py:_flag_hubert_window). Lowered from 20, which matched
+# SIDECAR_MAX_AUDIO_SECONDS and therefore never truncated anything: measured
+# 8 Aug on a 9.6s answer, HuBERT took 1934ms against STT's 1336ms and was the
+# slowest stage of the entire turn, and its cost grows with input length, so a
+# rambling 20s answer paid ~4s. Emotion is a whole-utterance impression that the
+# first 8s carries; latency is not.
+HUBERT_MAX_SECONDS = max(1.0, float(os.environ.get("HUBERT_MAX_SECONDS", "8")))
 PROSODY_ENABLED = _env_bool("PROSODY_ENABLED", True)
 PROSODY_BASELINE_TURNS = max(1, int(os.environ.get("PROSODY_BASELINE_TURNS", "3")))
 PROSODY_MIN_CONFIDENCE = min(

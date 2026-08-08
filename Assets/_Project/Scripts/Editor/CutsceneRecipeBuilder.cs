@@ -315,6 +315,25 @@ namespace FalsePositive.Editor
                 Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
+                // Spassky's scripted P3 beats. These play in the interrogation
+                // room with the mic down, so they are pre-rendered rather than
+                // live TTS — same treatment as spassky_answer, and it keeps the
+                // longest lines off the live turn budget. VisibleRecipe because
+                // §4 cuts hard between the room and the memories rather than
+                // fading. No CutsceneStage staging: nothing moves in the room,
+                // and CutsceneStage only lives in the memory scenes anyway.
+                VisibleRecipe(CutsceneId.P3Photograph,
+                    VoBeat("SPASSKY", "That's what I don't understand.", "spassky_p3_dont_understand", 2f),
+                    VoBeat("SPASSKY", "Old friends. An anniversary. Drinks. From the way they tell it, things were going well.", "spassky_p3_old_friends", 5f),
+                    VoBeat("SPASSKY", "So when did it all go wrong?", "spassky_p3_when_wrong", 2.4f)),
+
+                VisibleRecipe(CutsceneId.P3AfterGoodYears,
+                    VoBeat("SPASSKY", "And somewhere between that photograph and sunrise, Nick ended up dead.", "spassky_p3_photo_sunrise", 4.4f),
+                    VoBeat("SPASSKY", "If it wasn't you, David — who killed Nick?", "spassky_p3_who_killed_nick", 3f)),
+
+                VisibleRecipe(CutsceneId.P3WhoDavid,
+                    VoBeat("SPASSKY", "Who, David?", "spassky_p3_who_david", 1.6f)),
+
                 // The P3 memory pair (docs/STORY_SCRIPT.md §4 P3_VERDICT, §5
                 // CS-16A/CS-16B). VisibleRecipe, not Recipe: the script calls
                 // for a hard cut into the photograph and a hard cut back on the

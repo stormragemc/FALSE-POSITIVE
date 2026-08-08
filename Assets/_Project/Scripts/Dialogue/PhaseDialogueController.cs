@@ -53,6 +53,7 @@ namespace FalsePositive.Dialogue
         private bool _hasSeatedOnce;
         private Coroutine _noSpeechNudgeRoutine;
         private Suspect _namedSuspect = Suspect.None;
+        private bool _p3MemoriesPlayed;
 
         private DialogueManager Dialogue => binder != null ? binder.Dialogue : null;
 
@@ -228,6 +229,14 @@ namespace FalsePositive.Dialogue
                 _namedSuspect = DetectNamedSuspect(response.transcript);
             }
 
+            // One completed turn = the witness has defended themselves, which is
+            // the cue for the photograph (§4). Guarded so it fires exactly once.
+            if (_currentPhase == GamePhase.P3_Verdict && !_p3MemoriesPlayed && TurnsThisPhase >= 2)
+            {
+                RunP3MemorySequence();
+                return;
+            }
+
             _flow.Score.RecordTurn(new TurnRecord(
                 TurnsThisSession,
                 _currentPhase,
@@ -266,24 +275,46 @@ namespace FalsePositive.Dialogue
             _flow.AdvancePhase();
         }
 
-        /// <summary>P3 opens with the memory pair, not with the officer's
-        /// question (docs/STORY_SCRIPT.md §4 P3_VERDICT). The mic stays down
-        /// across both: Spassky asks who killed Nick twice, and the memories
-        /// are the answer David is not managing to give him. Live dialogue —
-        /// and with it the mic — starts only once CS-16B has returned.
-        ///
-        /// Both interludes run on GameFlowDirector rather than here: they
-        /// swap the active scene, which deactivates this component, so a
-        /// coroutine started here would not survive to see them finish.</summary>
+        /// <summary>P3 opens LIVE, not with the memories (docs/STORY_SCRIPT.md
+        /// §4 P3_VERDICT): the officer asks why he should spare the witness and
+        /// the witness defends themselves first. Only after that does he slide
+        /// the photograph across and the memory pair run. An earlier version
+        /// played both memories at the top of the phase, before the player had
+        /// said anything, which inverted the scene — the memories are his answer
+        /// to a question that has already been put to him.</summary>
         private void EnterP3()
         {
+            _p3MemoriesPlayed = false;
+            EnterLiveDialoguePhase(
+                prompts != null ? prompts.TextFor(GamePhase.P3_Verdict) : string.Empty,
+                p3TurnCap);
+        }
+
+        /// <summary>The photograph beat and the memory pair, fired once the
+        /// witness has answered the opening question. The mic is down for the
+        /// whole sequence — §4 has Spassky ask who killed Nick twice before it
+        /// reopens, and the memories are the answer David cannot give him.
+        ///
+        /// Both interludes run on GameFlowDirector rather than here: they swap
+        /// the active scene, which deactivates this component, so a coroutine
+        /// started here would not survive to see them finish.</summary>
+        private void RunP3MemorySequence()
+        {
+            _p3MemoriesPlayed = true;
             Dialogue?.Suspend();
 
-            _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.GoodYears, () =>
-                _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.WhenItWentWrong, () =>
-                    EnterLiveDialoguePhase(
-                        prompts != null ? prompts.TextFor(GamePhase.P3_Verdict) : string.Empty,
-                        p3TurnCap)));
+            _flow.RequestCutscene(CutsceneId.P3Photograph, () =>
+                _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.GoodYears, () =>
+                    _flow.RequestCutscene(CutsceneId.P3AfterGoodYears, () =>
+                        _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.WhenItWentWrong, () =>
+                            _flow.RequestCutscene(CutsceneId.P3WhoDavid, () =>
+                            {
+                                // Mic back up. Resume the same phase rather than
+                                // re-entering it: re-entering would reset the
+                                // turn counter and the story marks.
+                                Dialogue?.Resume();
+                                Dialogue?.RequestOfficerTurn(null);
+                            })))));
         }
 
         private void EnterP4Placeholder()

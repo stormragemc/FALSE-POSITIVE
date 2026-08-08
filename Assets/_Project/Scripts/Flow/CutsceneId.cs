@@ -39,5 +39,13 @@ namespace FalsePositive.Flow
         // repoint every recipe already wired on the CutsceneDirector.
         GoodYears,
         WhenItWentWrong,
+
+        // The officer's scripted P3 beats, spoken in the interrogation
+        // room with the mic down (STORY_SCRIPT.md §4 P3_VERDICT). They
+        // bracket the memory pair: photograph -> CS-16A -> question ->
+        // CS-16B -> "Who, David?", at which point the mic opens.
+        P3Photograph,
+        P3AfterGoodYears,
+        P3WhoDavid,
     }
 }

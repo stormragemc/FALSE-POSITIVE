@@ -303,6 +303,20 @@ namespace FalsePositive.Dialogue
             _p3MemoriesPlayed = true;
             Dialogue?.Suspend();
 
+            // §4: Spassky slides a printed group photograph across the table.
+            // Laid on the desk by raycast between the two seats — the
+            // interrogation Table is a bare Transform with no renderer, so its
+            // surface height cannot be read off the object, and a guessed height
+            // is exactly how a prop ends up floating.
+            Vector3 seat = binder != null && binder.PlayerState != null
+                ? binder.PlayerState.transform.position
+                : new Vector3(0f, 0f, -0.8f);
+            GameObject groupPhoto = FalsePositive.Cutscene.PhotoProps.LayOnSurface(
+                "photo_group_that_night",
+                above: new Vector3(0f, 0.9f, 0.1f),
+                readFrom: seat,
+                width: 0.18f, height: 0.135f);
+
             _flow.RequestCutscene(CutsceneId.P3Photograph, () =>
                 _flow.RequestMemoryInterlude(GamePhase.M1_Night, CutsceneId.GoodYears, () =>
                     _flow.RequestCutscene(CutsceneId.P3AfterGoodYears, () =>
@@ -312,6 +326,9 @@ namespace FalsePositive.Dialogue
                                 // Mic back up. Resume the same phase rather than
                                 // re-entering it: re-entering would reset the
                                 // turn counter and the story marks.
+                                // "He pulls the photograph back into the folder"
+                                // — it goes before the name is asked for.
+                                FalsePositive.Cutscene.PhotoProps.Discard(groupPhoto);
                                 Dialogue?.Resume();
                                 Dialogue?.RequestOfficerTurn(null);
                             })))));

@@ -920,12 +920,20 @@ namespace FalsePositive.Cutscene
 
             yield return PoseBorrowed();
 
-            // 0-4s — old friends. Priya holds up the school photograph.
+            // 0-4s — old friends. Priya holds up the school photograph of David
+            // and Nick. Parented to her hand rather than placed in the air, so
+            // it tracks her breathing idle instead of hanging beside her.
+            GameObject schoolPhoto = PhotoProps.PutInHand(priya, david, "photo_school_david_nick");
             yield return new WaitForSeconds(3.95f);
 
             // 4-8s — Aaron and Ivy. Ivy turns to Aaron, then the half-second
             // where Nick and Ivy look at each other instead of at him. Held
             // under half a second: catchable, not certain.
+            // 4-8s — Priya swipes to the wedding photo on her phone. Smaller
+            // than a print because it is a phone screen, per §4.
+            PhotoProps.Discard(schoolPhoto);
+            GameObject weddingPhoto = PhotoProps.PutInHand(priya, david, "photo_aaron_ivy_wedding", 0.075f, 0.055f);
+
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
             yield return new WaitForSeconds(3.2f);
             if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, ivyAt), 0f);
@@ -943,6 +951,9 @@ namespace FalsePositive.Cutscene
             if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, david), 0f);
             yield return new WaitForSeconds(2f);
 
+            // The photographs belong to this memory only — they must not be left
+            // in the cabin for the player to find during M1.
+            PhotoProps.Discard(weddingPhoto);
             ReturnBorrowed();
         }
 

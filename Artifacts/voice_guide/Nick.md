@@ -1,32 +1,28 @@
 # Nick — voice and script-driven delivery
 
-**Status:** voice cast and six production MP3s **finalized in the working tree** 8 Aug 2026
-(§4.1–4.3), imported and wired into CS-16A/CS-16B (§4.4). Adds Nick to
-`Assets/_Project/Art/Audio/VO/README.md`, which had no row for him at all.
+**Status:** voice **selected** 8 Aug 2026. Production WAV generation, review, and
+Unity integration are pending. This guide supersedes the Artem Lebedev casting
+in `Assets/_Project/Art/Audio/VO/README.md` where the two conflict.
 
 ---
 
 ## 1. Problem
 
-Nick had **no voice and no audio**. `docs/STORY_SCRIPT.md` §2 promised him "one pre-rendered line
-(fire argument)" and no `nick_*.mp3` existed anywhere in the project. He was the single hard
-blocker on the P3 memory pair: he is the centre of both fragments, and neither could be built
-without him.
+Nick needs to sound like the same person in two sharply different memories. In
+the good-years fragment, he is warm, funny, and physically at ease with David.
+Later, alcohol and the pressure of the hidden affair make him careless,
+defensive, and humiliated. The performance should reveal that change without
+turning him into an obvious villain.
 
-**Casting.** `docs/HUMAN_SCRIPT.md`'s accent table lists Nick as **Russian, with a Russian
-accent** — the same family as Officer Spassky. That constraint was missed on the first audition
-pass, which auditioned three American voices (Chris, Will, Josh) against §2's personality line
-alone. All three were discarded.
+**Casting.** The human script calls for a Russian man with a natural,
+easy-to-understand Russian accent. The existing Unity README casts Artem
+Lebedev (`rQOBu7YxCDxGiFdTm28w`), but the new audition selected Ivan Energetic.
+Nick must also remain clearly distinct from Officer Spassky: younger, warmer,
+quicker, and less controlled.
 
-**Separation.** Nick's problem is not just sounding right, it is sounding *distinct*. He shares
-CS-16A and CS-16B with Aaron (Eric) and hard-cuts back to Spassky (Maksim, Russian) within
-seconds. Two Russian male voices in adjacent shots will blur if they are close in age or depth,
-and the player would lose track of who is speaking during the fire argument — the one beat where
-following the speaker actually matters.
-
-**Delivery.** Nick spans warm best-friend teasing and the careless line that ends Aaron's
-marriage, then anger and humiliation, inside about twenty seconds of screen time. One preset
-cannot carry all three.
+**Delivery.** Nick is described as warm and careless. He knows the conversation
+with David matters, but he keeps putting it off. Even his angry lines come from
+avoidance and embarrassment rather than menace.
 
 ---
 
@@ -37,55 +33,48 @@ Verified against the working tree on 8 Aug 2026.
 | Source | Current reality |
 |---|---|
 | `docs/HUMAN_SCRIPT.md` | Canonical spoken script. Nick owns `NICK-001` through `NICK-007`. |
-| `Assets/_Project/Art/Audio/VO/` | Six finalized Artem MP3s with descriptive stems (see §2.1). |
-| `Assets/_Project/Art/Audio/VO/README.md` | Now carries Nick's row and render settings. |
-| `CutsceneRecipeBuilder.cs` | All six wired as `VoBeat` entries in `GoodYears` / `WhenItWentWrong`. |
-| `docs/STORY_SCRIPT.md` §2 | Still reads "pre-rendered memory lines" — accurate but no longer a promise. |
+| `Artifacts/voice-auditions/nick/` | Contains the audition metadata, playback utilities, and current audition renders. |
+| `Artifacts/voice-lines/nick/` | Does not yet exist; no selected-voice production set has been rendered. |
+| `Assets/_Project/Art/Audio/VO/README.md` | Still names Artem Lebedev as Nick and is stale. |
+| `Assets/_Project/Art/Audio/VO/` | Contains six Artem-era MP3s for approximate equivalents of `NICK-002` through `NICK-007`. |
+| `CutsceneRecipeBuilder.cs` | Uses the six descriptive Unity stems; `NICK-001` is not represented there. |
 
 ### 2.1 Canonical line set
 
-| ID | Line | Beat | Asset |
-|---|---|---|---|
-| `NICK-001` | Not tonight, David. I can't do this with you right now. I need some air. | superseded by `NICK-007` in the split-memory rewrite | — not rendered |
-| `NICK-002` | He was worse at seventeen. | CS-16A, school photo | `nick_worse_at_seventeen.mp3` |
-| `NICK-003` | Unfortunately. | CS-16A, the toast | `nick_unfortunately.mp3` |
-| `NICK-004` | Here. You look fucking freezing. | CS-16A, the coat swap | `nick_you_look_freezing.mp3` |
-| `NICK-005` | You've been saying "after this trip" for two years. | CS-16B, Aaron learns | `nick_after_this_trip.mp3` |
-| `NICK-006` | He already knows. | CS-16B, the fire argument | `nick_he_already_knows.mp3` |
-| `NICK-007` | I need some air. | CS-16B, he walks out | `nick_i_need_some_air.mp3` |
+| ID | Dialogue |
+|---|---|
+| `NICK-001` | Not tonight, David. I can't do this with you right now. I need some air. |
+| `NICK-002` | He was worse at seventeen. |
+| `NICK-003` | Unfortunately. |
+| `NICK-004` | Here. You look fucking freezing. |
+| `NICK-005` | You've been saying "after this trip" for two years. |
+| `NICK-006` | He already knows. |
+| `NICK-007` | I need some air. |
 
-`NICK-001` predates the split-memory rewrite and overlaps `NICK-007`. It is deliberately not
-rendered; if it is ever restored, it needs its own asset rather than reusing `NICK-007`.
+The first line belongs to the original argument scene. The remaining six are
+split between the warm good-years memory and the colder memory showing when the
+night went wrong. The descriptive Unity stems cover only the latter six.
 
 ### 2.2 Audition evidence
 
-Two rounds, both auditioned on the same pair of lines so the warm and the damaging register could
-be judged together: *"Here. You look freezing. … You've been saying 'after this trip' for two
-years."*
+Eight Russian male candidates first read `NICK-001` using
+`eleven_multilingual_v2`. Alexei was the provisional favourite on the longer
+argument line.
 
-| Round | Candidates | Outcome |
-|---|---|---|
-| 1 | Chris, Will, Josh (all American) | **Discarded** — cast against §2's personality note without checking `HUMAN_SCRIPT.md`'s accent table. Liam was also attempted and 404'd: not in the account's library. |
-| 2 | Oleg, Denis, Guy, Artem — all Russian or Moscow-labelled | **Artem selected.** |
+The same candidates then read `NICK-005`, which tests drunken carelessness and
+the moment Nick exposes the affair. Ivan Energetic was preferred on that line.
+Those two voices advanced to a production-quality decider using `NICK-004`, a
+warm line from before the group fractures. Both finalists used `eleven_v3` with
+Natural stability. **Ivan Energetic**, presented as finalist 1, won the final
+comparison.
 
-Round 2 was rendered alongside a Maksim reference clip of the same lines, so candidates could be
-judged for family separation against Spassky rather than in isolation.
-
-Note the account's voice labelling: only **one** voice is tagged `russian` (Maksim). The rest of
-the Russian bench is tagged `moscow` or `standard`, so an accent filter alone will not surface
-them.
+The numbers are historical aids, not identity. Ivan Energetic was candidate 3
+in the eight-voice rounds and finalist 1 in the decider.
 
 ### 2.3 Casting decision
 
-**Artem Lebedev** ("Podcast Pro"), `rQOBu7YxCDxGiFdTm28w`. Middle-aged, casual register.
-
-Chosen over the younger candidates (Oleg, Guy) because Nick has to be believable as David's friend
-of fifteen years and as a man having a two-year affair — not as a student. Chosen over Denis
-because the casual register carries the careless line better than a straight read.
-
-Provisional in one respect: Artem sits nearer Maksim in age than the younger candidates did, so
-separation from Spassky relies on depth and pace rather than age. If the fire argument reads as
-muddy against Spassky in a full playthrough, re-audition Oleg before changing anything else.
+Selected: **Ivan Energetic**, ElevenLabs voice ID
+`JKtNvDNrWu33P1xzttP2`.
 
 ---
 
@@ -93,120 +82,164 @@ muddy against Spassky in a full playthrough, re-audition Oleg before changing an
 
 | # | Decision | Rationale |
 |---|---|---|
-| D1 | Russian accent, non-negotiable | `docs/HUMAN_SCRIPT.md` accent table |
-| D2 | Auditioned against Maksim, not in isolation | Two Russian males in adjacent shots must be separable |
-| D3 | Middle-aged over young | Fifteen-year friendship, two-year affair |
-| D4 | One voice identity, per-line settings | Same approach as Priya: identity fixed, emotion from text and settings |
-| D5 | `eleven_multilingual_v2`, not `v3` | Matches every other clip in the project and `Sidecar/tts.py`'s live model; mixing models inside one scene risks an audible seam |
-| D6 | Descriptive stems, not `NICK-00n` filenames | `CutsceneRecipeBuilder.VoBeat` resolves by stem; renaming would mean touching every recipe |
+| D1 | Nick's production voice is **Ivan Energetic** (`JKtNvDNrWu33P1xzttP2`) | It carried the accidental revelation naturally and remained warm enough for the coat-swap joke. |
+| D2 | Production model is **`eleven_v3`** with Natural stability | The final comparison used V3, and its direction handling was more useful than the historical V2 audition baseline. |
+| D3 | Nick's accent stays natural and intelligible | Russian is a casting cue, not a reason to exaggerate pronunciation or reduce clarity. |
+| D4 | Nick sounds younger and less controlled than Spassky | The two Russian male voices must remain immediately distinguishable in memory and interrogation scenes. |
+| D5 | Warmth is the baseline; anger is situational | Nick is careless and avoidant, not threatening by default. The later lines should feel like the same friend under pressure. |
+| D6 | Every production filename will use its `NICK-###` script ID | This avoids drift between descriptive Unity stems and canonical dialogue. |
+| D7 | Performance direction may change punctuation but not spoken wording | Tags and pauses can shape delivery without silently rewriting the script. |
+| D8 | Casting is final, but individual takes are not | Each of the seven production lines still needs generation, listening, and approval. |
 
-D5 and D6 both differ from `Priya.md` deliberately. See §7.
+**Rejected:**
+
+- **Artem Lebedev as the binding cast choice.** It documents an earlier asset
+  set, not the result of the current audition.
+- **Alexei as the final voice.** He led on the first argument line, but Ivan
+  Energetic handled the revelation and warm decider more convincingly overall.
+- **Choosing from anger alone.** Nick appears at his warmest before the story
+  reveals the affair; a voice that only sounds severe would flatten the memory.
+- **Treating “Energetic” as a direction for every line.** It is the library
+  voice name, not a requirement to make quiet or humiliated lines upbeat.
+- **Reusing the old V2 settings as production defaults.** The decisive round
+  used V3 Natural settings.
 
 ---
 
 ## 4. Design
 
-### 4.1 Voice and synthesis — FINALIZED
-
-All six production lines share one voice identity and baseline:
+### 4.1 Voice and synthesis — SELECTED
 
 | Setting | Value |
 |---|---|
-| Voice | Artem Lebedev — "Podcast Pro" |
-| Voice ID | `rQOBu7YxCDxGiFdTm28w` |
-| `model_id` | `eleven_multilingual_v2` |
-| `stability` | `0.35` |
-| `similarity_boost` | `0.85` |
-| `style` | `0.55` |
-| `speed` | `0.95` |
-| Output format | default MP3 |
+| Voice | Ivan Energetic |
+| Voice ID | `JKtNvDNrWu33P1xzttP2` |
+| `model_id` | `eleven_v3` |
+| `stability` | `0.50` (`Natural`) |
+| `similarity_boost` | `0.75` |
+| `style` | `0.00` |
+| `use_speaker_boost` | `True` |
+| `speed` | `1.00` |
+| Output format | `pcm_24000` |
 
-Looser than Spassky (`stability 0.15` is his expressive setting, but he is *composed*; Nick is
-drunk and careless) and tighter than a free-form read, because below about `0.3` the Russian
-accent begins to wander between takes.
-
-`similarity_boost 0.85` holds the accent stable across all six renders. Emotional range comes from
-the line text and the direction in §4.2, not from changing identity per line.
+The target production format is mono, 24 kHz, 16-bit PCM WAV. Keep the baseline
+settings fixed across the character so emotional direction changes the
+performance without changing Nick's identity.
 
 ### 4.2 Script-driven delivery
 
-Three registers across six lines. They are not interchangeable.
+Audio tags and punctuation below are synthesis directions. They are not extra
+spoken dialogue.
 
-**Warm — `NICK-002`, `NICK-003`, `NICK-004`.** Teasing an old friend. `NICK-004` ("Here. You look
-fucking freezing.") must land as generosity, not aggression — the profanity is affectionate. This
-line is also load-bearing: it is why Nick is underdressed when he dies, and §9's clue 3 now cites
-this memory as a source. If it reads as a sneer, the coat swap stops looking like a kindness.
+| ID | Performance beat | Exact synthesis prompt |
+|---|---|---|
+| `NICK-001` | Frustrated avoidance; tired of the subject, not hostile toward David | `[frustrated, avoiding the conversation] Not tonight, David. I can’t do this with you right now. I need some air.` |
+| `NICK-002` | Fond teasing while remembering their school years | `[fondly teasing] He was worse at seventeen.` |
+| `NICK-003` | Dry joke during the toast, with affection underneath | `[dryly, joking] Unfortunately.` |
+| `NICK-004` | Casual warmth while throwing David the warmer coat | `[warm, teasing] Here. You look fucking freezing.` |
+| `NICK-005` | Slightly drunk and careless; the secret escapes before he recognizes the danger | `[slightly drunk, careless] You’ve been saying “after this trip” for two years.` |
+| `NICK-006` | Angry and humiliated after David presses him | `[angry, humiliated] He already knows.` |
+| `NICK-007` | Tight and final; end the conversation and get out of the room | `[tense, trying to end the argument] I need some air.` |
 
-**Careless — `NICK-005`.** The line that ends Aaron's marriage. Nick is not being cruel and is not
-making a point; he is drunk and has stopped tracking who is in the room. Any hint of deliberate
-malice makes Aaron's restraint incoherent and turns Nick into a villain, which the story does not
-support.
+`NICK-001` and `NICK-007` both end with the same thought, but they occur in
+different presentations of the night. The longer version carries exhausted
+avoidance; the short memory fragment should land as a clipped exit.
 
-**Humiliated — `NICK-006`, `NICK-007`.** Angry, clipped, defensive. `NICK-007` is his last line in
-the game; it should sound like leaving a room, not like a threat.
+### 4.3 Assets and reproducibility — NOT YET IMPLEMENTED
 
-The current renders were tuned on the warm register. The two humiliated lines are the most likely
-to need a second pass — check them before locking.
+The intended production set is:
 
-### 4.3 Assets and reproducibility — FINALIZED
+```text
+Artifacts/voice-lines/nick/NICK-001.wav
+Artifacts/voice-lines/nick/NICK-002.wav
+Artifacts/voice-lines/nick/NICK-003.wav
+Artifacts/voice-lines/nick/NICK-004.wav
+Artifacts/voice-lines/nick/NICK-005.wav
+Artifacts/voice-lines/nick/NICK-006.wav
+Artifacts/voice-lines/nick/NICK-007.wav
+```
 
-Six MP3s under `Assets/_Project/Art/Audio/VO/`, named by descriptive stem (§2.1). Rendered at the
-settings in §4.1; 156 characters billed total.
+The future generator should store the public voice ID, settings, and exact
+prompts from §4.1–4.2. It must read `ELEVENLABS_API_KEY` from the environment,
+skip existing approved WAVs by default, and require an explicit overwrite flag
+for regeneration.
 
-Reproducing them needs only the voice ID, the six line texts verbatim from `docs/HUMAN_SCRIPT.md`,
-and the §4.1 settings. Any re-render must take the text from the human script rather than from
-this table, so the spoken lines and the subtitles cannot drift apart.
+### 4.4 Unity integration — NOT YET IMPLEMENTED
 
-### 4.4 Unity integration — IMPLEMENTED
+Current Unity references use these descriptive stems:
 
-All six are wired as `VoBeat` entries in `CutsceneRecipeBuilder.BuildRecipes`, three in
-`CutsceneId.GoodYears` and three in `CutsceneId.WhenItWentWrong`. `VoBeat` resolves the clip by
-stem at recipe-build time, so the assets are picked up by
-`Tools ▸ False Positive ▸ Bootstrap ▸ 6 - Populate Cutscene Recipes` with no per-clip wiring.
+- `nick_worse_at_seventeen`
+- `nick_unfortunately`
+- `nick_you_look_freezing`
+- `nick_after_this_trip`
+- `nick_he_already_knows`
+- `nick_i_need_some_air`
 
-They are **not** in `CutsceneRecipeBuilder.VoClipNames`, and must not be added: that path assigns
-clips to beats *positionally*, and `WhenItWentWrong` contains two subtitle-only `DAVID` beats at
-indices 4 and 6. A positional mapping would write Nick's audio onto David's silent lines.
+Integration needs to:
+
+1. Generate and approve all seven Ivan Energetic WAVs.
+2. Import the approved files without transcoding them.
+3. Replace Nick's Artem casting row in the Unity VO README with §4.1.
+4. Replace descriptive stems with the `NICK-###` ID contract.
+5. Add `NICK-001` to the fire-argument sequence.
+6. Map `NICK-002` through `NICK-004` to the good-years memory.
+7. Map `NICK-005` through `NICK-007` to the when-it-went-wrong memory.
+8. Rebuild serialized recipes and verify every subtitle resolves the matching
+   clip.
 
 ### 4.5 Loudness and in-game mix
 
-Not yet normalised. Spassky's clips carry a documented −1.5 dB trim; Nick's have no equivalent
-pass and may sit hotter than the rest of the cast. Do a level check across CS-16A once Priya's and
-Aaron's final assets are in, and normalise the scene together rather than per character.
+Nick's warm jokes, accidental revelation, and angry exit should not all be
+normalized to the same apparent intensity. Preserve the natural dynamics of
+approved takes and balance them through one Unity character-VO mixer group.
+Check intelligibility against fire, glass, radio bleed, wind, and the door slam.
 
 ---
 
 ## 5. Testing and verification
 
-- [x] Six MP3s exist under `Art/Audio/VO/` with the §2.1 stems
-- [x] `Bootstrap/6` reports 27 recipes with no "Missing VO nick_*" warnings
-- [ ] CS-16A and CS-16B play with all six audible, in a full playthrough
-- [ ] Nick is distinguishable from Aaron (Eric) within CS-16A
-- [ ] Nick is distinguishable from Spassky (Maksim) across the CS-16B → interrogation hard cut
-- [ ] `NICK-004` reads as generosity, not aggression
-- [ ] `NICK-005` reads as careless, not cruel
-- [ ] Level check against Priya, Aaron and Spassky in the same scene
+Completed:
 
-The two separation checks are the ones that would send this back to casting. Everything else is
-tuning.
+- `HUMAN_SCRIPT.md` contains exactly seven Nick IDs, `NICK-001` through
+  `NICK-007`.
+- Audition scripts preserve every candidate name, number, and public voice ID.
+- The final-decider script records Ivan Energetic as original candidate 3 and
+  finalist 1.
+- The final-decider files use `eleven_v3` with the settings in §4.1.
+- No API key is stored in the audition or guide files.
+
+Required after production generation:
+
+- Each production WAV opens as mono, 24 kHz, 16-bit PCM.
+- Spoken words match the canonical line paired with each ID.
+- The Russian accent remains natural and easy to understand.
+- `NICK-002` through `NICK-004` sound warm enough to establish the friendship.
+- `NICK-005` sounds careless rather than deliberately cruel.
+- `NICK-006` and `NICK-007` sound humiliated and avoidant rather than
+  villainous.
+- Nick remains clearly distinct from Spassky in the final mix.
 
 ---
 
 ## 6. Out of scope
 
-- Nick's on-screen model, animation and lip-sync
-- `NICK-001`, superseded by the split-memory rewrite
-- Loudness normalisation across the whole cast (§4.5 flags it; it is a scene-level job)
-- Any live TTS for Nick — he is pre-rendered only, and never speaks in the present tense
+- Generating or approving Nick's seven production WAVs.
+- Importing or wiring Nick's files in Unity.
+- Deleting the tracked Artem-era MP3s before migration.
+- Changing canonical dialogue to suit a generated take.
+- Live or dynamic Nick TTS; his lines are pre-rendered memories.
+- Per-line destructive mastering.
 
 ---
 
 ## 7. Risks
 
-| Risk | Impact | Mitigation |
+| Risk | Severity | Mitigation |
 |---|---|---|
-| Artem and Maksim blur across the CS-16B hard cut | Player loses the speaker in the fire argument | Separation check in §5; Oleg is the fallback |
-| `NICK-005` reads as cruel | Aaron's restraint becomes incoherent; Nick becomes a villain | §4.2 direction; re-render at lower `style` if needed |
-| Model divergence from `Priya.md` | Audible seam within CS-16A | D5 is deliberate — but if Priya ships on `eleven_v3`, A/B the two in the same scene before locking |
-| Casting recorded in three places | Drift, as already happened with Priya | `Art/Audio/VO/README.md`, `docs/HUMAN_SCRIPT.md` and this file must agree; this file is the detailed record, the README table is the index |
-| Nick's stems differ from Priya's `NICK-00n` convention | Confusion when both guides are read together | D6 — descriptive stems are what `VoBeat` resolves; changing them means touching every recipe |
+| Unity continues playing Artem while the guide names Ivan Energetic | **High** | Treat casting, production generation, import, and recipe migration as one explicit follow-up change |
+| `NICK-001` remains silent because no legacy stem exists | High | Add the ID-based clip explicitly to the fire-argument sequence |
+| “Ivan Energetic” is directed too brightly in the later scene | Medium | Treat the name as voice identity only and follow the per-line beats in §4.2 |
+| Nick sounds too similar to Spassky | Medium | Compare both in the cabin/interrogation transition and preserve Nick's quicker, warmer delivery |
+| Drunken delivery becomes slurred or comic | Medium | Suggest carelessness through timing; keep every word intelligible |
+| Short lines produce unstable or theatrical takes | Medium | Audition multiple renders and approve files individually before locking them |
+| The Voice Library entry becomes unavailable | Low | Preserve the public voice ID, settings, prompts, and approved WAVs in source control |

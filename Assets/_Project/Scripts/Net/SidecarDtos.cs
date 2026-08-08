@@ -15,6 +15,7 @@ namespace FalsePositive.Net
     {
         public bool ok;
         public string error;
+        public bool session_ended;
         public string transcript;
         public string emotion;
         public float emotion_confidence;

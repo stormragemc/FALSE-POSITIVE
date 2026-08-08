@@ -61,11 +61,16 @@ blackout, not an alibi.
 | **Ivy** | Aaron's wife. Two years with Nick. Saw Aaron come in. Cannot speak without becoming the motive. | ElevenLabs, pre-rendered |
 | **Priya** | Passed out early. Finds the body. Calls the police. Knows nothing. | ElevenLabs, pre-rendered |
 
-> **Voice-cast note:** `Sidecar/llm.py` currently hardcodes *Detective Mara Voss* and the verified
-> ElevenLabs voice `XrExE9yKIg1WjnnlVkGX` (Matilda, **female**). Officer Spassky reads male →
-> **re-run `Sidecar/tools/probe_tts.py`** to find an API-usable male voice on the account. This is a
-> backend-team ask (`GAME_COMPLETION_PLAN.md` §7, B0) with a client-side fallback of *keeping the
-> female voice and renaming the character* if the probe returns nothing usable.
+> **Voice-cast note — resolved 7 Aug 2026.** Spassky is voiced by **Maksim** ("Raw, unpolished,
+> deep", Russian accent), ElevenLabs `6sXsAlJKKBf265ucBSRt`, on `eleven_multilingual_v2`. This is
+> now the committed default in `Sidecar/config.py`, so no `.env` entry is needed to get the right
+> voice on a fresh machine — only `ELEVENLABS_API_KEY`. `GAME_COMPLETION_PLAN.md` §7 B0 is closed;
+> its fallback (keep the female voice, rename the character) is dead. Casting rationale, the
+> delivery settings, and the latency this model costs are in
+> `docs/superpowers/specs/2026-08-07-spassky-voice-and-delivery-design.md`.
+>
+> The earlier claim that `llm.py` hardcodes *Detective Mara Voss* was stale: `llm.py:55` has read
+> `You are Officer Spassky` since the rename. Only the voice ID was ever wrong.
 
 ---
 

@@ -91,6 +91,20 @@ class UnityContractTests(unittest.TestCase):
         response_fields = _class_fields(self.source, "SidecarTurnResponse")
         self.assertEqual(response_fields.get("prosody"), "SidecarProsodySignal")
 
+    def test_turn_response_exposes_the_terminal_session_signal(self):
+        self.assertEqual(
+            _class_fields(self.source, "SidecarTurnResponse").get("session_ended"),
+            "bool",
+        )
+
+    def test_unity_sends_the_configured_client_key_on_turn_requests(self):
+        client_source = UNITY_CLIENT_PATH.read_text(encoding="utf-8")
+        self.assertGreaterEqual(
+            client_source.count("ApplyClientKey(req);"),
+            2,
+            "both session reset and turn requests must apply the configured client key",
+        )
+
     def test_unity_probability_dto_covers_checkpoint_labels_with_float_types(self):
         self.assertEqual(
             _class_fields(self.source, "SidecarClassProbabilities"),

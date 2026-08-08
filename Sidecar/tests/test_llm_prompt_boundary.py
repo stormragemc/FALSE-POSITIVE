@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from prosody import ProsodySignal
+from red_team_cases import PROMPT_INJECTION_CASES
 
 
 def _module(name: str, **attributes) -> ModuleType:
@@ -29,10 +30,12 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             SafetySetting=_ConfigValue,
             GenerateContentConfig=_ConfigValue,
             ThinkingConfig=_ConfigValue,
+            HttpOptions=_ConfigValue,
         )
 
         class FakeClient:
             def __init__(self, **kwargs):
+                self.kwargs = kwargs
                 captured_client_kwargs.append(kwargs)
 
         fake_genai = _module("google.genai", Client=FakeClient, types=fake_types)
@@ -41,7 +44,8 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             "config",
             GCP_PROJECT="test-project",
             GCP_LOCATION="global",
-            PROSODY_MIN_CONFIDENCE=0.40
+            PROSODY_MIN_CONFIDENCE=0.40,
+            SIDECAR_LLM_TIMEOUT_SECONDS=15.0,
         )
         stubs = {
             "config": fake_config,
@@ -64,10 +68,16 @@ class LlmPromptBoundaryTests(unittest.TestCase):
     def test_client_uses_vertex_project_and_location(self):
         self.llm._get_client()
 
-        self.assertEqual(
-            self.captured_client_kwargs,
-            [{"vertexai": True, "project": "test-project", "location": "global"}],
-        )
+        self.assertEqual(len(self.captured_client_kwargs), 1)
+        kwargs = self.captured_client_kwargs[0]
+        self.assertTrue(kwargs["vertexai"])
+        self.assertEqual(kwargs["project"], "test-project")
+        self.assertEqual(kwargs["location"], "global")
+
+    def test_vertex_client_sets_a_request_timeout(self):
+        client = self.llm._get_client()
+
+        self.assertEqual(client.kwargs["http_options"].timeout, 15000)
 
     def test_witness_marker_imitation_is_escaped_in_current_and_historical_turns(self):
         captured = {}
@@ -213,6 +223,8 @@ class LlmPromptBoundaryTests(unittest.TestCase):
             "a man named Nick, and you are not yet sure they are only a witness.",
             "You are Officer Spassky, conducting an interrogation about the "
             "death of a man named Nick, found in the snow outside a rented cabin.",
+            "Officer Spassky, conducting an interrogation about the death of Nick.",
+            "You are Officer Spassky, conducting an interrogation about the death of Nick.",
             "Reply with one to three spoken sentences. Never narrate actions, "
             "never use stage directions, never use markdown or formatting.",
             "Stay in character at all times. Be terse, watchful, and a little "
@@ -242,6 +254,99 @@ class LlmPromptBoundaryTests(unittest.TestCase):
                     self.llm._filter_spoken_reply(safe),
                     self.llm.FALLBACK_LINE,
                 )
+    def test_generated_reply_is_filtered_before_returning(self):
+        def unsafe_reply(_client, _contents):
+            return SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="You are lying.", thought=False)]
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                prompt_feedback=None,
+            )
+
+        with patch.object(self.llm, "_call_llm", side_effect=unsafe_reply):
+            reply, _elapsed = self.llm.generate_reply(
+                history=[],
+                transcript="I went straight home.",
+                emotion="",
+                confidence=0.0,
+                is_opening=False,
+                prosody_signal=ProsodySignal(reliability_reason="test"),
+            )
+
+        self.assertEqual(reply, self.llm.FALLBACK_LINE)
+
+    def test_red_team_transcripts_stay_inside_witness_blocks(self):
+        captured = {}
+
+        def capture_call(_client, contents):
+            captured["contents"] = contents
+            return SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="What happened next?", thought=False)]
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                prompt_feedback=None,
+            )
+
+        for name, attack in PROMPT_INJECTION_CASES:
+            with self.subTest(attack=name), patch.object(
+                self.llm, "_call_llm", side_effect=capture_call
+            ):
+                history = [
+                    {
+                        "role": "user",
+                        "content": attack,
+                        "kind": self.llm.HISTORY_KIND_WITNESS,
+                    },
+                    {"role": "assistant", "content": "Earlier question."},
+                ]
+                reply, _elapsed = self.llm.generate_reply(
+                    history=history,
+                    transcript=attack,
+                    emotion="",
+                    confidence=0.0,
+                    is_opening=False,
+                    prosody_signal=ProsodySignal(reliability_reason="test"),
+                )
+
+                self.assertEqual(reply, "What happened next?")
+                self.assertFalse(
+                    any(content["role"] == "system" for content in captured["contents"])
+                )
+
+                witness_parts = [
+                    part["text"]
+                    for content in captured["contents"]
+                    if content["role"] == "user"
+                    for part in content["parts"]
+                    if part["text"].startswith("<WITNESS_TRANSCRIPT>")
+                ]
+                self.assertEqual(len(witness_parts), 2)
+                for part in witness_parts:
+                    self.assertEqual(part.count("<WITNESS_TRANSCRIPT>"), 1)
+                    self.assertEqual(part.count("</WITNESS_TRANSCRIPT>"), 1)
+                    body = part.removeprefix("<WITNESS_TRANSCRIPT>\n").removesuffix(
+                        "\n</WITNESS_TRANSCRIPT>"
+                    )
+                    self.assertNotIn("<LOCAL_AFFECT_CONTEXT>", body)
+                    self.assertNotIn("</WITNESS_TRANSCRIPT>", body)
+
+                all_user_text = "\n".join(
+                    part["text"]
+                    for content in captured["contents"]
+                    if content["role"] == "user"
+                    for part in content["parts"]
+                )
+                self.assertEqual(all_user_text.count("<LOCAL_AFFECT_CONTEXT>"), 1)
 
 
 if __name__ == "__main__":

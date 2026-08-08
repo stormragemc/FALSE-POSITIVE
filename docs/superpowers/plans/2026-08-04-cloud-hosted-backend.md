@@ -721,7 +721,7 @@ git commit -m "feat(sidecar): bill gemini through vertex ai instead of an api ke
 - Consumes: nothing from earlier tasks.
 - Produces: `auth.is_authorized(supplied: str, expected: str) -> bool`, and the header name constant `auth.CLIENT_KEY_HEADER = "x-fp-client-key"`. Task 8's Unity client sends this exact header.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Sidecar/tests/test_auth.py`:
 
@@ -757,12 +757,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd Sidecar && python3 -m pytest tests/test_auth.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'auth'`
 
-- [ ] **Step 3: Write `auth.py`**
+- [x] **Step 3: Write `auth.py`**
 
 ```python
 """Shared-secret gate for the public backend.
@@ -784,12 +784,12 @@ def is_authorized(supplied: str | None, expected: str) -> bool:
     return hmac.compare_digest(supplied or "", expected)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd Sidecar && python3 -m pytest tests/test_auth.py -q`
 Expected: PASS, 5 tests
 
-- [ ] **Step 5: Add the config value**
+- [x] **Step 5: Add the config value**
 
 In `Sidecar/config.py`, near the other secrets:
 
@@ -812,7 +812,7 @@ In `.env.example`, add:
 FP_CLIENT_KEY=
 ```
 
-- [ ] **Step 6: Register the middleware in `app.py`**
+- [x] **Step 6: Register the middleware in `app.py`**
 
 Add `import auth` to the imports. After `app = FastAPI(...)` (line 84):
 
@@ -834,11 +834,11 @@ async def require_client_key(request, call_next):
     return await call_next(request)
 ```
 
-- [ ] **Step 7: Delete the debug endpoint and its global**
+- [x] **Step 7: Delete the debug endpoint and its global**
 
 Delete lines 213–215 (`@app.get("/debug/last_turn")` and `debug_last_turn`). Delete `_last_turn_debug: dict = {}` (line 48). Delete the four lines that write to it — the pair at 351–352 and the pair at 361–362.
 
-- [ ] **Step 8: Teach the fake FastAPI about middleware**
+- [x] **Step 8: Teach the fake FastAPI about middleware**
 
 `_FakeFastAPI` in `tests/test_app_failure_isolation.py` has no `middleware` method, so `app.py` will now fail to import under test. Add to the class (after `post`, line 28):
 
@@ -849,7 +849,7 @@ Delete lines 213–215 (`@app.get("/debug/last_turn")` and `debug_last_turn`). D
 
 Add `FP_CLIENT_KEY="test-key"` to the fake config module's attribute list.
 
-- [ ] **Step 9: Run the full suite**
+- [x] **Step 9: Run the full suite**
 
 Run: `cd Sidecar && python3 -m pytest tests/ -q`
 Expected: PASS, 63 tests
@@ -882,7 +882,7 @@ git commit -m "feat(sidecar): require a client key and drop the debug transcript
   `forget(session_id: str) -> None`.
   Task 9's docs reference the reason slugs `session_turn_limit_reached` and `daily_turn_budget_exhausted`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Sidecar/tests/test_limits.py`:
 
@@ -948,12 +948,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd Sidecar && python3 -m pytest tests/test_limits.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'limits'`
 
-- [ ] **Step 3: Write `limits.py`**
+- [x] **Step 3: Write `limits.py`**
 
 ```python
 """Turn admission caps, so a runaway client cannot drain the project budget.
@@ -1001,12 +1001,12 @@ class TurnLimiter:
         self._session_counts.pop(session_id, None)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd Sidecar && python3 -m pytest tests/test_limits.py -q`
 Expected: PASS, 6 tests
 
-- [ ] **Step 5: Add config**
+- [x] **Step 5: Add config**
 
 In `Sidecar/config.py`:
 
@@ -1024,7 +1024,7 @@ MAX_TURNS_PER_SESSION=40
 MAX_TURNS_PER_DAY=2000
 ```
 
-- [ ] **Step 6: Enforce in `app.py`**
+- [x] **Step 6: Enforce in `app.py`**
 
 Add `import limits` to the imports. Next to `_session_store`:
 
@@ -1074,7 +1074,7 @@ In `_commit_history`, drop the limiter count for evicted sessions too:
         _turn_limiter.forget(evicted_id)
 ```
 
-- [ ] **Step 7: Update the fake config module**
+- [x] **Step 7: Update the fake config module**
 
 Add to `tests/test_app_failure_isolation.py`'s fake config:
 
@@ -1083,7 +1083,7 @@ Add to `tests/test_app_failure_isolation.py`'s fake config:
             MAX_TURNS_PER_DAY=2000,
 ```
 
-- [ ] **Step 8: Run the full suite**
+- [x] **Step 8: Run the full suite**
 
 Run: `cd Sidecar && python3 -m pytest tests/ -q`
 Expected: PASS, 69 tests

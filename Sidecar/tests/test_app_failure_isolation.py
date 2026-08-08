@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 import importlib.util
 import io
 from pathlib import Path
+import re
 import sys
 import threading
 import time
@@ -15,7 +16,32 @@ from unittest.mock import patch
 
 import numpy as np
 
-from tests.test_unity_contract import DTO_PATH, _class_fields
+DTO_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "Assets/_Project/Scripts/Net/SidecarDtos.cs"
+)
+
+
+def _class_fields(source: str, class_name: str) -> dict[str, str]:
+    match = re.search(rf"public\s+sealed\s+class\s+{re.escape(class_name)}\b", source)
+    if match is None:
+        raise AssertionError(f"missing C# DTO class {class_name}")
+    opening = source.find("{", match.end())
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                body = source[opening + 1:index]
+                return {
+                    field_name: field_type
+                    for field_type, field_name in re.findall(
+                        r"public\s+([A-Za-z0-9_\[\]]+)\s+([A-Za-z0-9_]+)\s*;", body
+                    )
+                }
+    raise AssertionError(f"unbalanced C# DTO class {class_name}")
 
 
 class _FakeFastAPI:
@@ -100,6 +126,11 @@ class AppFailureIsolationTests(unittest.TestCase):
         fastapi_exceptions = _module(
             "fastapi.exceptions",
             RequestValidationError=request_validation_error,
+        )
+        starlette_http_exception = type("HTTPException", (Exception,), {})
+        starlette_exceptions = _module(
+            "starlette.exceptions",
+            HTTPException=starlette_http_exception,
         )
         config = _module(
             "config",
@@ -186,6 +217,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             "fastapi": fastapi,
             "fastapi.exceptions": fastapi_exceptions,
             "fastapi.responses": fastapi_responses,
+            "starlette.exceptions": starlette_exceptions,
             "llm": llm,
             "ser": ser,
             "stt": stt,
@@ -395,6 +427,12 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertTrue(first["ok"])
         self.assertEqual(second.status_code, 429)
         self.assertEqual(second.content["error"], "session_turn_limit_reached")
+        self.assertTrue(second.content["session_ended"])
+        self.assertEqual(
+            second.content["reply_text"],
+            "We're done for tonight. The station will follow up.",
+        )
+        self.assertEqual(second.content["audio_b64"], "")
         self.assertEqual(len(self.captured_signals), 1)
 
     def test_reset_does_not_restore_paid_turn_budget(self):

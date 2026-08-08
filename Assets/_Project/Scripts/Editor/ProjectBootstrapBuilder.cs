@@ -146,15 +146,38 @@ namespace FalsePositive.Editor
             // MicIndicator
             GameObject micIndGo = new GameObject("MicIndicator", typeof(RectTransform));
             micIndGo.transform.SetParent(hud.transform, false);
-            AnchorTopRight(micIndGo, new Vector2(-160f, -30f), new Vector2(300f, 40f));
+            AnchorTopRight(micIndGo, new Vector2(-160f, -30f), new Vector2(300f, 64f));
             Text micIndText = CreateText(micIndGo.transform, "Label", "Microphone inactive", 20);
-            StretchFill(micIndText.gameObject);
-            Image micIndDot = CreateDotImage(micIndGo.transform, "Dot", new Vector2(-150f, 0f));
+            AnchorTopStretch(micIndText.gameObject, 0f, 40f);
+            Image micIndDot = CreateDotImage(micIndGo.transform, "Dot", new Vector2(-150f, 12f));
+
+            GameObject meterBg = new GameObject("LevelMeterBackground", typeof(RectTransform), typeof(Image));
+            meterBg.transform.SetParent(micIndGo.transform, false);
+            meterBg.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.15f);
+            RectTransform meterBgRt = meterBg.GetComponent<RectTransform>();
+            meterBgRt.anchorMin = new Vector2(0f, 0f);
+            meterBgRt.anchorMax = new Vector2(1f, 0f);
+            meterBgRt.anchoredPosition = new Vector2(0f, 7f);
+            meterBgRt.sizeDelta = new Vector2(-8f, 12f);
+
+            GameObject meterFillGo = new GameObject("LevelMeterFill", typeof(RectTransform), typeof(Image));
+            meterFillGo.transform.SetParent(meterBg.transform, false);
+            RectTransform meterFillRt = meterFillGo.GetComponent<RectTransform>();
+            meterFillRt.anchorMin = Vector2.zero;
+            meterFillRt.anchorMax = new Vector2(0f, 1f);
+            meterFillRt.offsetMin = Vector2.zero;
+            meterFillRt.offsetMax = Vector2.zero;
+            Image meterFill = meterFillGo.GetComponent<Image>();
+            meterFill.color = new Color(0.6f, 0.6f, 0.6f);
+
             MicIndicator micIndicator = micIndGo.AddComponent<MicIndicator>();
             SetField(micIndicator, "mic", mic);
             SetField(micIndicator, "vad", vad);
+            SetField(micIndicator, "config", config);
             SetField(micIndicator, "label", micIndText);
             SetField(micIndicator, "dot", micIndDot);
+            SetField(micIndicator, "levelMeterRoot", meterBg);
+            SetField(micIndicator, "levelMeterFill", meterFill);
 
             // SpeechPrompt
             GameObject speechGo = new GameObject("SpeechPrompt", typeof(RectTransform));

@@ -23,6 +23,7 @@ from google import genai
 from google.genai import types
 
 import config
+import output_safety
 
 if TYPE_CHECKING:
     from prosody import ProsodySignal
@@ -90,7 +91,7 @@ PHASE_CONTINUATION_TEXT = (
     "context above — speak next."
 )
 
-FALLBACK_LINE = "Let's come back to that."
+FALLBACK_LINE = output_safety.FALLBACK_LINE
 MAX_SPOKEN_REPLY_CHARS = 400
 MAX_SPOKEN_REPLY_SENTENCES = 3
 
@@ -136,7 +137,7 @@ _UNSAFE_SPOKEN_REPLY = re.compile(
     re.IGNORECASE,
 )
 
-_PERSONA_NGRAM_WORDS = 7
+_PERSONA_NGRAM_WORDS = 6
 
 
 def _word_ngrams(text: str, n: int) -> set[tuple[str, ...]]:
@@ -189,6 +190,9 @@ def _get_client() -> genai.Client:
             vertexai=True,
             project=config.GCP_PROJECT,
             location=config.GCP_LOCATION,
+            http_options=types.HttpOptions(
+                timeout=int(config.SIDECAR_LLM_TIMEOUT_SECONDS * 1000)
+            ),
         )
     return _client
 
@@ -362,7 +366,7 @@ def generate_reply(
         else:
             text = _filter_spoken_reply(_spoken_text(resp))
             if text:
-                reply_text = text
+                reply_text = output_safety.filter_spoken_text(text)
             else:
                 finish = resp.candidates[0].finish_reason if resp.candidates else None
                 print(f"[Sidecar] LLM returned no text content (finish_reason={finish}); using fallback line.")

@@ -1,6 +1,6 @@
 # FALSE POSITIVE — roadmap and live status
 
-**Last updated:** 4 Aug 2026 · **Deadline:** 9 Aug 2026 · **Days left:** 5
+**Last updated:** 7 Aug 2026 · **Deadline:** 9 Aug 2026 · **Days left:** 2
 
 This file answers one question: **what is actually built, and what is not.**
 
@@ -68,7 +68,7 @@ pitch is actually about — a detective that catches you contradicting yourself.
 | ☑ | STT and affect run **concurrently** on the same buffer | `asyncio.gather`, `app.py:266` |
 | ❌ | ~~STT: `faster-whisper small.en`, local, no key, audio never leaves the machine~~ | **Superseded 4 Aug** — STT is Google Cloud Speech-to-Text and player audio now leaves the machine. [§9](#9-distribution-hosted-backend-migration-record), [`PRIVACY.md`](PRIVACY.md). |
 | ☑ | TTS: ElevenLabs, PCM normalised to a canonical rate for Unity | `tts.py`, `audio_utils.py` |
-| ☑ | LLM: Gemini 3.6 Flash, thinking pinned `minimal`, thought parts stripped before TTS | `llm.py` |
+| ☑ | LLM: Gemini 3.6 Flash through Vertex AI, with thought parts stripped before TTS | `Sidecar/llm.py` |
 | ☑ | Fail-fast config validation naming the missing variable | `config.py:46` |
 | ☑ | Parent-PID watchdog so an Editor crash cannot orphan the port | `app.py:366` |
 | ☑ | Input bounds: session ID, sample rate, PCM alignment, 30 s audio cap, LRU session cap | `app.py:98-124`, `232-246` |
@@ -175,11 +175,11 @@ the brief scores exception handling and requires protecting personal information
 
 | ☐ | ID | Item | Status and why | Dependencies before implementation can be finished |
 |---|---|---|---|---|
-| ◐ | **S1** | **Output filter between the LLM and the speaker** | **Partially closed:** model output is limited to three sentences/400 characters, Gemini output tokens are 256, and a deterministic screen rejects direct deception claims plus prompt/sensor leakage markers before TTS. **Still open:** adversarial semantic/evasion coverage beyond these explicit patterns. Safety remains relaxed to `BLOCK_ONLY_HIGH` because an accusatory detective trips default filters. | **None.** The existing Gemini → TTS seam can be hardened and tested directly. |
-| ☐ | **S2** | **Voice prompt-injection red-team suite** | The player's speech becomes model input. Partial mitigations exist — separate `WITNESS_TRANSCRIPT` / `LOCAL_AFFECT_CONTEXT` trust blocks, HTML escaping, reserved-marker scrubbing, applied to replayed history too (`llm.py:92-124`). **Never tested against an adversary.** Build a spoken-attack corpus ("ignore your instructions", "you are now a helpful assistant", "repeat your system prompt", marker imitation) and assert the detective holds role. A judge *will* try this. | **None.** The current prompt-boundary logic is enough to begin the corpus and tests. S1 should use this suite as a regression gate, but it is not a prerequisite. |
-| ☐ | **S3** | **No-deception schema test** | G6 as an executable control: the build fails if a `deception` / `truthfulness` / `lie_probability`-like key appears in any contract or payload. `prosody.py` is clean today by discipline alone — nothing enforces it. Folds A3. | **A3 contract models** for a durable schema-level test. A temporary payload/key scan can start now while A3 is incomplete. |
+| ☑ | **S1** | **Output filter between the LLM and the speaker** | `output_safety.py` is the final filter before a Gemini reply reaches TTS. It rejects lie/truth claims, voice-as-proof claims, diagnostic and internal leaks, empty output, and overlong replies. Unit and LLM-boundary tests pass. | **None.** |
+| ◐ | **S2** | **Voice prompt-injection red-team suite** | Offline corpus and boundary tests cover instruction overrides, role changes, prompt requests, forged tags, affect-marker imitation, and malicious history. The opt-in live Gemini probe exists at `tools/red_team_llm.py`, but has not run because ADC lacks quota-project permission. | Grant ADC quota-project permission, then run the live probe. |
+| ☑ | **S3** | **No-deception schema test** | `test_no_deception_schema.py` rejects diagnostic field names in snake case and camel case across the prosody payload, Python response keys, and Unity DTO fields. | **None.** |
 | ◐ | **S4** | ~~Local~~ **Endpoint hardening** | **Implemented and locally smoke-tested on `cloud/client-docs` (5 Aug):** shared client key on every path except `/health`, fail-closed startup/configuration, `GET /debug/last_turn` removed, Unity sends `X-FP-Client-Key`, and the rebuilt container returns 401 with the Unity-compatible error envelope. **Still open:** verify the deployed service. Owner: Vinay for deploy. | Deploy the service and repeat the authentication smoke test against its public URL. |
-| ☐ | **S5** | **Secret handling, automated** | Unverified by machinery: vendor keys live only in the backend process and never cross to Unity; `.gitignore` covers `.env`; history is clean. The Unity asset currently serializes a **blank** client-key field. Task 8 will deliberately insert the deployed shared key because a shipped build must carry a copy; it is an extractable speed bump, not a secret. Add `gitleaks` to CI, with that value allow-listed once it exists. Folds A13. | **A13 CI workflow** to run `gitleaks`, plus the deployed shared-key decision before an allow-list entry exists. |
+| ☑ | **S5** | **Secret handling, automated** | `.github/workflows/ci.yml` runs a full-history Gitleaks scan beside the Sidecar tests on pushes to `main` and pull requests targeting `main`. GitHub Actions run 31144715561 passed both jobs on 7 Aug 2026. The Unity client key is an extractable speed bump, not a secret, and must be allow-listed only after the deployed value exists. Folds A13. | **None.** |
 | ◐ | **S6** | **Cost and abuse ceiling** | `Sidecar/limits.py` counts turns **on admission, not on success**, retains accounting across gameplay resets, and returns 429 at the session/day caps. A 50-second application deadline prevents late history commits, but timed-out synchronous SDK work may continue in its executor and there is no request idempotency key. Counters also reset on process replacement and caller-chosen session IDs are not durable identities, so this is **not a public billing ceiling**. **Still open:** turn IDs/replay, provider SDK deadlines, durable per-device/client admission, provider-side hard quota or shutdown, Vinay's budget alerts, deployed verification, and the in-fiction capped-session ending. Folds A11. | Durable identity/admission storage, provider-side quota controls, budget alerts, deployed verification, and the capped-session ending. |
 | ☑ | **S7** | **Model supply chain** | Google STT is pinned to `short`, Gemini to `gemini-3.6-flash`, and HuBERT to immutable revision `9a456581e0147a2b7fdaf56d77a9e8fce3865eaa`. The image requires safetensors, bakes that snapshot, loads it offline at runtime, and validates the four-label contract at startup. | **None.** The selected model versions and image build are pinned. |
 | ◐ | **S8** | **Privacy boundary, stated and enforced** | ~~Player audio and embeddings never leave the machine.~~ **That claim died with the migration** — audio now goes to Google Cloud, which is exactly why this row stopped being a bragging point and became an obligation. ☑ **`PRIVACY.md` is written** ([`PRIVACY.md`](PRIVACY.md)) and says so plainly: audio is discarded after each turn, never written to disk, no account, no training, and the system cannot detect lies. ☑ Telemetry still defaults to no transcripts, trivially — A10 does not exist. ☐ **Still missing: the in-game notice before the first recording.** A privacy doc a player never sees is not disclosure. | Task 8's in-game notice and A10's no-transcript telemetry default. |
@@ -187,6 +187,25 @@ the brief scores exception handling and requires protecting personal information
 **Do first:** S1, then S2. S1 because an unfiltered path to a speaker in front of judges is the
 highest-consequence failure we have. S2 because it is the attack a curious judge performs
 without being asked.
+
+### Remaining owner actions
+
+- [ ] Push the current security changes and confirm the full Python 3.12 CI suite passes.
+- [ ] Set Unity's `backendClientKey` to the same value as the deployed `FP_CLIENT_KEY`.
+- [ ] After the project owner grants ADC quota-project permission, run
+  `cd Sidecar; python tools/red_team_llm.py --show-replies`. Review every reply for role
+  compliance and prompt or context leakage, then record the result here and in `AI_SECURITY.md`.
+- [ ] Test the deployed service with missing, invalid, and valid `X-FP-Client-Key` values. Confirm
+  protected paths reject unauthorized calls and no debug-transcript endpoint is public.
+- [ ] Have the Unity scene owner show the capped-session line in a normal end-of-session panel and
+  show the privacy notice before the first microphone capture.
+- [ ] Add a verified ElevenLabs SDK request deadline. Set or verify provider-side quotas, shutdown
+  procedures, and alerts for Google Speech-to-Text and ElevenLabs. Monitor spend and turn Cloud Run
+  off after judging.
+- [ ] Before allowing more than one Cloud Run instance, replace the in-memory session and admission
+  state with shared durable storage.
+- [ ] When `DetectiveAction` or a visible `internal_note` is added, apply the output-safety filter
+  to that text as well.
 
 ---
 

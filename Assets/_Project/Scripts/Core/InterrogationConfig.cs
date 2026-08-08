@@ -51,6 +51,9 @@ namespace FalsePositive.Core
         public float vadMinUtteranceSeconds = 0.3f;
         public float vadSilenceTimeoutSeconds = 0.7f;
         public float vadMaxUtteranceSeconds = 20f;
+        [Tooltip("RMS level at which the HUD microphone meter warns that the input is excessively loud and may clip.")]
+        [Range(0.05f, 1f)]
+        public float micTooLoudRms = 0.25f;
         [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         public float ttsEchoGateTailSeconds = 0.25f;
 

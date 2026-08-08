@@ -13,7 +13,10 @@ namespace FalsePositive.CabinNight
         Panicked,
         Walking,
         Carrying,
-        Kneeling
+        Kneeling,
+        Seated,
+        SeatedBack,
+        SeatedForward
     }
 
     /// <summary>
@@ -60,6 +63,11 @@ namespace FalsePositive.CabinNight
                 CabinIdleProfile.Walking => 0.5f,
                 CabinIdleProfile.Carrying => 0.9f,
                 CabinIdleProfile.Kneeling => 0.6f,
+                CabinIdleProfile.Seated => 0.35f,
+                // Sat back and open-chested reads as the most relaxed breath in
+                // the room; leaning over the table compresses it.
+                CabinIdleProfile.SeatedBack => 0.5f,
+                CabinIdleProfile.SeatedForward => 0.25f,
                 _ => 0.4f
             };
 
@@ -73,10 +81,33 @@ namespace FalsePositive.CabinNight
                 CabinIdleProfile.Walking => drift * 0.4f,
                 CabinIdleProfile.Carrying => drift * 0.15f,
                 CabinIdleProfile.Kneeling => drift * 0.3f,
+                CabinIdleProfile.Seated => drift * 0.4f,
+                // Someone sat back scans the room; someone leaning in is fixed
+                // on the person opposite.
+                CabinIdleProfile.SeatedBack => drift * 0.7f,
+                CabinIdleProfile.SeatedForward => drift * 0.2f,
                 _ => 0f
             };
 
-            Apply(_spines, Quaternion.Euler(breath * breathDegrees, 0f, 0f));
+            // The seated lean rides on the same spine write as the breathing.
+            // It lives here rather than in CabinPoseLibrary because a muscle
+            // -space lean does not work on this rig: Unity's humanoid solver
+            // holds pose.bodyRotation fixed, so "Spine/Chest Front-Back"
+            // counter-rotates the hips instead of carrying the head forward
+            // (measured: full -0.9..+0.9 sweep moved the hips-to-head vector
+            // barely 6 degrees while sliding the feet 0.34 m vertically).
+            // Writing the bone directly tilts everything above it — chest,
+            // arms, head — and leaves the hips and legs exactly where the
+            // seated pose put them, which is what leaning from the waist
+            // actually is. Positive X on this rig's spine is forward.
+            float leanDegrees = profile switch
+            {
+                CabinIdleProfile.SeatedForward => 16f,
+                CabinIdleProfile.SeatedBack => -18f,
+                _ => 0f
+            };
+
+            Apply(_spines, Quaternion.Euler(leanDegrees + breath * breathDegrees, 0f, 0f));
             Apply(_necks, Quaternion.Euler(-breath * breathDegrees * 0.25f, headYaw * 0.35f, 0f));
             Apply(_heads, Quaternion.Euler(0f, headYaw, drift * 0.22f));
         }

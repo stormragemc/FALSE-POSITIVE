@@ -51,15 +51,33 @@ namespace FalsePositive.Cutscene
 
         // BO_Sofa's measured collider (Unity_RunCommand, Cabin_v2/Memory_CabinMorning):
         // center (0.75, 0.43, 0.25), size (1.0, 0.85, 3.5) -> x in [0.25, 1.25],
-        // z in [-1.5, 2.0]. The sofa faces -X (Cabin_v2 README: Blender +X ->
-        // Unity -X), so its open/approach side is x < 0.25. These rest spots
-        // sit just off that face — NOT the old (0.75, ·, ·) values, which were
-        // inside the sofa's own box and would have left the player standing
-        // (and previously the CharacterController re-enabling) INSIDE it.
-        private static readonly Vector3 SofaPlayerRest = new Vector3(-0.4f, 0f, 0.3f);
-        private static readonly Vector3 SofaAaronRest = new Vector3(-0.4f, 0f, -0.5f);
-        private static readonly Vector3 SofaBodyCarriedHeight = new Vector3(0.75f, 0.9f, 0.45f);
-        private static readonly Vector3 SofaBodyRest = new Vector3(0.75f, 0.85f, 0.4f);
+        // z in [-1.5, 2.0] at the sofa's ORIGINAL yaw 0. The sofa's open face
+        // is its local -X (Cabin_v2 README: Blender +X -> Unity -X), so these
+        // rest spots sit just off that face — NOT the old (0.75, ·, ·) values,
+        // which were inside the sofa's own box and would have left the player
+        // standing (and previously the CharacterController re-enabling) INSIDE it.
+        //
+        // Stored as offsets in BO_SOFA'S LOCAL SPACE, resolved through
+        // SofaPoint() at runtime. They used to be world-space, which was only
+        // correct while the sofa sat axis-aligned at yaw 0; it is now turned to
+        // face the fireplace (CabinV2Builder.SofaYaw), which sweeps that box to
+        // x [-1.06, 2.56], z [-0.56, 1.06] and would have put every one of
+        // these spots inside the furniture — the exact bug the paragraph above
+        // records fixing once already. Local offsets follow the sofa at any yaw.
+        private static readonly Vector3 SofaPlayerRestLocal = new Vector3(-1.15f, 0f, 0.05f);
+        private static readonly Vector3 SofaAaronRestLocal = new Vector3(-1.15f, 0f, -0.75f);
+        private static readonly Vector3 SofaBodyRestLocal = new Vector3(0f, 0.85f, 0.15f);
+
+        /// <summary>Resolves a BO_Sofa-local offset to world space. Falls back
+        /// to the sofa's authored origin so a missing/renamed sofa degrades to
+        /// the old fixed layout instead of dumping actors at world zero.</summary>
+        private static Vector3 SofaPoint(Vector3 localOffset)
+        {
+            GameObject sofa = GameObject.Find("BO_Sofa");
+            return sofa != null
+                ? sofa.transform.TransformPoint(localOffset)
+                : new Vector3(0.75f, 0f, 0.25f) + localOffset;
+        }
 
         // The front door sits in the 45-degree chamfered corner (x + z =
         // -7.5), not in an axis-aligned wall — confirmed against the door's
@@ -573,7 +591,8 @@ namespace FalsePositive.Cutscene
 
             if (player != null)
             {
-                Vector3 flatTarget = new Vector3(SofaPlayerRest.x, 0f, SofaPlayerRest.z);
+                Vector3 playerRest = SofaPoint(SofaPlayerRestLocal);
+                Vector3 flatTarget = new Vector3(playerRest.x, 0f, playerRest.z);
                 while (true)
                 {
                     Vector3 flatPlayer = new Vector3(player.transform.position.x, 0f, player.transform.position.z);
@@ -626,15 +645,16 @@ namespace FalsePositive.Cutscene
             driver?.PlayState("Walk_Carry", 0.1f);
 
             Vector3 start = aaron.position;
+            Vector3 aaronRest = SofaPoint(SofaAaronRestLocal);
             const float duration = 0.8f;
             float t = 0f;
             while (t < duration)
             {
                 t += Time.deltaTime;
-                aaron.position = Vector3.Lerp(start, SofaAaronRest, t / duration);
+                aaron.position = Vector3.Lerp(start, aaronRest, t / duration);
                 yield return null;
             }
-            aaron.position = SofaAaronRest;
+            aaron.position = aaronRest;
         }
 
         private IEnumerator TheSofa()
@@ -644,16 +664,17 @@ namespace FalsePositive.Cutscene
             GameObject body = GameObject.Find("Prop_NickBody");
             GameObject player = GameObject.Find("Player (Male - First Person)");
 
-            Vector3 bodyStart = body != null ? body.transform.position : SofaBodyRest;
+            Vector3 bodyRest = SofaPoint(SofaBodyRestLocal);
+            Vector3 bodyStart = body != null ? body.transform.position : bodyRest;
             const float duration = 1.2f;
             float t = 0f;
             while (t < duration)
             {
                 t += Time.deltaTime;
-                if (body != null) body.transform.position = Vector3.Lerp(bodyStart, SofaBodyRest, t / duration);
+                if (body != null) body.transform.position = Vector3.Lerp(bodyStart, bodyRest, t / duration);
                 yield return null;
             }
-            if (body != null) body.transform.position = SofaBodyRest;
+            if (body != null) body.transform.position = bodyRest;
 
             ScriptedActor priyaActor = priya != null ? priya.GetComponent<ScriptedActor>() : null;
             priyaActor?.PlayPose(CabinIdleProfile.Kneeling);
@@ -747,8 +768,14 @@ namespace FalsePositive.Cutscene
             }
 
             // Let the Animator evaluate the pose it was just handed before the
-            // feet are measured against it.
-            yield return null;
+            // feet are measured against it. CabinAnimatorDriver.PlayProfile
+            // applies the hip-height offset instantly but crossfades the
+            // muscle pose over 0.25s (CrossFadeInFixedTime) — measuring feet
+            // one frame later catches a transitional pose (hips already
+            // dropped, legs still in the old shape) and bakes in a wrong
+            // one-time correction that nothing re-runs once the blend
+            // finishes. Wait past the fade, not one frame.
+            yield return new WaitForSeconds(0.3f);
 
             foreach (BorrowedActor b in _borrowed)
             {
@@ -851,6 +878,42 @@ namespace FalsePositive.Cutscene
             return away.sqrMagnitude < 0.0001f ? seat : seat + away.normalized * clearance;
         }
 
+        /// <summary>Seat position for an actor at a chair, tucked toward the
+        /// table. Contrast StandingAtChair, which pushes 0.5 m AWAY so a
+        /// standing body clears the furniture — a seated body belongs in the
+        /// chair, so that clearance must not be applied. The drop onto the seat
+        /// pad is the Seated profile's job (CabinPoseLibrary /
+        /// CabinAnimatorDriver.Editor_BodyYOffsetFor); the root Transform stays
+        /// on the floor exactly as it does for every other pose.
+        ///
+        /// The tuck closes the last few centimetres between the chair centre
+        /// and the table so hands land ON the surface: a seated character
+        /// reaches at most 0.249 m forward of the hip at table height (see
+        /// CabinPoseLibrary's SeatedForward note — that is the maximum over the
+        /// whole arm-muscle space, not a tuning choice), and the chair centres
+        /// sit 0.25-0.38 m out from the table's edge depending on which chair.
+        ///
+        /// MUST stay under the seat's support distance along the facing
+        /// direction, measured per chair as 0.229 (SM_Chair_06, the tightest)
+        /// to 0.330. A previous value of 0.42 was set from a bad reading of the
+        /// chair-to-table gap — taken along the x axis alone, which inflates it
+        /// to 0.70 for the diagonal chairs — and it pushed every actor clean off
+        /// the front of the seat. 0.18 clears the tightest chair with room and
+        /// still puts the hands 0.05-0.18 m onto the table.</summary>
+        private const float SeatTuck = 0.18f;
+
+        private static Vector3 SeatedAtChair(string chairName, Vector3 table)
+        {
+            GameObject chair = GameObject.Find(chairName);
+            if (chair == null) return table;
+
+            Vector3 seat = new Vector3(chair.transform.position.x, 0f, chair.transform.position.z);
+            Vector3 toTable = table - seat;
+            toTable.y = 0f;
+            if (toTable.sqrMagnitude < 0.0001f) return seat;
+            return seat + toTable.normalized * SeatTuck;
+        }
+
         /// <summary>Borrows an actor only to take it off screen, recording its
         /// state so ReturnBorrowed puts it back. Priya is active in M1_Night,
         /// asleep on the sofa and in shot — she has to go for CS-16B's private
@@ -904,19 +967,23 @@ namespace FalsePositive.Cutscene
         private IEnumerator GoodYears()
         {
             Vector3 table = TableCentre();
-            Vector3 david = StandingAtChair(ChairDavid, table);
+            Vector3 david = SeatedAtChair(ChairDavid, table);
 
-            Vector3 nickAt = StandingAtChair(ChairNick, table);
-            Vector3 priyaAt = StandingAtChair(ChairPriya, table);
-            Vector3 aaronAt = StandingAtChair(ChairAaron, table);
-            Vector3 ivyAt = StandingAtChair(ChairIvy, table);
+            Vector3 nickAt = SeatedAtChair(ChairNick, table);
+            Vector3 priyaAt = SeatedAtChair(ChairPriya, table);
+            Vector3 aaronAt = SeatedAtChair(ChairAaron, table);
+            Vector3 ivyAt = SeatedAtChair(ChairIvy, table);
 
-            GameObject nick = Borrow("Nick Vlahos (Male)", nickAt, YawToward(nickAt, david), CabinIdleProfile.Confrontational);
-            GameObject aaron = Borrow("Aaron Teague (Male)", aaronAt, YawToward(aaronAt, table), CabinIdleProfile.Controlled);
-            GameObject ivy = Borrow("Ivy Teague (Female)", ivyAt, YawToward(ivyAt, table), CabinIdleProfile.Guarded);
+            // Everyone leans in over the table. The idle seeds are already
+            // per-character (CabinNightCharacterBuilder hashes the name), so a
+            // shared profile still breathes and drifts out of phase rather than
+            // reading as four copies of one pose.
+            GameObject nick = Borrow("Nick Vlahos (Male)", nickAt, YawToward(nickAt, david), CabinIdleProfile.SeatedForward);
+            GameObject aaron = Borrow("Aaron Teague (Male)", aaronAt, YawToward(aaronAt, table), CabinIdleProfile.SeatedForward);
+            GameObject ivy = Borrow("Ivy Teague (Female)", ivyAt, YawToward(ivyAt, table), CabinIdleProfile.SeatedForward);
             // Priya is already active, asleep on the sofa — Borrow records that
             // so she is returned to it, rather than left standing at the table.
-            GameObject priya = Borrow("Priya Raman (Female)", priyaAt, YawToward(priyaAt, david), CabinIdleProfile.Walking);
+            GameObject priya = Borrow("Priya Raman (Female)", priyaAt, YawToward(priyaAt, david), CabinIdleProfile.SeatedForward);
 
             yield return PoseBorrowed();
 
@@ -956,20 +1023,22 @@ namespace FalsePositive.Cutscene
         {
             Vector3 table = TableCentre();
             Vector3 fire = FireplaceCentre(table);
-            Vector3 david = StandingAtChair(ChairDavid, table);
+            Vector3 david = SeatedAtChair(ChairDavid, table);
             ScreenFader fader = FindAnyObjectByType<ScreenFader>();
 
             // 0-5s — Aaron learns. Nick and Ivy are on the same side of the
             // table, one chair apart, which is as close as the seating allows.
             // Aaron is opposite and near enough to hear. He never moves: the
             // stillness is the whole performance.
-            Vector3 nickAt = StandingAtChair(ChairNick, table);
-            Vector3 ivyAt = StandingAtChair(ChairIvy2, table);
-            Vector3 aaronAt = StandingAtChair(ChairAaron, table);
+            Vector3 nickAt = SeatedAtChair(ChairNick, table);
+            Vector3 ivyAt = SeatedAtChair(ChairIvy2, table);
+            Vector3 aaronAt = SeatedAtChair(ChairAaron, table);
 
-            GameObject nick = Borrow("Nick Vlahos (Male)", nickAt, YawToward(nickAt, ivyAt), CabinIdleProfile.Confrontational);
-            GameObject ivy = Borrow("Ivy Teague (Female)", ivyAt, YawToward(ivyAt, nickAt), CabinIdleProfile.Guarded);
-            GameObject aaron = Borrow("Aaron Teague (Male)", aaronAt, YawToward(aaronAt, nickAt), CabinIdleProfile.Controlled);
+            // All three leaning in — the tension here is carried by who is
+            // facing whom (YawToward above) rather than by posture.
+            GameObject nick = Borrow("Nick Vlahos (Male)", nickAt, YawToward(nickAt, ivyAt), CabinIdleProfile.SeatedForward);
+            GameObject ivy = Borrow("Ivy Teague (Female)", ivyAt, YawToward(ivyAt, nickAt), CabinIdleProfile.SeatedForward);
+            GameObject aaron = Borrow("Aaron Teague (Male)", aaronAt, YawToward(aaronAt, nickAt), CabinIdleProfile.SeatedForward);
             // The argument is private. Priya asleep on the sofa is still in
             // shot otherwise.
             BorrowHidden("Priya Raman (Female)");
@@ -994,9 +1063,24 @@ namespace FalsePositive.Cutscene
             if (nick != null)
             {
                 nick.transform.SetPositionAndRotation(nickFire, Quaternion.Euler(0f, YawToward(nickFire, david), 0f));
+                // Nick was Seated at the table; the fire argument is standing.
+                // Without this he'd keep the Seated clip (and its hip-drop
+                // offset) at a standing floor position — reads as floating/
+                // crouched rather than on his feet by the fire.
+                nick.GetComponent<ScriptedActor>()?.PlayPose(CabinIdleProfile.Confrontational);
             }
 
-            yield return null;
+            // Wait for the Confrontational crossfade to finish before feet
+            // are measured against it — same fix and same reason as
+            // PoseBorrowed's wait (see its doc): CabinAnimatorDriver.
+            // ApplyBodyYOffset resets Body.localPosition to the Seated-less
+            // rest position INSTANTLY, but the leg muscles take 0.25s
+            // (CrossFadeInFixedTime) to blend out of the Seated bend. One
+            // frame catches Nick mid-blend — hips already up, legs still
+            // bent — and PlantFeet would bake in a correction for that
+            // transitional pose instead of the settled standing one.
+            yield return new WaitForSeconds(0.3f);
+            if (nick != null) PlantFeet(nick);
             if (fader != null) yield return fader.FadeFromBlack(0.12f);
 
             // 5-11s — the argument, David and Nick alone at the fire.

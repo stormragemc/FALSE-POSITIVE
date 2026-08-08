@@ -229,10 +229,46 @@ namespace FalsePositive.Editor
 
             AddColliders(instance, MeshColliderObjects, useMeshCollider: true);
             AddColliders(instance, BoxColliderObjects, useMeshCollider: false);
+            OrientSofaToFireplace(instance);
 
             System.IO.Directory.CreateDirectory(PrefabRoot);
             PrefabUtility.SaveAsPrefabAsset(instance, PrefabRoot + "Cabin_v2.prefab");
             UnityEngine.Object.DestroyImmediate(instance);
+        }
+
+        /// <summary>Yaw that turns BO_Sofa's open face toward the fire.
+        ///
+        /// The sofa imports axis-aligned at yaw 0, which LOOKS like it faces
+        /// forward but does not: its seating face is local -X, not +Z — its
+        /// collider is 1.0 deep in X by 3.5 long in Z, so the long axis is the
+        /// backrest. At yaw 0 the seat therefore opens due west while
+        /// BO_Fireplace sits at (0, 0, 4.3), leaving it ~79.5 degrees off.
+        ///
+        /// Derived, not eyeballed: rotating the seat normal (-1, 0, 0) by yaw
+        /// t gives (-cos t, 0, sin t); matching that to the normalised sofa ->
+        /// fireplace vector (-0.182, 0, 0.983) gives t = 79.5.
+        ///
+        /// Cutscene.CutsceneStage stores its sofa rest spots as sofa-LOCAL
+        /// offsets (see SofaPoint there) precisely so this yaw can change
+        /// without stranding actors inside the furniture.</summary>
+        public const float SofaYaw = 79.5f;
+
+        private static void OrientSofaToFireplace(GameObject cabin)
+        {
+            Transform sofa = cabin.transform.Find("BO_Sofa");
+            if (sofa == null)
+            {
+                Debug.LogWarning("[CabinV2Builder] BO_Sofa not found — sofa orientation skipped.");
+                return;
+            }
+
+            // Pre-multiplied, NOT assigned: BO_Sofa comes off the FBX carrying
+            // the Blender Z-up import rotation (270 about X, as every SM_/BO_
+            // node here does). Assigning a pure yaw would discard it and tip
+            // the sofa onto its back. This composes a world-Y turn on top of
+            // whatever the import gave us. Safe to run repeatedly only because
+            // BuildCabinPrefab always starts from a fresh FBX instance.
+            sofa.localRotation = Quaternion.Euler(0f, SofaYaw, 0f) * sofa.localRotation;
         }
 
         private static void BuildDoorPrefab()

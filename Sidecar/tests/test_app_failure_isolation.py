@@ -158,6 +158,8 @@ class AppFailureIsolationTests(unittest.TestCase):
             GCP_LOCATION="global",
             STT_MODEL="short",
             STT_LANGUAGE="en-US",
+            TRAP_JUDGE_ENABLED=True,
+            TRAP_JUDGE_GRACE_SECONDS=1.5,
         )
         cls.captured_signals = []
 
@@ -211,9 +213,21 @@ class AppFailureIsolationTests(unittest.TestCase):
         )
         uvicorn = _module("uvicorn", run=lambda *_args, **_kwargs: None)
 
+        # The §7 judge is stubbed so these tests stay offline, and so each test
+        # can decide how it behaves. cls.judge_behaviour is called with the same
+        # kwargs app.py passes; the default is a clean, fast "nothing caught".
+        cls.judge_calls = []
+
+        def fake_judge(**kwargs):
+            cls.judge_calls.append(kwargs)
+            return cls.judge_behaviour(**kwargs)
+
+        fabrication = _module("fabrication", judge=fake_judge)
+
         stubs = {
             "audio_utils": audio_utils,
             "config": config,
+            "fabrication": fabrication,
             "fastapi": fastapi,
             "fastapi.exceptions": fastapi_exceptions,
             "fastapi.responses": fastapi_responses,
@@ -237,8 +251,15 @@ class AppFailureIsolationTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.app._ser_pool.shutdown(wait=True)
         cls.app._vendor_pool.shutdown(wait=True)
+        cls.app._judge_pool.shutdown(wait=True)
+
+    @staticmethod
+    def judge_behaviour(**_kwargs):
+        return [], 0
 
     def setUp(self):
+        type(self).judge_behaviour = staticmethod(lambda **_kwargs: ([], 0))
+        type(self).judge_calls.clear()
         self.app._session_store.clear()
         self.app._prosody_registry = self.app.prosody.ProsodyRegistry(4, 3, 0.4)
         self.app._session_reset_generations.clear()
@@ -760,6 +781,83 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(len(self.app._session_store.history("session-a")), 2)
         source = DTO_PATH.read_text(encoding="utf-8")
         self.assertEqual(set(result), set(_class_fields(source, "SidecarTurnResponse")))
+
+    # --- §7: the judge must never be able to damage a turn ------------------
+
+    def _turn_with_audio(self, session_id="session-a", scene_instruction=""):
+        sample_count = 16000 * 2
+        pcm = (np.sin(np.arange(sample_count) * 0.1) * 8000).astype("<i2").tobytes()
+        return asyncio.run(
+            self.app.turn(
+                session_id, 16000, 0, _FakeUpload(pcm),
+                scene_instruction=scene_instruction,
+            )
+        )
+
+    def test_caught_trap_ids_ride_the_turn_response(self):
+        type(self).judge_behaviour = staticmethod(
+            lambda **_kwargs: (["trap_time", "trap_door"], 40)
+        )
+
+        result = self._turn_with_audio(
+            scene_instruction="WITNESS KNOWLEDGE — observed:\nnothing"
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["fabrications"], ["trap_time", "trap_door"])
+
+    def test_the_judge_sees_the_officers_previous_question(self):
+        """A bait like "Did you hear glass?" makes a bare "Yes" meaningful. The
+        judge cannot read that from the transcript alone."""
+        self._turn_with_audio(scene_instruction="WITNESS KNOWLEDGE — observed:\nnothing")
+        self._turn_with_audio(scene_instruction="")
+
+        self.assertEqual(self.judge_calls[-1]["officer_question"], "Next question.")
+        self.assertEqual(self.judge_calls[-1]["transcript"], "fixture transcript")
+
+    def test_a_failing_judge_leaves_the_turn_intact(self):
+        def explode(**_kwargs):
+            raise RuntimeError("judge exploded")
+
+        type(self).judge_behaviour = staticmethod(explode)
+
+        result = self._turn_with_audio(
+            scene_instruction="WITNESS KNOWLEDGE — observed:\nnothing"
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["fabrications"], [])
+        self.assertNotEqual(result["reply_text"], "")
+
+    def test_a_slow_judge_is_dropped_rather_than_delaying_the_turn(self):
+        """The grace window is the whole point: a scoring signal must never be
+        able to push a turn past its deadline into a 504."""
+        import time as _time
+
+        def crawl(**_kwargs):
+            _time.sleep(1.0)
+            return ["trap_time"], 1000
+
+        type(self).judge_behaviour = staticmethod(crawl)
+
+        with patch.object(self.app.config, "TRAP_JUDGE_GRACE_SECONDS", 0.05):
+            started = _time.perf_counter()
+            result = self._turn_with_audio(
+                scene_instruction="WITNESS KNOWLEDGE — observed:\nnothing"
+            )
+            elapsed = _time.perf_counter() - started
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["fabrications"], [])
+        self.assertLess(elapsed, 0.9, "the turn waited for the judge instead of dropping it")
+
+    def test_turns_with_nothing_to_judge_never_call_the_judge(self):
+        """An opening turn and a phase transition carry no witness utterance,
+        and a turn with no scene instruction has no knowledge block to judge
+        against. All three should cost nothing."""
+        asyncio.run(self.app.turn("session-quiet", 16000, 0, None))
+
+        self.assertEqual(self.judge_calls, [])
 
     def test_affect_context_echo_is_opt_in_and_stays_out_of_the_unity_contract(self):
         """The echo is prompt text, so absence is the contract, not an oversight.

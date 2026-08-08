@@ -29,6 +29,12 @@ namespace FalsePositive.Net
         public int llm_ms;
         public int tts_ms;
         public int total_ms;
+
+        /// <summary>Trap ids from docs/STORY_SCRIPT.md §7 — details the witness
+        /// stated as memory but was not in a position to observe. Null when the
+        /// key is absent (JsonUtility leaves missing arrays null), which is the
+        /// same as empty: nothing was caught.</summary>
+        public string[] fabrications;
     }
 
     [Serializable]

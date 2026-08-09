@@ -133,6 +133,48 @@ namespace FalsePositive.Cutscene
         /// stopwatch. The fixed WaitForSeconds chain this replaces was written
         /// against one particular set of clip lengths and silently went out of
         /// step whenever the pacing moved.</summary>
+        /// <summary>Logs where every borrowed actor's feet, hips and head
+        /// actually are, in world space, against the cabin floor at y = 0.
+        ///
+        /// Sinking is not diagnosable by eye — "buried to the shins" and
+        /// "standing on the floor" differ by about the length of a boot, and by
+        /// the time it is obvious on screen it is already several beats too
+        /// late to see which actor and which beat caused it. This prints the
+        /// numbers so the staging can be checked against the floor rather than
+        /// against an impression.
+        ///
+        /// A healthy standing actor reads foot ~0.09-0.16 (the bone is the
+        /// ankle, not the sole). Negative anything means below the floorboards.
+        /// Head below hips means the actor is lying or has been rotated into
+        /// the ground.</summary>
+        private void LogCastHeights(string label)
+        {
+            if (!logStagingTiming) return;
+
+            foreach (BorrowedActor b in _borrowed)
+            {
+                if (b.Go == null) continue;
+                Animator a = b.Go.GetComponentInChildren<Animator>(true);
+                if (a == null || !a.isHuman) continue;
+
+                Transform hips = a.GetBoneTransform(HumanBodyBones.Hips);
+                Transform foot = a.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform head = a.GetBoneTransform(HumanBodyBones.Head);
+
+                float footY = foot != null ? foot.position.y : float.NaN;
+                bool sunk = !float.IsNaN(footY) && footY < -0.02f;
+
+                string line = $"[CastY] {label} :: {b.Go.name} " +
+                    $"root={b.Go.transform.position.y:0.000} " +
+                    $"foot={footY:0.000} " +
+                    $"hips={(hips != null ? hips.position.y : float.NaN):0.000} " +
+                    $"head={(head != null ? head.position.y : float.NaN):0.000}" +
+                    (sunk ? "   <-- BELOW FLOOR" : string.Empty);
+
+                if (sunk) Debug.LogWarning(line); else Debug.Log(line);
+            }
+        }
+
         private IEnumerator AtBeat(CutsceneId id, int beatIndex)
         {
             if (_director == null)
@@ -841,11 +883,15 @@ namespace FalsePositive.Cutscene
             // finishes. Wait past the fade, not one frame.
             yield return new WaitForSeconds(0.3f);
 
+            LogCastHeights("after pose, before PlantFeet");
+
             foreach (BorrowedActor b in _borrowed)
             {
                 if (!b.WantsPose || b.Go == null || !b.Go.activeSelf) continue;
                 PlantFeet(b.Go);
             }
+
+            LogCastHeights("after PlantFeet");
         }
 
         /// <summary>Drops the character so its feet rest on the floor.
@@ -1091,6 +1137,7 @@ namespace FalsePositive.Cutscene
             // to the middle of the table.
             yield return AtBeat(CutsceneId.GoodYears, 4);
             TurnAllToward(table, nick, aaron, ivy, priya);
+            LogCastHeights("CS-16A beat 4 (the toast)");
 
             // Beat 6, NICK-004 "Here. You look fucking freezing." — the coat
             // swap. Nick turns to David and throws the parka.
@@ -1099,6 +1146,7 @@ namespace FalsePositive.Cutscene
 
             // Teardown waits for the cutscene itself, never a timer. Anything
             // earlier removes the cast from a room that is still speaking.
+            LogCastHeights("CS-16A beat 6 (coat swap)");
             yield return UntilCutsceneEnds(CutsceneId.GoodYears);
 
             // The photographs belong to this memory only — they must not be left
@@ -1201,6 +1249,7 @@ namespace FalsePositive.Cutscene
             // transitional pose instead of the settled standing one.
             yield return new WaitForSeconds(0.3f);
             if (nick != null) PlantFeet(nick);
+            LogCastHeights("CS-16B after jump (Nick moved to fire)");
             if (fader != null) yield return fader.FadeFromBlack(JumpBlinkSeconds);
 
             // 11-13s — Nick goes outside, still in David's thin jacket. The

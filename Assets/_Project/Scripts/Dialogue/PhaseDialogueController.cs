@@ -39,6 +39,21 @@ namespace FalsePositive.Dialogue
         [SerializeField] private int p3TurnCap = 8;
         [SerializeField] private int sessionTurnCap = 30;
 
+        [Header("P3 memory sequence pacing")]
+        /// <summary>Held after the officer's reply finishes, before the folder
+        /// opens and the photograph beat starts.</summary>
+        [SerializeField, Range(0f, 4f)] private float p3BeforePhotographSeconds = 1.0f;
+
+        /// <summary>Held after "Who, David?" before the microphone reopens and
+        /// the live turn is requested.</summary>
+        [SerializeField, Range(0f, 4f)] private float p3AfterMemoriesSeconds = 1.2f;
+
+        /// <summary>Ceiling on waiting for the officer to stop speaking, so a
+        /// stuck AudioSource cannot strand the sequence and leave P3 unable to
+        /// reach its verdict. Generous: real replies run well under this.
+        /// </summary>
+        [SerializeField, Range(1f, 60f)] private float p3MaxWaitForOfficerSeconds = 30f;
+
         public int TurnsThisPhase { get; private set; }
         public int TurnsThisSession { get; private set; }
         public bool PhaseComplete { get; private set; }
@@ -376,6 +391,39 @@ namespace FalsePositive.Dialogue
         {
             _p3MemoriesPlayed = true;
             Dialogue?.Suspend();
+            StartCoroutine(P3MemorySequenceRoutine());
+        }
+
+        /// <summary>Waits for the officer's live reply to actually finish, then
+        /// runs the §4 photograph-and-memories chain.
+        ///
+        /// The wait is the whole point. DialogueManager raises TurnCompleted the
+        /// moment it calls copVoice.Play — playback has *started*, not finished
+        /// — so kicking the photograph beat off from that event cut Spassky off
+        /// mid-sentence every time the sequence fired. Suspend() only gates the
+        /// microphone and leaves his audio running, so the reply plays out and
+        /// OnCopFinishedSpeaking drops the state to Idle, which is the signal
+        /// waited on here.
+        ///
+        /// Only the lead-in can be a coroutine on this component: the interludes
+        /// deactivate Interrogation's roots, which would kill anything still
+        /// running here. Everything past the first cutscene therefore stays a
+        /// callback chain, and its pacing lives in GameFlowDirector.</summary>
+        private IEnumerator P3MemorySequenceRoutine()
+        {
+            float waited = 0f;
+            while (Dialogue != null && Dialogue.State == DialogueState.Speaking
+                   && waited < p3MaxWaitForOfficerSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            // A held beat after the answer, before the folder opens.
+            if (p3BeforePhotographSeconds > 0f)
+            {
+                yield return new WaitForSeconds(p3BeforePhotographSeconds);
+            }
 
             // §4: Spassky slides a printed group photograph across the table.
             // Laid on the desk by raycast between the two seats — the
@@ -403,9 +451,27 @@ namespace FalsePositive.Dialogue
                                 // "He pulls the photograph back into the folder"
                                 // — it goes before the name is asked for.
                                 FalsePositive.Cutscene.PhotoProps.Discard(groupPhoto);
-                                Dialogue?.Resume();
-                                Dialogue?.RequestOfficerTurn(null);
+                                StartCoroutine(ResumeAfterMemoriesRoutine());
                             })))));
+        }
+
+        /// <summary>Lets "Who, David?" land before the room is live again.
+        ///
+        /// Resume() is deliberately after the wait: it re-opens the microphone,
+        /// and doing that while the closing line is still sounding invites the
+        /// player to answer over it — the same overlap this whole change is
+        /// removing, just at the other end of the sequence.</summary>
+        private IEnumerator ResumeAfterMemoriesRoutine()
+        {
+            if (p3AfterMemoriesSeconds > 0f)
+            {
+                yield return new WaitForSeconds(p3AfterMemoriesSeconds);
+            }
+
+            // Mic back up. Resume the same phase rather than re-entering it:
+            // re-entering would reset the turn counter and the story marks.
+            Dialogue?.Resume();
+            Dialogue?.RequestOfficerTurn(null);
         }
 
         /// <summary>A10 — docs/STORY_SCRIPT.md §8's full ending rule, replacing

@@ -60,6 +60,27 @@ namespace FalsePositive.Flow
         [SerializeField] private ObjectiveHud objectives;
         [SerializeField] private SceneRouter sceneRouter;
         [SerializeField] private MemoryFlagCatalog memoryFlagCatalog;
+
+        [Header("Memory interlude pacing")]
+        /// <summary>Silence held in the room the player is currently in, after
+        /// the last line and before the cut to memory.
+        ///
+        /// docs/STORY_SCRIPT.md §4 asks for hard cuts, and these stay hard —
+        /// but a hard cut still has to land in a gap rather than on top of a
+        /// word. Without this the swap fired on the frame the previous
+        /// cutscene reported Finished, which is why Spassky kept getting cut
+        /// off mid-sentence on the way into the flashback.</summary>
+        [SerializeField, Range(0f, 3f)] private float interludeLeadInSeconds = 0.8f;
+
+        /// <summary>Silence held after the memory ends, before the cut back.
+        /// Lets the last line of the flashback land before the room returns.
+        /// </summary>
+        [SerializeField, Range(0f, 3f)] private float interludeCutBackSeconds = 0.7f;
+
+        /// <summary>Silence held once the interrogation room is live again,
+        /// before the caller continues. The room needs a moment to re-register
+        /// as the present before the officer speaks into it.</summary>
+        [SerializeField, Range(0f, 3f)] private float interludeSettleSeconds = 0.9f;
         [SerializeField] private MicConsentFlow consentFlow;
         [SerializeField] private MicCalibration calibration;
         [SerializeField] private CalibrationPanelUI calibrationPanel;
@@ -454,8 +475,15 @@ namespace FalsePositive.Flow
 
             if (sceneRouter != null && !string.IsNullOrEmpty(memoryScene))
             {
-                // Load before cutting, so the cut itself costs nothing.
+                // Load before cutting, so the cut itself costs nothing. Loading
+                // first also means the lead-in below is real silence in the
+                // present rather than a loading stall.
                 yield return sceneRouter.EnsureLoaded(memoryScene);
+
+                if (interludeLeadInSeconds > 0f)
+                {
+                    yield return new WaitForSeconds(interludeLeadInSeconds);
+                }
                 yield return sceneRouter.Activate(memoryScene);
             }
 
@@ -463,9 +491,19 @@ namespace FalsePositive.Flow
             RequestCutscene(id, () => finished = true);
             while (!finished) yield return null;
 
+            if (interludeCutBackSeconds > 0f)
+            {
+                yield return new WaitForSeconds(interludeCutBackSeconds);
+            }
+
             if (sceneRouter != null && !string.IsNullOrEmpty(interrogationSceneName))
             {
                 yield return sceneRouter.Activate(interrogationSceneName);
+            }
+
+            if (interludeSettleSeconds > 0f)
+            {
+                yield return new WaitForSeconds(interludeSettleSeconds);
             }
 
             // Invoked only after Interrogation's roots are live again, so a

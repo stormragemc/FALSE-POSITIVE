@@ -80,6 +80,29 @@ namespace FalsePositive.Cutscene
         [SerializeField] private CutsceneRecipe[] recipes = Array.Empty<CutsceneRecipe>();
         [SerializeField] private CutsceneTimelineBinding[] timelineDirectors = Array.Empty<CutsceneTimelineBinding>();
 
+        [Header("Pacing")]
+        /// <summary>Silence held after a spoken beat before the next one starts.
+        ///
+        /// Without it every line begins on the exact frame the previous one is
+        /// due to end, so a scripted exchange machine-guns and reads as rushed.
+        /// This is the single biggest lever on how the P3 memory sequence
+        /// feels; raise it if the delivery still runs together.</summary>
+        [SerializeField, Range(0f, 1.5f)] private float interBeatSeconds = 0.45f;
+
+        /// <summary>Extra hold on top of a clip's own length.
+        ///
+        /// A beat used to wait exactly voClip.length, but the wait is frame
+        /// quantised and AudioSource.Play does not start on the same frame it
+        /// is called, so the next beat reassigned source.clip while the tail of
+        /// the current line was still sounding — clipping the last syllable off
+        /// essentially every line. The tail absorbs that skew.</summary>
+        [SerializeField, Range(0f, 1f)] private float audioTailSeconds = 0.25f;
+
+        /// <summary>Cap on waiting for a still-playing clip. Guards against a
+        /// beat hanging forever if a clip loops or an AudioSource is left
+        /// paused by something else.</summary>
+        private const float MaxAudioOverrunSeconds = 2f;
+
         public bool IsPlaying { get; private set; }
         public event Action<CutsceneId> Finished;
 
@@ -150,9 +173,18 @@ namespace FalsePositive.Cutscene
 
             if (recipe != null)
             {
-                foreach (CutsceneBeat beat in recipe.beats)
+                for (int i = 0; i < recipe.beats.Length; i++)
                 {
-                    yield return PlayBeat(beat, timeline != null);
+                    yield return PlayBeat(recipe.beats[i], timeline != null);
+
+                    // Between beats only. The pause after the *last* beat is
+                    // owned by whoever is cutting away next — see
+                    // GameFlowDirector's interlude lead-in — so that a seam is
+                    // paced once rather than twice.
+                    if (i < recipe.beats.Length - 1 && interBeatSeconds > 0f)
+                    {
+                        yield return new WaitForSeconds(interBeatSeconds);
+                    }
                 }
             }
 
@@ -171,14 +203,16 @@ namespace FalsePositive.Cutscene
                 GameFlowDirector.Instance?.Flags.Set(beat.memoryFlagToSet);
             }
 
-            float hold = beat.voClip != null ? beat.voClip.length : beat.holdSecondsIfNoClip;
+            bool spoken = beat.voClip != null;
+            float hold = spoken ? beat.voClip.length + audioTailSeconds : beat.holdSecondsIfNoClip;
 
             if (!string.IsNullOrEmpty(beat.line))
             {
                 subtitles?.Show(beat.speaker, beat.line, hold);
             }
 
-            if (!timelineOwnsAudio && beat.voClip != null)
+            AudioSource playing = null;
+            if (!timelineOwnsAudio && spoken)
             {
                 AudioSource source = string.IsNullOrEmpty(beat.speaker) && sfxSource != null
                     ? sfxSource
@@ -187,10 +221,23 @@ namespace FalsePositive.Cutscene
                 {
                     source.clip = beat.voClip;
                     source.Play();
+                    playing = source;
                 }
             }
 
             yield return new WaitForSeconds(hold);
+
+            // Belt and braces on the tail above: if the clip is somehow still
+            // sounding, let it land rather than cutting it off by reassigning
+            // source.clip on the next beat. Capped so a stuck source cannot
+            // stall the sequence.
+            float waited = 0f;
+            while (playing != null && playing.isPlaying && waited < MaxAudioOverrunSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
             subtitles?.Hide();
         }
 

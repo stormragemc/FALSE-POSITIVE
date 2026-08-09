@@ -81,6 +81,9 @@ namespace FalsePositive.Core
 
         [Tooltip("How long after the cop's audio stops playing before the mic re-arms — covers the audible reverb tail.")]
         public float ttsEchoGateTailSeconds = 0.25f;
+        [Tooltip("Natural reaction beat between the end of the player's captured utterance and a prerecorded filler acknowledgement. The backend request starts immediately; this delays audio only.")]
+        [Min(0f)]
+        public float fillerPlaybackDelaySeconds = 0.15f;
 
         [Header("Voice calibration (A4) and the call-for-Nick loudness gate (A6)")]
         [Tooltip("Room-tone sampling window during calibration's first stage.")]

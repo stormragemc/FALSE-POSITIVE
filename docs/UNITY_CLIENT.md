@@ -60,20 +60,29 @@ One conversational turn, in order:
    rather than a per-frame level-vs-threshold check, so it reflects whether
    an utterance is actually being captured instead of flickering on every
    transient.
-2. **Speech-to-text**: ~~`faster-whisper` (`small.en`), local, no API key~~
+2. **Latency acknowledgement** (Unity, live interrogation turns only) — as
+   soon as `UtteranceCaptured` fires, Unity gates the VAD and starts the
+   backend request. After a 0.15 s natural reaction beat, it plays one of 10
+   prerecorded Spassky fillers from `Art/Audio/VO/SpasskyFiller/`, avoiding
+   the immediately previous choice. Backend processing continues in parallel.
+   If the reply arrives before the filler begins, the pending filler is
+   cancelled; if it arrives while one is playing, playback waits for the
+   filler to finish so the voices never overlap or cut each other off. Offline
+   demo turns skip this path because no backend work is happening.
+3. **Speech-to-text**: ~~`faster-whisper` (`small.en`), local, no API key~~
    **(4 Aug: Google Cloud Speech-to-Text v2, `short` recognizer, called from
    the backend)** — turns the utterance into a transcript.
-3. **Speech emotion recognition**: **HuBERT** (`superb/hubert-base-superb-er`),
+4. **Speech emotion recognition**: **HuBERT** (`superb/hubert-base-superb-er`),
    in-process on the backend, no API key — runs *in parallel* with STT on the
    same audio buffer and returns one of 4 emotion labels + confidence, framed
    to the LLM as a soft impression, not a fact.
    **HuBERT is the emotion model here, not the speech-recognizer** — worth
    stating explicitly, since it's easy to assume "HuBERT" implies ASR. STT
    is Google's job; HuBERT's job is reading tone, not words.
-4. **LLM reply**: Gemini 3.6 Flash, given the transcript + emotion reading,
+5. **LLM reply**: Gemini 3.6 Flash, given the transcript + emotion reading,
    in character as the interrogating detective.
-5. **TTS**: ElevenLabs synthesizes the reply as PCM audio.
-6. **Playback + lip sync** (Unity) — the reply plays through `CopVoicePlayback`
+6. **TTS**: ElevenLabs synthesizes the reply as PCM audio.
+7. **Playback + lip sync** (Unity) — the reply plays through `CopVoicePlayback`
    while `CopMouthController` drives whichever `ICopMouth` tier is active
    (currently `BlendShapeCopMouth`, real audio-driven visemes — see "Cop
    character" below) off the playback.
@@ -243,7 +252,8 @@ verified through workarounds:
   crashing the dialogue state machine).
 - **Not exercised — compiled and wired, not observed**: the jaw actually
   moving with reply audio, `CopIdleAnimator`'s breathing/lean/glances, the
-  filler-stop fix, and `CopVoicePlayback` reading `config.ttsEchoGateTailSeconds`.
+  delayed filler-to-reply handoff, and `CopVoicePlayback` reading
+  `config.ttsEchoGateTailSeconds`.
   All of these need the Editor's Update loop to actually tick, and it
   didn't in the sessions used to build this — `Time.frameCount` stayed at 1
   through a full Play-mode session (confirmed via script: `realtimeSinceStartup`

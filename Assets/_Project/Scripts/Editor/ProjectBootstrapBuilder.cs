@@ -45,6 +45,7 @@ namespace FalsePositive.Editor
         private const string MorningScenePath = "Assets/_Project/Scenes/Memory_CabinMorning.unity";
         private const string PromptsRoot = "Assets/_Project/Prompts/";
         private const string ConfigRoot = "Assets/_Project/Config/";
+        private const string SpasskyFillerRoot = "Assets/_Project/Art/Audio/VO/SpasskyFiller/";
 
         private static readonly DefaultControls.Resources UIResources = BuildUiResources();
 
@@ -1631,6 +1632,7 @@ namespace FalsePositive.Editor
 
             DialogueManager dialogueManager = dialogueManagerGo.GetComponent<DialogueManager>();
             PlayerStateController playerState = playerGo.GetComponent<PlayerStateController>();
+            WireSpasskyFillers(dialogueManager);
 
             GameObject binderGo = GameObject.Find("SceneBinder") ?? new GameObject("SceneBinder");
             InterrogationSceneBinder binder = binderGo.GetComponent<InterrogationSceneBinder>() ?? binderGo.AddComponent<InterrogationSceneBinder>();
@@ -1659,6 +1661,46 @@ namespace FalsePositive.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             SaveScene(scene, InterrogationScenePath);
             Debug.Log("[ProjectBootstrapBuilder] Interrogation.unity fixed up.");
+        }
+
+        [MenuItem("Tools/False Positive/Bootstrap/Install Spassky Fillers")]
+        public static void InstallSpasskyFillers()
+        {
+            Scene scene = EditorSceneManager.OpenScene(InterrogationScenePath, OpenSceneMode.Single);
+            DialogueManager dialogueManager = UnityEngine.Object.FindAnyObjectByType<DialogueManager>();
+            if (dialogueManager == null)
+            {
+                throw new InvalidOperationException(
+                    "[ProjectBootstrapBuilder] Interrogation.unity is missing DialogueManager.");
+            }
+
+            WireSpasskyFillers(dialogueManager);
+            EditorSceneManager.MarkSceneDirty(scene);
+            SaveScene(scene, InterrogationScenePath);
+            Debug.Log("[ProjectBootstrapBuilder] Installed Spassky filler acknowledgements.");
+        }
+
+        private static void WireSpasskyFillers(DialogueManager dialogueManager)
+        {
+            AudioClip[] fillerClips = AssetDatabase.FindAssets("t:AudioClip", new[] { SpasskyFillerRoot })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(path => path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(AssetDatabase.LoadAssetAtPath<AudioClip>)
+                .ToArray();
+            if (fillerClips.Length != 10 || fillerClips.Any(clip => clip == null))
+            {
+                throw new InvalidOperationException(
+                    $"[ProjectBootstrapBuilder] Expected 10 Spassky filler WAVs in {SpasskyFillerRoot}, " +
+                    $"found {fillerClips.Length}.");
+            }
+
+            AudioSource fillerSource = dialogueManager.GetComponent<AudioSource>();
+            InterrogationConfig config = AssetDatabase.LoadAssetAtPath<InterrogationConfig>(ConfigPath);
+            SetField(dialogueManager, "config", config);
+            SetField(dialogueManager, "fillerSource", fillerSource);
+            SetField(dialogueManager, "fillerClips", fillerClips);
+            EditorUtility.SetDirty(dialogueManager);
         }
 
         /// <summary>Verification helper — logs the cross-scene uLipSync

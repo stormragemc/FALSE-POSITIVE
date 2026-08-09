@@ -89,6 +89,8 @@ namespace FalsePositive.Dialogue
         private float _listeningStartedAt;
         private int _lastSpeechOnsetDelayMs;
         private int _consecutiveTurnFailures;
+        private Coroutine _fillerDelayRoutine;
+        private int _lastFillerIndex = -1;
 
         private OfflineOfficerLine[] _offlineLines;
         private int _offlineIndex;
@@ -142,6 +144,8 @@ namespace FalsePositive.Dialogue
             if (copVoice != null) copVoice.Stopped -= OnCopFinishedSpeaking;
             if (_recorder != null) _recorder.UtteranceCaptured -= OnUtteranceCaptured;
             if (_vad != null) _vad.SpeakingStateChanged -= OnSpeakingStateChanged;
+            CancelPendingFiller();
+            if (fillerSource != null && fillerSource.isPlaying) fillerSource.Stop();
         }
 
         private void SubscribeToServices()
@@ -231,18 +235,17 @@ namespace FalsePositive.Dialogue
         {
             if (!IsBound || IsSuspended || State != DialogueState.Listening) return;
 
-            PlayFiller();
             SetState(DialogueState.Uploading);
             _vad.SetGated(true);
 
             if (OfflineMode)
             {
-                StopFiller();
                 _pendingSceneInstruction = null;
                 PlayOfflineTurn();
                 return;
             }
 
+            ScheduleFiller();
             string instruction = _pendingSceneInstruction;
             _pendingSceneInstruction = null;
             string onceInstruction = _pendingSceneInstructionOnce;
@@ -315,17 +318,17 @@ namespace FalsePositive.Dialogue
 
         private void OnTurnSuccess(SidecarTurnResponse response)
         {
+            RunAfterFiller(() => CompleteTurnSuccess(response));
+        }
+
+        private void CompleteTurnSuccess(SidecarTurnResponse response)
+        {
             // A12. Filtered here, at the single point every consumer reads
             // from, rather than at each Show() — the subtitle, the debug
             // overlay and PhaseDialogueController all take reply_text off this
             // object, and a guard applied per-consumer is a guard with holes.
             response.reply_text = OutputGuard.Filter(response.reply_text);
 
-            // The filler clip plays to cover upload/inference latency —
-            // stop it here so it doesn't keep overlapping the reply once
-            // the reply itself starts (it was previously never stopped on
-            // either exit path from Uploading).
-            StopFiller();
             _consecutiveTurnFailures = 0;
 
             // A backend response with no audio (empty/malformed audio_b64)
@@ -358,8 +361,11 @@ namespace FalsePositive.Dialogue
 
         private void OnTurnError(string error)
         {
-            StopFiller();
+            RunAfterFiller(() => CompleteTurnError(error));
+        }
 
+        private void CompleteTurnError(string error)
+        {
             Debug.LogWarning($"[Dialogue] Turn failed: {error}");
 
             _consecutiveTurnFailures++;
@@ -396,7 +402,11 @@ namespace FalsePositive.Dialogue
 
         private void OnSessionEnded(SidecarTurnResponse response)
         {
-            StopFiller();
+            RunAfterFiller(() => CompleteSessionEnded(response));
+        }
+
+        private void CompleteSessionEnded(SidecarTurnResponse response)
+        {
             if (_vad != null) _vad.SetGated(true);
             SetState(DialogueState.Idle);
             SessionEnded?.Invoke(response.reply_text);
@@ -432,16 +442,61 @@ namespace FalsePositive.Dialogue
             if (_vad != null) _vad.SetGated(false);
         }
 
-        private void PlayFiller()
+        private void ScheduleFiller()
         {
             if (fillerSource == null || fillerClips == null || fillerClips.Length == 0) return;
-            AudioClip clip = fillerClips[Random.Range(0, fillerClips.Length)];
-            fillerSource.PlayOneShot(clip);
+            CancelPendingFiller();
+            _fillerDelayRoutine = StartCoroutine(PlayFillerAfterDelay());
         }
 
-        private void StopFiller()
+        private IEnumerator PlayFillerAfterDelay()
         {
-            if (fillerSource != null && fillerSource.isPlaying) fillerSource.Stop();
+            float delaySeconds = config != null ? config.fillerPlaybackDelaySeconds : 0.15f;
+            if (delaySeconds > 0f) yield return new WaitForSecondsRealtime(delaySeconds);
+            _fillerDelayRoutine = null;
+
+            int index;
+            if (fillerClips.Length == 1 || _lastFillerIndex < 0)
+            {
+                index = Random.Range(0, fillerClips.Length);
+            }
+            else
+            {
+                index = Random.Range(0, fillerClips.Length - 1);
+                if (index >= _lastFillerIndex) index++;
+            }
+
+            AudioClip clip = fillerClips[index];
+            if (clip == null) yield break;
+
+            _lastFillerIndex = index;
+            fillerSource.clip = clip;
+            fillerSource.Play();
+        }
+
+        private void RunAfterFiller(Action completion)
+        {
+            CancelPendingFiller();
+            if (fillerSource != null && fillerSource.isPlaying)
+            {
+                StartCoroutine(WaitForFillerThen(completion));
+                return;
+            }
+
+            completion();
+        }
+
+        private IEnumerator WaitForFillerThen(Action completion)
+        {
+            yield return new WaitWhile(() => fillerSource != null && fillerSource.isPlaying);
+            completion();
+        }
+
+        private void CancelPendingFiller()
+        {
+            if (_fillerDelayRoutine == null) return;
+            StopCoroutine(_fillerDelayRoutine);
+            _fillerDelayRoutine = null;
         }
 
         private void SetState(DialogueState newState)

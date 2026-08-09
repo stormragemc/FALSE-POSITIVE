@@ -1801,10 +1801,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe617419da9de544ebb8200c6cc94ef5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Dialogue.DialogueManager
+  config: {fileID: 11400000, guid: 7d7c79acba51061458a174d85dc8eb59, type: 2}
   copVoice: {fileID: 485316757}
   copMouth: {fileID: 485316755}
   fillerSource: {fileID: 828849310}
-  fillerClips: []
+  fillerClips:
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80001, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80003, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80004, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80005, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80006, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80007, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80009, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80010, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80013, type: 3}
+  - {fileID: 8300000, guid: c4d9f2a1b6e7483f91a0d2c5e7b80023, type: 3}
 --- !u!82 &828849310
 AudioSource:
   m_ObjectHideFlags: 0

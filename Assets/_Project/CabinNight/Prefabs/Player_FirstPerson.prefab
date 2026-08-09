@@ -400,7 +400,7 @@ MonoBehaviour:
   pitchAmplitude: 0.18
   rollAmplitude: 0.4
   startSmoothTime: 0.12
-  stopSmoothTime: 0.28
+  stopSmoothTime: 0.09
   idleFrequency: 0.085
   idleVerticalAmplitude: 0.003
   idleLateralAmplitude: 0.004
@@ -2417,7 +2417,7 @@ PrefabInstance:
     - target: {fileID: 13700014, guid: 99038cc8636a1834fbf83a430b449773, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
-      objectReference: {fileID: 2100000, guid: 5eb1d490d8669e146ba16c65f1c33d4c, type: 2}
+      objectReference: {fileID: 2100000, guid: df10089273da4844194e2d22ae7e4f9a, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

@@ -25,7 +25,11 @@ namespace FalsePositive.Editor
             { CutsceneId.Wake, new[] { "SPASSKY-001", "SPASSKY-002", "SPASSKY-003" } },
             { CutsceneId.SpasskyAnswer, new[] { "SPASSKY-005" } },
             { CutsceneId.NightArgument, new[] { null, "NICK-001" } },
-            { CutsceneId.RadioClears, new[] { "RADIO-001" } },
+            // Index 1, not 0: RadioClears gained a silent lead-in beat so the
+            // RadioTuneTimelineBuilder Timeline has room to play before the
+            // announcer speaks. The clip has to stay on the beat that carries
+            // the line, so adding the lead-in shifted it one along.
+            { CutsceneId.RadioClears, new[] { null, "RADIO-001" } },
             { CutsceneId.PriyaScreams, new[] { "PRIYA-001" } },
             { CutsceneId.OutIntoTheSnow, new[] { "PRIYA-002", "IVY-001", "AARON-001" } },
             { CutsceneId.TheCarry, new[]
@@ -340,9 +344,16 @@ namespace FalsePositive.Editor
                     SfxBeat("chair_creak", 0.6f),
                     HoldBeat(2.95f)),
 
+                // Kept lit for the RadioTuneTimelineBuilder Timeline beat
+                // (CutsceneStage.RadioTune) — a silent lead-in bracketing the
+                // 7.40s clip, then the storm-warning VO, then a short tail.
+                // Subtitle is the production RADIO-001 wording, not the older
+                // radio_storm_warning line the Timeline was first cut against.
                 VisibleRecipe(CutsceneId.RadioClears,
+                    Beat(null, null, 3.4f),
                     Beat("RADIO", "A snowstorm is moving through the area. Please stay indoors until conditions improve.", 3f,
-                        MemoryFlagIds.HeardRadioWarning)),
+                        MemoryFlagIds.HeardRadioWarning),
+                    Beat(null, null, 0.3f)),
 
                 // Screen-lit -- CutsceneStage stages this one (door swing) while
                 // the fade covered it before; that staging is now visible.

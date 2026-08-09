@@ -7,6 +7,8 @@ using FalsePositive.Interaction;
 using FalsePositive.Player;
 using FalsePositive.UI;
 using UnityEngine;
+using UnityEngine.Playables;
+using UnityEngine.Rendering;
 
 namespace FalsePositive.Cutscene
 {
@@ -14,9 +16,11 @@ namespace FalsePositive.Cutscene
     /// Per-memory-scene procedural staging: who walks where, where the
     /// camera looks, what gets posed, for the cutscene beats that need more
     /// than CutsceneDirector's default fade+VO (see the plan's Phase 4
-    /// table). Everything else — fuzzy transitions, wake, Spassky's answer,
-    /// radio clears, flashbacks, endings — is fade/VO-only and needs nothing
-    /// here.
+    /// table). RadioClears is the one beat that hands off to a Timeline
+    /// (RadioTune, below) rather than doing its own procedural work — see
+    /// RadioTuneTimelineBuilder. Everything else — fuzzy transitions, wake,
+    /// Spassky's answer, flashbacks, endings — is fade/VO-only and needs
+    /// nothing here.
     ///
     /// One instance per memory scene (added by MemorySceneBuilderV2, `isMorning`
     /// set per scene). Subscribes to the single persistent CutsceneDirector's
@@ -39,6 +43,18 @@ namespace FalsePositive.Cutscene
         // dialogue through CutsceneRecipeBuilder the way TheCarry/TheSofa do;
         // this is played directly instead.
         [SerializeField] private AudioClip ivyLiftLineClip;
+
+        // Wired by Editor.RadioTuneTimelineBuilder.WireNightScene, same
+        // reflection-SetField pattern as liftEffortClip above. The director's
+        // own track bindings (body/camera Animators, the two AudioSources)
+        // are re-asserted by that same method on every build — not stored
+        // here, since PlayableDirector already owns them.
+        [SerializeField] private PlayableDirector radioTuneDirector;
+
+        // Empty child of Prop_Radio, facing +Z — see RadioTuneTimelineBuilder
+        // for the exact placement. Muscle-space animation is root-relative,
+        // so the player has to be moved here before the clip plays.
+        [SerializeField] private Transform radioTuneAnchor;
 
         public void Configure(bool isMorningScene) => isMorning = isMorningScene;
 
@@ -159,6 +175,8 @@ namespace FalsePositive.Cutscene
                     return StandFromChair();
                 case CutsceneId.SomeoneLeft:
                     return SomeoneLeft();
+                case CutsceneId.RadioClears:
+                    return RadioTune();
                 case CutsceneId.GoodYears:
                     return GoodYears();
                 case CutsceneId.WhenItWentWrong:
@@ -251,6 +269,151 @@ namespace FalsePositive.Cutscene
                 }
                 door.transform.rotation = DoorClosedRotation;
             }
+        }
+
+        /// <summary>Radio-tuning beat (RadioClears): steady the radio, reach
+        /// out, turn the knob, the storm comes through, return. See
+        /// RadioTuneTimelineBuilder for the two animation clips and the
+        /// Timeline asset this plays; this method only does the runtime
+        /// half — align the player, show the arm, hand off to the director,
+        /// wait, then restore everything it touched.</summary>
+        private IEnumerator RadioTune()
+        {
+            if (radioTuneDirector == null || radioTuneAnchor == null)
+            {
+                Debug.LogError("[CutsceneStage] RadioTune fields unassigned — run " +
+                    "Tools/False Positive/Bootstrap/9c - Build Radio Tune Timeline.");
+                yield break;
+            }
+
+            GameObject player = GameObject.Find("Player (Male - First Person)");
+            if (player == null) yield break;
+
+            FreeLookCameraRig rig = FindPlayerRig();
+            PlayerInputRouter input = FindPlayerInput();
+            InteractionRaycaster raycaster = player.GetComponent<InteractionRaycaster>();
+            CharacterController controller = player.GetComponent<CharacterController>();
+            Transform view = FindPlayerView();
+            FirstPersonCameraMotion motion = view != null ? view.GetComponent<FirstPersonCameraMotion>() : null;
+
+            // 1. Gate — FreeLookCameraRig.Update writes rotation
+            // unconditionally, so gating input alone does not stop it; it
+            // must be disabled directly. Interact is deliberately left live
+            // by SetMovementGated, so InteractionRaycaster needs its own
+            // disable or E would still fire mid-animation.
+            input?.SetMovementGated(true);
+            if (rig != null) rig.enabled = false;
+            if (motion != null) motion.enabled = false;
+            if (raycaster != null) raycaster.enabled = false;
+
+            // 2. Align, 0.35s lerp — into both the anchor and the Timeline
+            // clip's own frame-0 rest pose, so the Timeline taking over at
+            // t=0 doesn't snap the view.
+            if (controller != null) controller.enabled = false;
+
+            Vector3 startPos = player.transform.position;
+            Quaternion startRot = player.transform.rotation;
+            Vector3 targetPos = radioTuneAnchor.position;
+            float anchorYaw = radioTuneAnchor.eulerAngles.y;
+            Quaternion targetRot = Quaternion.Euler(0f, anchorYaw, 0f);
+
+            Vector3 viewStartPos = view != null ? view.localPosition : Vector3.zero;
+            Quaternion viewStartRot = view != null ? view.localRotation : Quaternion.identity;
+            Vector3 viewRestPos = new Vector3(0f, 1.64f, 0.04f);
+            Quaternion viewRestRot = Quaternion.identity;
+
+            const float alignDuration = 0.35f;
+            float t = 0f;
+            while (t < alignDuration)
+            {
+                t += Time.deltaTime;
+                float frac = Mathf.Clamp01(t / alignDuration);
+                player.transform.position = Vector3.Lerp(startPos, targetPos, frac);
+                player.transform.rotation = Quaternion.Slerp(startRot, targetRot, frac);
+                if (view != null)
+                {
+                    view.localPosition = Vector3.Lerp(viewStartPos, viewRestPos, frac);
+                    view.localRotation = Quaternion.Slerp(viewStartRot, viewRestRot, frac);
+                }
+                yield return null;
+            }
+            player.transform.position = targetPos;
+            player.transform.rotation = targetRot;
+            if (view != null)
+            {
+                view.localPosition = viewRestPos;
+                view.localRotation = viewRestRot;
+            }
+
+            // 3. Show — only the _LOD1 unified renderer; ConfigurePlayer set
+            // every renderer ShadowsOnly, and flipping both the base and
+            // _LOD1 copies would render two coincident meshes.
+            SkinnedMeshRenderer unified = FindUnifiedBodyRenderer(player);
+            ShadowCastingMode previousMode = ShadowCastingMode.ShadowsOnly;
+            if (unified != null)
+            {
+                previousMode = unified.shadowCastingMode;
+                unified.shadowCastingMode = ShadowCastingMode.On;
+            }
+
+            // 4. Play
+            radioTuneDirector.time = 0;
+            radioTuneDirector.Play();
+
+            // 5. Wait — hard timeout so a user's Timeline edit (or a stuck
+            // graph) can never hang the game with input gated.
+            float timeout = (float)radioTuneDirector.duration + 0.5f;
+            float waited = 0f;
+            while (radioTuneDirector.state == PlayState.Playing && waited < timeout)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            // 6. Restore, idempotent. Timeline does not restore scene
+            // bindings at runtime — the clip's last key gets the view back
+            // to rest, this is belt-and-braces. SeedYaw zeroes pitch, so it
+            // must run before SeedPitch, and both must run before the rig is
+            // re-enabled so its first live Update already has the right
+            // values instead of snapping one frame late.
+            radioTuneDirector.Stop();
+            if (unified != null) unified.shadowCastingMode = previousMode;
+            if (view != null)
+            {
+                view.localPosition = viewRestPos;
+                view.localRotation = viewRestRot;
+            }
+            if (rig != null)
+            {
+                rig.SeedYaw(anchorYaw);
+                rig.SeedPitch(0f);
+                rig.enabled = true;
+            }
+            if (motion != null) motion.enabled = true;
+            if (raycaster != null) raycaster.enabled = true;
+            if (controller != null) controller.enabled = true;
+            input?.SetMovementGated(false);
+        }
+
+        /// <summary>Matches AssignBodyMaterials' "unified" substring filter
+        /// (Editor/CabinNightCharacterBuilder.cs) but disambiguates the base
+        /// o3n_male_unified_low renderer from its o3n_male_unified_LOD1
+        /// twin — both match "unified", only the _LOD1 one should ever be
+        /// shown, since there is no LODGroup culling the other away.</summary>
+        private static SkinnedMeshRenderer FindUnifiedBodyRenderer(GameObject player)
+        {
+            Transform body = player.transform.Find("Body");
+            if (body == null) return null;
+
+            SkinnedMeshRenderer fallback = null;
+            foreach (SkinnedMeshRenderer renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                string lower = renderer.name.ToLowerInvariant();
+                if (!lower.Contains("unified")) continue;
+                if (lower.Contains("lod1")) return renderer;
+                fallback = renderer;
+            }
+            return fallback;
         }
 
         // ---- M2_Morning ----

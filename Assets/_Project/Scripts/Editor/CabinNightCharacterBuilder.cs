@@ -61,13 +61,20 @@ namespace FalsePositive.Editor
                 UnityEngine.Object.DestroyImmediate(charactersRoot.GetChild(0).gameObject);
             }
 
+            // MaleBodyJeansShirt (not the bare MaleBodyJeans every other
+            // renderer here still uses) so the radio-tuning Timeline beat has
+            // a shirt to show when it flips the player's arm renderer visible
+            // — see RadioTuneTimelineBuilder. Purely additive: the shirt
+            // material only layers _TopOverlayMap on top of the same
+            // _BaseMap/_OverlayMap, so this is also strictly better for the
+            // player's normal shadow-only rendering.
             GameObject player = isMorning
                 ? BuildCharacter(charactersRoot, "Player (Male - First Person)", false,
                     new Vector3(0.75f, 0f, 0.25f), new Vector3(0f, -90f, 0f), 0.98f,
-                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null)
+                    Material("MaleBodyJeansShirt"), CabinIdleProfile.Controlled, null, null, null, null, null)
                 : BuildCharacter(charactersRoot, "Player (Male - First Person)", false,
                     new Vector3(-3.0f, 0f, 0.85f), new Vector3(0f, 0f, 0f), 0.98f,
-                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null);
+                    Material("MaleBodyJeansShirt"), CabinIdleProfile.Controlled, null, null, null, null, null);
             ConfigurePlayer(player);
             ConvertToRouterRig(player);
             ConfigureInteraction(player);

@@ -12,8 +12,14 @@ namespace FalsePositive.Interaction
     /// Day-1 form; a real minigame can replace OnInteract's body without
     /// touching Cleared or the memory flag it writes.
     ///
-    /// Audio (Phase 5): a static loop plays from Awake until tuned, then a
-    /// tuning sweep + lock-on one-shot play and the static stops.
+    /// Audio (Phase 5): a static loop plays from Awake until tuned. The
+    /// tuning sweep + lock-on one-shots have since moved onto the
+    /// Cutscene_RadioTune Timeline's "Radio Tune" audio track (see
+    /// RadioTuneTimelineBuilder), so they land on the knob-turn animation
+    /// beat instead of on the E-press itself. sfxSource/tuningSweepClip/
+    /// lockOnClip stay wired by MemorySceneDressing even though OnInteract
+    /// no longer plays them directly — the Timeline track reads the same
+    /// clips by asset path, not through these fields.
     /// </summary>
     public sealed class RadioTuner : Interactable
     {
@@ -51,8 +57,6 @@ namespace FalsePositive.Interaction
         public override void OnInteract()
         {
             if (staticLoopSource != null) staticLoopSource.Stop();
-            if (sfxSource != null && tuningSweepClip != null) sfxSource.PlayOneShot(tuningSweepClip);
-            if (sfxSource != null && lockOnClip != null) sfxSource.PlayOneShot(lockOnClip);
 
             MarkComplete();
             Cleared?.Invoke();

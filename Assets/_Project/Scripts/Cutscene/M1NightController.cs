@@ -27,6 +27,9 @@ namespace FalsePositive.Cutscene
             _flow = GameFlowDirector.Instance;
             if (_flow != null) _flow.PhaseChanged += OnPhaseChanged;
             if (radio != null) radio.Cleared += OnRadioCleared;
+            else Debug.LogError("[M1NightController] radio is unassigned — the whole " +
+                "M1 chain (RadioClears, the door, \"Call out for Nick.\") is dead. Run " +
+                "Tools/False Positive/Bootstrap/9a - Wire Memory_CabinNight.");
         }
 
         private void OnDisable()

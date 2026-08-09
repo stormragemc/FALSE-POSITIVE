@@ -124,13 +124,14 @@ exaggeration. Similarity is fixed at 0.75 so the selected timbre stays consisten
 
 | ID | Performance beat | Exact synthesis prompt |
 |---|---|---|
-| `IVY-001` | Immediate shock and vulnerability; frightened, not melodramatic | `[shocked] Oh my God. What happened to him? What do we do now?` |
+| `IVY-001` | Shock held in check, followed by two clear thought breaks and a quieter request for direction | `[shocked but restrained] Oh my God.\n\nWhat happened to him?\n\n[quieter, asking the others for direction] What do we do now?` |
 | `IVY-002` | Guarded and slightly too quick | `[guarded, answering quickly] I don’t know. I was upstairs with Aaron.` |
 | `IVY-003` | Controlled confirmation after a fraction of hesitation | `[guarded] Yes. All night.` |
-| `IVY-004` | Quiet focus while lowering Nick | `[quietly, focused] Careful. Careful... easy.` |
+| `IVY-004` | Hushed, practical concern; each word tracks the movement as Nick is lowered | `[hushed, practical, concerned] Careful... careful... easy... [short pause]` |
 
 Audio tags and punctuation are generation directions and are not additional spoken words. The
-ellipsis in `IVY-004` softens the final instruction; it does not indicate a dramatic pause.
+ellipses in `IVY-004` time the three physical cues. Its trailing `[short pause]` is a supported V3
+timing tag that gives “easy” room to decay naturally before the file boundary; it is not spoken.
 
 ### 4.3 Assets and reproducibility — FINALIZED
 

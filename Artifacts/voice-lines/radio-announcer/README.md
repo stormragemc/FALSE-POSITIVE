@@ -23,19 +23,33 @@ later, non-destructive sound design.
 The API key is read from `ELEVENLABS_API_KEY` at runtime and is never stored in
 this directory.
 
+## Dry-voice cleanup and tail treatment
+
+Every production render uses this FFmpeg chain after synthesis:
+
+```text
+afftdn=nr=12:nf=-55:tn=1:gs=5,areverse,afade=t=in:st=0:d=0.02,areverse,apad=pad_dur=0.15
+```
+
+This applies conservative broadband denoising, fades the final 20 ms of the
+spoken source to digital zero, and then appends 150 ms of exact digital
+silence. Denoising comes first because it can add residual tail energy. The
+production files remain dry: radio static, bandwidth filtering, dropouts, room
+tone, and scene ambience are not baked into these WAVs.
+
 ## Canonical line manifest and review status
 
 | ID | Exact canonical words | Production provenance | Review status |
 |---|---|---|---|
-| `RADIO-001` | A snowstorm is moving through the area. Please stay indoors until conditions improve. | Exact copy of approved V3 Natural Roger audition `v3-natural-round/line-01-storm-warning/01-roger.wav` | Approved take |
-| `RADIO-002` | …snow storm… | Production render generated with Roger | Pending listening review |
-| `RADIO-003` | …please stay indoors… | Exact copy of approved V3 Natural Roger audition `v3-natural-round/line-03-stay-indoors/01-roger.wav` | Approved take |
-| `RADIO-004` | …during these times. | Production render generated with Roger | Pending listening review |
+| `RADIO-001` | A snowstorm is moving through the area. Please stay indoors until conditions improve. | Selected Roger performance preserved and production copy cleaned | Passed user listening review |
+| `RADIO-002` | …snow storm… | Production render generated with Roger, performance preserved and cleaned | Passed user listening review in sequence context |
+| `RADIO-003` | …please stay indoors… | Selected Roger performance preserved and production copy cleaned | Passed user listening review in sequence context |
+| `RADIO-004` | …during these times. | Regenerated with Roger because the previous waveform carried strong speech-level energy into the file boundary; replacement cleaned | Passed user listening review in sequence context |
 
-The approved audition source paths are relative to
-`Artifacts/voice-auditions/radio-announcer/`. The ellipses on the short memory
-fragments indicate clipped surrounding radio context; they are not extra spoken
-content.
+Historical auditions were removed after the production set was locked. The
+ellipses on the short memory fragments indicate clipped surrounding radio
+context; they are not extra spoken content. Selected voice identity, settings,
+prompts, and production provenance remain documented here.
 
 ## Exact synthesis prompts
 

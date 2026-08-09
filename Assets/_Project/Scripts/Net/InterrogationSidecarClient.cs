@@ -149,7 +149,11 @@ namespace FalsePositive.Net
             string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
             Action<SidecarTurnResponse> onSessionEnded,
-            Action<string> onError)
+            Action<string> onError,
+            // A single-turn order, distinct from the standing phase briefing in
+            // sceneInstruction. The server applies it to this turn and drops it;
+            // the briefing persists. Optional so existing call sites are unchanged.
+            string sceneInstructionOnce = null)
         {
             if (IsBusy)
             {
@@ -164,7 +168,8 @@ namespace FalsePositive.Net
                 sceneInstruction,
                 onSuccess,
                 onSessionEnded,
-                onError));
+                onError,
+                sceneInstructionOnce));
         }
 
         /// <summary>Requests a full server-side session reset — dialogue history and the
@@ -203,7 +208,8 @@ namespace FalsePositive.Net
             string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
             Action<SidecarTurnResponse> onSessionEnded,
-            Action<string> onError)
+            Action<string> onError,
+            string sceneInstructionOnce)
         {
             IsBusy = true;
 
@@ -257,6 +263,11 @@ namespace FalsePositive.Net
             if (!string.IsNullOrEmpty(sceneInstruction))
             {
                 form.Add(new MultipartFormDataSection("scene_instruction", sceneInstruction));
+            }
+
+            if (!string.IsNullOrEmpty(sceneInstructionOnce))
+            {
+                form.Add(new MultipartFormDataSection("scene_instruction_once", sceneInstructionOnce));
             }
 
             string url = $"{config.SidecarBaseUrl}/turn";

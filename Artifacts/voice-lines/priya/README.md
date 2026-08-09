@@ -1,11 +1,13 @@
 # Priya production voice lines
 
-This directory contains Priya's selected-voice dialogue, one 24 kHz mono 16-bit
-PCM WAV per spoken line. Filenames match the stable IDs in
-`docs/HUMAN_SCRIPT.md`. `PRIYA-002` through `PRIYA-008` are approved.
-`PRIYA-001` was regenerated on 9 Aug 2026 for the standardized **DAY-vid**
-pronunciation and is pending re-review; `PRIYA-014` through `PRIYA-016` are
-also pending review.
+This directory contains Priya's synthetic selected-voice dialogue, one 24 kHz
+mono 16-bit PCM WAV per spoken line. Filenames match the stable IDs in
+`docs/HUMAN_SCRIPT.md`. The performances in `PRIYA-002` through `PRIYA-008`
+were approved before the dry-VO cleanup pass. `PRIYA-001` was regenerated on
+9 Aug 2026 for the standardized **DAY-vid** pronunciation and was already
+pending re-review; `PRIYA-014` through `PRIYA-016` were also pending review.
+All eleven cleaned outputs now require a post-cleanup listening pass before
+final approval.
 
 ## Selected voice model
 
@@ -28,6 +30,26 @@ this directory.
 enforcing the project-wide **DAY-vid** pronunciation without changing the
 canonical words.
 
+## Dry-VO cleanup and tail treatment
+
+Every production render is processed in this mandatory order:
+
+1. Conservative FFmpeg broadband cleanup with
+   `afftdn=nr=12:nf=-55:tn=1:gs=5`.
+2. A 20 ms fade over the final source samples to reach digital zero.
+3. Exactly 150 ms of appended digital silence.
+
+The generator performs this processing before an atomic WAV replacement, skips
+existing files by default, and overwrites only when `--force` is explicit.
+The cleanup pass preserves native line-to-line dynamics; it does not normalize,
+compress, or add ambience.
+
+On 9 Aug 2026, all eleven production WAVs received this cleanup and tail
+treatment. The original `PRIYA-014` ended during sustained speech with no
+natural decay, so it was regenerated after explicit user authorization. The
+replacement passed technical validation and is pending human listening to
+confirm the complete final word and performance.
+
 ## Line manifest
 
 | ID | Dialogue | Performance direction |
@@ -49,7 +71,9 @@ canonical words.
 Audio tags and punctuation are generation directions; they are not additional
 spoken dialogue.
 
-- `PRIYA-001`: `[worried] Guys—help! Something’s happened to Nick. IVY! AARON! DAVID! Please—come here!`
+- `PRIYA-001`: `[worried] Guys—help! Something’s happened to Nick.` then
+  `IVY! AARON! DAVID!` then `Please—come here!`, with paragraph breaks between
+  all three beats. The generator substitutes `DAY-VID` only at synthesis time.
 - `PRIYA-002`: `[panicked] What do we do?! What do we do?!`
 - `PRIYA-003`: `[stunned] How did this happen?`
 - `PRIYA-004`: `[skeptical] All night?`

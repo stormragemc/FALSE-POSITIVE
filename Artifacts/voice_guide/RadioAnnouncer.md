@@ -1,8 +1,8 @@
 # Radio announcer — voice and delivery guide
 
-**Status:** voice **selected** 9 Aug 2026. The `RADIO-001` and `RADIO-003`
-audition takes are approved. Production packaging and the `RADIO-002` and
-`RADIO-004` renders are pending.
+**Status:** voice selected and all four cleaned production WAVs approved by user
+listening review 9 Aug 2026. Unity integration and radio sound design are
+pending.
 
 ---
 
@@ -21,10 +21,10 @@ easy to understand rather than sounding like a dramatic character performance.
 
 | ID | Dialogue | State |
 |---|---|---|
-| `RADIO-001` | A snowstorm is moving through the area. Please stay indoors until conditions improve. | Audition take approved |
-| `RADIO-002` | …snow storm… | Not yet rendered with Roger |
-| `RADIO-003` | …please stay indoors… | Audition take approved |
-| `RADIO-004` | …during these times. | Not yet rendered with Roger |
+| `RADIO-001` | A snowstorm is moving through the area. Please stay indoors until conditions improve. | Production take approved |
+| `RADIO-002` | …snow storm… | Production take approved in sequence context |
+| `RADIO-003` | …please stay indoors… | Production take approved in sequence context |
+| `RADIO-004` | …during these times. | Regenerated production take approved in sequence context |
 
 The three short lines are broken radio bleed during the later memory. Ellipses
 represent clipped context; no labels, candidate numbers, static, or production
@@ -54,20 +54,12 @@ remain consistent across the clean warning and the three memory fragments.
 
 ## 4. Current assets and next work
 
-Approved audition sources:
+The authoritative production set is `Artifacts/voice-lines/radio-announcer/`
+and contains `RADIO-001.wav` through `RADIO-004.wav`, the reproducible generator,
+single-line playback utility, and review manifest. Historical audition assets
+were removed after the production set was locked; casting provenance remains
+documented here and in the production README.
 
-```text
-Artifacts/voice-auditions/radio-announcer/v3-natural-round/line-01-storm-warning/01-roger.wav
-Artifacts/voice-auditions/radio-announcer/v3-natural-round/line-03-stay-indoors/01-roger.wav
-```
-
-These WAVs are audition assets and are ignored by Git. They have not been copied
-into an ID-based production directory or integrated into Unity.
-
-When production rendering is requested:
-
-1. Preserve the approved `RADIO-001` and `RADIO-003` takes.
-2. Render `RADIO-002` and `RADIO-004` with Roger and the settings above.
-3. Package the approved set as `RADIO-001.wav` through `RADIO-004.wav`.
-4. Apply radio static and filtering non-destructively during Unity or sound-design
-   integration.
+Unity integration must import the dry WAVs without baking in static. Apply radio
+bandwidth filtering, dropouts, masking, and static non-destructively during
+sound-design integration.

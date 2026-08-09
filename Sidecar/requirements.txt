@@ -14,6 +14,7 @@ torch>=2.3
 soundfile>=0.12
 soxr>=0.5
 pydub>=0.25
+audioop-lts>=0.2.2; python_version >= "3.13"
 
 # LLM (Gemini 3.6 Flash)
 google-genai>=2.14

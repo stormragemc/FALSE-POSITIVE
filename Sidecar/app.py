@@ -468,6 +468,16 @@ async def turn(
     # Appended last, after `audio`, so every existing positional call site
     # (tests included) that predates this field keeps working unchanged.
     scene_instruction: str = Form(""),
+    # A single-turn order, as opposed to the standing briefing above. Applied
+    # to THIS turn and then dropped.
+    #
+    # The standing/one-shot distinction is not cosmetic. P2 ends by telling the
+    # officer 'Ask exactly: "What happened to Nick?" as your next question',
+    # and because scene_instruction persists until replaced, that order was
+    # re-issued on every following turn — the officer obeyed it forever and the
+    # interrogation could not move on. A phase briefing SHOULD persist; a
+    # one-turn instruction must not.
+    scene_instruction_once: str = Form(""),
 ):
     t_total0 = time.perf_counter()
     loop = asyncio.get_running_loop()
@@ -535,6 +545,16 @@ async def turn(
         if scene_instruction:
             _scene_instructions[session_id] = scene_instruction
         active_scene_instruction = _scene_instructions.get(session_id, "")
+
+        # The one-shot rides on top of the standing briefing for this turn only,
+        # and is never written to _scene_instructions, so the next turn is back
+        # to the briefing alone.
+        if scene_instruction_once:
+            active_scene_instruction = (
+                active_scene_instruction + "\n\n" + scene_instruction_once
+                if active_scene_instruction
+                else scene_instruction_once
+            )
 
         if not has_audio:
             transcript, emotion, emotion_conf = "", "", 0.0
@@ -650,11 +670,15 @@ async def turn(
             deadline,
         )
 
+        # The officer may lead with one bracketed mood for eleven_v3 to act.
+        # It is split off here: the voice gets it, reply_text does not, because
+        # reply_text is what the game renders as the on-screen subtitle.
+        reply_text, mood = llm.split_mood_tag(reply_text)
+
         pcm, rate, channels, tts_ms = await _await_before_deadline(
             loop.run_in_executor(
                 _vendor_pool,
-                tts.synthesize,
-                reply_text,
+                partial(tts.synthesize, reply_text, mood),
             ),
             deadline,
         )

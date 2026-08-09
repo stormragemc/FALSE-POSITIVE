@@ -1,8 +1,9 @@
 # Nick — voice and script-driven delivery
 
-**Status:** voice **selected** 8 Aug 2026. Production WAV generation, review, and
-Unity integration are pending. This guide supersedes the Artem Lebedev casting
-in `Assets/_Project/Art/Audio/VO/README.md` where the two conflict.
+**Status:** voice selected and seven cleaned production WAVs generated 9 Aug
+2026. Listening review is complete; final Unity integration and in-game mix
+review are pending. This guide supersedes the Artem Lebedev casting in
+`Assets/_Project/Art/Audio/VO/README.md` where the two conflict.
 
 ---
 
@@ -33,8 +34,8 @@ Verified against the working tree on 8 Aug 2026.
 | Source | Current reality |
 |---|---|
 | `docs/HUMAN_SCRIPT.md` | Canonical spoken script. Nick owns `NICK-001` through `NICK-007`. |
-| `Artifacts/voice-auditions/nick/` | Contains the audition metadata, playback utilities, and current audition renders. |
-| `Artifacts/voice-lines/nick/` | Does not yet exist; no selected-voice production set has been rendered. |
+| Historical auditions | Removed after casting was locked; the selected identity and settings are preserved in this guide and the production generator. |
+| `Artifacts/voice-lines/nick/` | Contains the complete cleaned Ivan Energetic production set and reproducible utilities. |
 | `Assets/_Project/Art/Audio/VO/README.md` | Still names Artem Lebedev as Nick and is stale. |
 | `Assets/_Project/Art/Audio/VO/` | Contains six Artem-era MP3s for approximate equivalents of `NICK-002` through `NICK-007`. |
 | `CutsceneRecipeBuilder.cs` | Uses the six descriptive Unity stems; `NICK-001` is not represented there. |
@@ -145,7 +146,7 @@ spoken dialogue.
 different presentations of the night. The longer version carries exhausted
 avoidance; the short memory fragment should land as a clipped exit.
 
-### 4.3 Assets and reproducibility — NOT YET IMPLEMENTED
+### 4.3 Assets and reproducibility — FINALIZED
 
 The intended production set is:
 
@@ -159,10 +160,10 @@ Artifacts/voice-lines/nick/NICK-006.wav
 Artifacts/voice-lines/nick/NICK-007.wav
 ```
 
-The future generator should store the public voice ID, settings, and exact
-prompts from §4.1–4.2. It must read `ELEVENLABS_API_KEY` from the environment,
-skip existing approved WAVs by default, and require an explicit overwrite flag
-for regeneration.
+`Artifacts/voice-lines/nick/generate_nick_voice_lines.py` stores the public
+voice ID, settings, and exact prompts from §4.1–4.2. It reads
+`ELEVENLABS_API_KEY` from the environment, skips existing approved WAVs by
+default, and requires an explicit overwrite flag for regeneration.
 
 ### 4.4 Unity integration — NOT YET IMPLEMENTED
 
@@ -202,13 +203,12 @@ Completed:
 
 - `HUMAN_SCRIPT.md` contains exactly seven Nick IDs, `NICK-001` through
   `NICK-007`.
-- Audition scripts preserve every candidate name, number, and public voice ID.
-- The final-decider script records Ivan Energetic as original candidate 3 and
-  finalist 1.
-- The final-decider files use `eleven_v3` with the settings in §4.1.
-- No API key is stored in the audition or guide files.
+- Historical casting records identify Ivan Energetic as original candidate 3,
+  finalist 1, and public voice ID `JKtNvDNrWu33P1xzttP2`.
+- The production generator uses `eleven_v3` with the settings in §4.1.
+- No API key is stored in the guide or production files.
 
-Required after production generation:
+Production review completed:
 
 - Each production WAV opens as mono, 24 kHz, 16-bit PCM.
 - Spoken words match the canonical line paired with each ID.
@@ -217,13 +217,13 @@ Required after production generation:
 - `NICK-005` sounds careless rather than deliberately cruel.
 - `NICK-006` and `NICK-007` sound humiliated and avoidant rather than
   villainous.
-- Nick remains clearly distinct from Spassky in the final mix.
+
+Remaining: confirm Nick remains clearly distinct from Spassky in the final mix.
 
 ---
 
 ## 6. Out of scope
 
-- Generating or approving Nick's seven production WAVs.
 - Importing or wiring Nick's files in Unity.
 - Deleting the tracked Artem-era MP3s before migration.
 - Changing canonical dialogue to suit a generated take.
@@ -241,5 +241,5 @@ Required after production generation:
 | “Ivan Energetic” is directed too brightly in the later scene | Medium | Treat the name as voice identity only and follow the per-line beats in §4.2 |
 | Nick sounds too similar to Spassky | Medium | Compare both in the cabin/interrogation transition and preserve Nick's quicker, warmer delivery |
 | Drunken delivery becomes slurred or comic | Medium | Suggest carelessness through timing; keep every word intelligible |
-| Short lines produce unstable or theatrical takes | Medium | Audition multiple renders and approve files individually before locking them |
+| Short lines produce unstable or theatrical takes | Medium | Regenerate and review replacement takes individually if an in-game issue appears |
 | The Voice Library entry becomes unavailable | Low | Preserve the public voice ID, settings, prompts, and approved WAVs in source control |

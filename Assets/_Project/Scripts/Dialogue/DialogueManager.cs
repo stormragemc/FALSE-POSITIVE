@@ -80,6 +80,12 @@ namespace FalsePositive.Dialogue
         private SubtitleUI _subtitles;
 
         private string _pendingSceneInstruction;
+        // Consumed on the very next turn and then dropped, unlike
+        // _pendingSceneInstruction which the SERVER keeps applying until a new
+        // briefing replaces it. Orders like "ask exactly X as your next
+        // question" belong here — as a standing briefing they get re-issued
+        // every turn and the officer never moves on.
+        private string _pendingSceneInstructionOnce;
         private float _listeningStartedAt;
         private int _lastSpeechOnsetDelayMs;
         private int _consecutiveTurnFailures;
@@ -153,6 +159,14 @@ namespace FalsePositive.Dialogue
             _pendingSceneInstruction = text;
         }
 
+        /// <summary>Queues an order that applies to the next turn only. Use this
+        /// for anything phrased as "do X on your next turn"; use
+        /// QueueSceneInstruction for the standing phase briefing.</summary>
+        public void QueueSceneInstructionOnce(string text)
+        {
+            _pendingSceneInstructionOnce = text;
+        }
+
         /// <summary>Hard stop for memory scenes and cutscenes: gates the VAD and
         /// refuses to start a new turn until Resume(). Does not abort a turn
         /// already in flight — its callback checks IsSuspended before re-arming.</summary>
@@ -192,6 +206,8 @@ namespace FalsePositive.Dialogue
             _vad.SetGated(true);
             string instruction = _pendingSceneInstruction;
             _pendingSceneInstruction = null;
+            string onceInstruction = _pendingSceneInstructionOnce;
+            _pendingSceneInstructionOnce = null;
 
             if (OfflineMode)
             {
@@ -207,7 +223,8 @@ namespace FalsePositive.Dialogue
                 instruction,
                 OnTurnSuccess,
                 OnSessionEnded,
-                OnTurnError);
+                OnTurnError,
+                onceInstruction);
         }
 
         private void OnUtteranceCaptured(float[] samples, int sampleRate)
@@ -228,6 +245,8 @@ namespace FalsePositive.Dialogue
 
             string instruction = _pendingSceneInstruction;
             _pendingSceneInstruction = null;
+            string onceInstruction = _pendingSceneInstructionOnce;
+            _pendingSceneInstructionOnce = null;
             _sidecarClient.PostTurn(
                 SessionId,
                 samples,
@@ -236,7 +255,8 @@ namespace FalsePositive.Dialogue
                 instruction,
                 OnTurnSuccess,
                 OnSessionEnded,
-                OnTurnError);
+                OnTurnError,
+                onceInstruction);
         }
 
         /// <summary>Offline-mode equivalent of a real turn: plays the next

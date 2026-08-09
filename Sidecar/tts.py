@@ -26,7 +26,7 @@ _client: ElevenLabs | None = None
 # about — accepted deliberately, see §4.6 of the design spec for what that
 # costs a full playthrough. Confirm the id via ElevenLabs' /v1/models endpoint
 # if TTS calls start failing with an unknown-model error.
-_MODEL_ID = "eleven_multilingual_v2"
+_MODEL_ID = "eleven_v3"
 
 # Spassky's delivery: contained anger, not shouting — slow and held down rather
 # than loud. Low stability keeps the emotional variance (and the accent, which
@@ -36,12 +36,38 @@ _MODEL_ID = "eleven_multilingual_v2"
 # This is the LOW register of the design spec's §4.3 table, applied uniformly.
 # Script-driven register selection is specced but not yet implemented; until it
 # is, every line is delivered in this one.
+# Variant 12, chosen by ear against the previous eleven_multilingual_v2 render.
+#
+# These are not free parameters. eleven_v3 does NOT carry this voice's Russian
+# accent on its own — the accent comes from the ACCENT_TAG below — and style
+# above 0 drags the render away from the source voice hard enough to lose it
+# entirely. stability 1.0 (Robust) preserves identity best of the three v3
+# settings. Changing any of these without listening will produce a British
+# Spassky, which is exactly what happened in testing.
 _VOICE_SETTINGS = VoiceSettings(
-    stability=0.15,
+    stability=1.0,
     similarity_boost=1.00,
-    style=0.85,
-    speed=0.85,
+    style=0.0,
+    use_speaker_boost=True,
 )
+
+# Prepended to every line server-side rather than left to the model. If the
+# model forgets it, Spassky loses his accent mid-interrogation, so it is not
+# something a prompt is allowed to be responsible for.
+ACCENT_TAG = "strong Russian accent"
+
+# The moods the officer may ask for. Deliberately a closed set: an open
+# vocabulary means the model invents directions nobody has heard, and an
+# untested tag can drop the accent with no warning in front of a player.
+ALLOWED_MOODS = frozenset({"angry", "shouting", "quietly menacing", "tired", "impatient"})
+
+
+def _tagged(text: str, mood: str | None) -> str:
+    """Builds the v3 audio tag. Mood rides inside the same bracket as the
+    accent — two separate tags fight each other."""
+    if mood and mood.lower().strip() in ALLOWED_MOODS:
+        return f"[{ACCENT_TAG}, {mood.lower().strip()}] {text}"
+    return f"[{ACCENT_TAG}] {text}"
 
 
 def _get_client() -> ElevenLabs:
@@ -108,10 +134,13 @@ def _fetch_audio(client: ElevenLabs, text: str) -> tuple[bytes, int, int]:
         return _decode_mp3_to_pcm16(mp3_bytes)
 
 
-def synthesize(text: str) -> tuple[bytes, int, int, int]:
-    """Returns (pcm16_le_bytes, sample_rate, channels, elapsed_ms)."""
+def synthesize(text: str, mood: str | None = None) -> tuple[bytes, int, int, int]:
+    """Returns (pcm16_le_bytes, sample_rate, channels, elapsed_ms).
+
+    `text` is the spoken line with no tag; the accent tag is applied here so
+    every call gets it whether or not the caller remembered."""
     client = _get_client()
     t0 = time.perf_counter()
-    pcm, rate, channels = _fetch_audio(client, text)
+    pcm, rate, channels = _fetch_audio(client, _tagged(text, mood))
     ms = int((time.perf_counter() - t0) * 1000)
     return pcm, rate, channels, ms

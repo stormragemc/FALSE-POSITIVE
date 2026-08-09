@@ -169,6 +169,15 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         import re as _re
 
+        _fake_mood_tag = _re.compile(r"^\s*\[([^\]]{1,40})\]\s*")
+
+        def _fake_split_mood_tag(text):
+            match = _fake_mood_tag.match(text or "")
+            if not match:
+                return text, None
+            return text[match.end():].lstrip(), match.group(1).strip().lower()
+
+
         _fake_reserved_marker = _re.compile(
             r"WITNESS_TRANSCRIPT|LOCAL_AFFECT_CONTEXT|SCENE_INSTRUCTION|local\s+affect\s+signal",
             _re.IGNORECASE,
@@ -181,6 +190,11 @@ class AppFailureIsolationTests(unittest.TestCase):
             HISTORY_KIND_WITNESS="witness_transcript",
             generate_reply=generate_reply,
             contains_reserved_marker=lambda text: bool(_fake_reserved_marker.search(text or "")),
+            # app.turn splits a leading "[mood] " off the reply before it reaches
+            # reply_text, so the stub has to offer it or every turn 500s with an
+            # AttributeError and the whole suite fails on an unsubscriptable
+            # error response rather than on anything it was testing.
+            split_mood_tag=_fake_split_mood_tag,
         )
         async def fake_transcribe(_pcm_bytes):
             return "fixture transcript", 5
@@ -198,7 +212,10 @@ class AppFailureIsolationTests(unittest.TestCase):
         )
         tts = _module(
             "tts",
-            synthesize=lambda _text: (b"\x00\x00", 24000, 1, 7),
+            # app.turn passes the mood alongside the text now: tts.synthesize
+            # applies the eleven_v3 accent tag itself, so the second argument is
+            # part of the contract and the stub has to accept it.
+            synthesize=lambda _text, _mood=None: (b"\x00\x00", 24000, 1, 7),
         )
         audio_utils = _module(
             "audio_utils",

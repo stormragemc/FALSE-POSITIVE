@@ -78,17 +78,24 @@ namespace FalsePositive.Editor
                 CabinIdleProfile.Confrontational);
             SaveCharacter(nick, "Nick_Vlahos");
 
+            // Aaron and Ivy stand near the top of the stair run, not on the
+            // floor — so their y is the authored tread height put through
+            // CabinV2Builder.StairHeight, which tracks the room-height raise.
+            // A literal 2.7 here left them buried to the waist in the ceiling
+            // slab once the room went up.
+            float landingY = CabinV2Builder.StairHeight(2.7f);
+
             GameObject aaron = isMorning
                 ? BuildNamedCharacter(charactersRoot, "Aaron Teague (Male)", AaronModel,
-                    new Vector3(4.3f, 2.7f, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
+                    new Vector3(4.3f, landingY, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
                     CabinIdleProfile.Controlled)
                 : BuildNamedCharacter(charactersRoot, "Aaron Teague (Male)", AaronModel,
-                    new Vector3(4.3f, 2.7f, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
+                    new Vector3(4.3f, landingY, 3.4f), new Vector3(0f, 226f, 0f), 1.02f,
                     CabinIdleProfile.Controlled);
             SaveCharacter(aaron, "Aaron_Teague");
 
             GameObject ivy = BuildNamedCharacter(charactersRoot, "Ivy Teague (Female)", IvyModel,
-                new Vector3(4.6f, 2.7f, 3.0f), new Vector3(0f, 248f, 0f), 0.98f,
+                new Vector3(4.6f, landingY, 3.0f), new Vector3(0f, 248f, 0f), 0.98f,
                 CabinIdleProfile.Guarded);
             SaveCharacter(ivy, "Ivy_Teague");
 

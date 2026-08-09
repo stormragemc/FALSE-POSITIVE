@@ -350,10 +350,36 @@ namespace FalsePositive.Editor
             // transforms for seating, so it must look them up in a way that
             // sees inactive objects (see the note on SeatedAtChair).
             SwapFurnitureWithRealModels(instance);
+            DisableBakedInDoor(instance);
 
             System.IO.Directory.CreateDirectory(PrefabRoot);
             PrefabUtility.SaveAsPrefabAsset(instance, PrefabRoot + "Cabin_v2.prefab");
             UnityEngine.Object.DestroyImmediate(instance);
+        }
+
+        /// <summary>Cabin.fbx bakes a static SM_Door leaf into the doorway
+        /// (Cabin_v2/README.md's inventory claims the FBX is "everything except
+        /// the door" — it is not). The door the player actually uses is a
+        /// separate prefab, BuildDoorPrefab -> Prop_FrontDoor_Locked, so with
+        /// both present a second door is left standing in the frame once the
+        /// real one swings open.
+        ///
+        /// Disabled rather than deleted, same as SwapFurnitureWithRealModels
+        /// does with the blockout furniture, and left in WallHeightObjects so it
+        /// stays correctly scaled if it is ever switched back on. Visual-only:
+        /// SM_Door is in neither MeshColliderObjects nor BoxColliderObjects, so
+        /// nothing loses collision — the doorway is blocked by the interactive
+        /// door's own BoxCollider.</summary>
+        private static void DisableBakedInDoor(GameObject cabin)
+        {
+            Transform door = cabin.transform.Find("SM_Door");
+            if (door == null)
+            {
+                Debug.LogWarning("[CabinV2Builder] SM_Door not found on Cabin_v2 — baked-in door not disabled.");
+                return;
+            }
+
+            door.gameObject.SetActive(false);
         }
 
         /// <summary>Raises the room from the FBX's authored 2.7 m ceiling to

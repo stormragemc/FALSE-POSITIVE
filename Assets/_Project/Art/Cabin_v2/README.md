@@ -26,7 +26,15 @@ this FBX, if the room needs a different height.
 
 ## Object inventory
 
-### `Cabin.fbx` (everything except the door)
+### `Cabin.fbx` (the shell — including a static copy of the door)
+
+⚠️ This FBX **does** contain its own `SM_Door` leaf sitting in the doorway (see
+`WallHeightObjects` in `CabinV2Builder`), so it is *not* "everything except the
+door" as this table used to claim. The door the player opens is the separate
+`Door.fbx` → `Prop_FrontDoor_Locked` prefab; with both visible, a second door
+stays standing in the frame once the real one swings open.
+`CabinV2Builder.DisableBakedInDoor` `SetActive(false)`s the baked-in leaf when
+`Cabin_v2.prefab` is built. It carries no collider, so that is visual-only.
 
 | Object | Description |
 |---|---|

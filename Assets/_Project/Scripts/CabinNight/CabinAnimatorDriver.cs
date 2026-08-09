@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 namespace FalsePositive.CabinNight
@@ -28,8 +29,19 @@ namespace FalsePositive.CabinNight
     {
         [SerializeField] private CabinIdleProfile defaultProfile;
 
+        /// <summary>How long to wait after a profile change before the feet are
+        /// measured against it. PlayState below crossfades the muscle pose over
+        /// 0.25s while ApplyBodyYOffset moves the hips instantly, so measuring
+        /// one frame later catches a transitional shape — hips already dropped,
+        /// legs still in the old pose — and bakes a correction for a pose that
+        /// no longer exists by the time the blend finishes. Same wait, and the
+        /// same reason, as Cutscene.CutsceneStage.PoseBorrowed.</summary>
+        private const float PoseSettleSeconds = 0.3f;
+
         private Animator _animator;
         private Vector3 _bodyRestLocalPosition;
+        private Coroutine _plant;
+        private bool _plantsFeet;
 
         public void Configure(CabinIdleProfile profile) => defaultProfile = profile;
 
@@ -37,6 +49,11 @@ namespace FalsePositive.CabinNight
         {
             _animator = GetComponentInChildren<Animator>();
             if (_animator != null) _bodyRestLocalPosition = _animator.transform.localPosition;
+
+            // The player carries this component too (for the Lift_Crouch beat)
+            // but is moved by a CharacterController with gravity — the floor
+            // already finds them, and re-seating their root would fight it.
+            _plantsFeet = GetComponent<CharacterController>() == null;
         }
 
         private void Start() => PlayProfile(defaultProfile);
@@ -47,6 +64,7 @@ namespace FalsePositive.CabinNight
         {
             PlayState(StateName(profile), 0.25f);
             ApplyBodyYOffset(profile);
+            SchedulePlant(profile);
         }
 
         /// <summary>Cross-fades directly to a named state in CabinCast.controller —
@@ -54,9 +72,44 @@ namespace FalsePositive.CabinNight
         /// single CabinIdleProfile (Cutscene.ScriptedActor.MoveTo calls this).</summary>
         public void PlayState(string stateName, float fadeSeconds)
         {
+            // A walk or a lift is a MOVE, not a settled pose. Cancelling here
+            // stops a re-plant queued by the profile that preceded it from
+            // firing mid-stride and re-seating a character who is halfway
+            // across the room — and, since a re-plant re-fits the collider,
+            // from switching collision back on under a walk that deliberately
+            // turned it off (Cutscene.ScriptedActor.MoveTo).
+            CancelPlant();
             if (_animator == null || string.IsNullOrEmpty(stateName)) return;
             _animator.CrossFadeInFixedTime(stateName, fadeSeconds, 0);
         }
+
+        /// <summary>Re-grounds the character and re-fits its collider once the
+        /// new pose has settled. Every pose in CabinPoseLibrary that drops the
+        /// hips drops the feet with them (no foot IK on this rig), and the
+        /// collider that has to match a kneeling body is not the one that
+        /// matches a standing one — see CabinFootPlanter.</summary>
+        private void SchedulePlant(CabinIdleProfile profile)
+        {
+            if (!_plantsFeet || !isActiveAndEnabled) return;
+            CancelPlant();
+            _plant = StartCoroutine(PlantAfterBlend(profile));
+        }
+
+        private void CancelPlant()
+        {
+            if (_plant == null) return;
+            StopCoroutine(_plant);
+            _plant = null;
+        }
+
+        private IEnumerator PlantAfterBlend(CabinIdleProfile profile)
+        {
+            yield return new WaitForSeconds(PoseSettleSeconds);
+            _plant = null;
+            CabinFootPlanter.PlantAndFit(gameObject, profile);
+        }
+
+        private void OnDisable() => _plant = null;
 
         private void ApplyBodyYOffset(CabinIdleProfile profile)
         {

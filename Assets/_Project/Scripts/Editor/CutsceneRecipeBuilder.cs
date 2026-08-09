@@ -176,10 +176,13 @@ namespace FalsePositive.Editor
         /// as the VO-attach path.</summary>
         private static CutsceneBeat SfxBeat(string sfxName, float hold, string flag = null)
         {
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".mp3");
+            // .wav first for the same reason VoBeat does it — replacement clips
+            // arrive as wav and land beside the mp3 they supersede.
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".wav")
+                ?? AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".mp3");
             if (clip == null)
             {
-                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing SFX {sfxName}.mp3 under {SfxRoot} — beat will be a silent hold.");
+                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing SFX {sfxName}.wav/.mp3 under {SfxRoot} — beat will be a silent hold.");
             }
             return new CutsceneBeat
             {
@@ -188,6 +191,21 @@ namespace FalsePositive.Editor
                 voClip = clip,
             };
         }
+
+        /// <summary>A beat that is nothing but time under black — no line, no
+        /// clip. Used by the four "fuzzy" transitions, which used to carry
+        /// their own fuzzy_whoosh SFX. GameFlowDirector now plays one
+        /// scene-transition sound for every scene change (including the ones
+        /// these recipes never covered), so keeping a clip here would double
+        /// up; the hold stays so the disorienting black gap keeps its length.
+        /// CutsceneDirector.PlayBeat holds for voClip.length whenever a clip
+        /// exists, so a clip here would also stretch the black to that clip's
+        /// full duration rather than the authored hold.</summary>
+        private static CutsceneBeat HoldBeat(float hold, string flag = null) => new CutsceneBeat
+        {
+            holdSecondsIfNoClip = hold,
+            memoryFlagToSet = flag,
+        };
 
         /// <summary>A dialogue beat whose voClip is loaded directly from
         /// Art/Audio/VO by filename, for lines added after the AttachVoClips
@@ -263,11 +281,13 @@ namespace FalsePositive.Editor
                         "Please — try to recall everything that happened last night.", 8f)),
 
                 // The four "fuzzy" transitions (§10: "the same asset, parameterised")
-                // share one rewind-whoosh SFX, distinguished only by fade timing —
-                // FuzzyToNight is the reverse/rewind (long, disorienting), the
-                // other three are the forward return (shorter, snappier).
+                // are distinguished only by fade/hold timing — FuzzyToNight is the
+                // reverse/rewind (long, disorienting), the other three are the
+                // forward return (shorter, snappier). The shared rewind-whoosh SFX
+                // they used to carry is gone: GameFlowDirector.PlayTransitionSound
+                // now sounds every scene change, these four included.
                 Recipe(CutsceneId.FuzzyToNight, 1.2f, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 1.4f)),
+                    HoldBeat(1.4f)),
                 Recipe(CutsceneId.StandFromChair, 0.2f, 0.4f,
                     SfxBeat("chair_creak", 0.6f)),
 
@@ -284,9 +304,9 @@ namespace FalsePositive.Editor
                 Recipe(CutsceneId.CallForNick, 0.2f, 0.3f,
                     SfxBeat("wind_gust_roar", 1.8f)),
                 Recipe(CutsceneId.FuzzyToInterrogation, 1.2f, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                    HoldBeat(0.9f)),
                 Recipe(CutsceneId.FuzzyToMorning, 1.2f, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                    HoldBeat(0.9f)),
 
                 Recipe(CutsceneId.PriyaScreams, 0.3f, 0.5f,
                     Beat("PRIYA", "GUYS! GUYS! HELP! WHAT HAPPENED TO NICK? IVY! AARON! DAVID! GUYS, COME HERE PLEASE!", 4f,
@@ -319,7 +339,7 @@ namespace FalsePositive.Editor
                     VoBeat("PRIYA", "Nick? Nick, can you hear me?", "priya_can_you_hear_me", 2.5f)),
 
                 Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                    HoldBeat(0.9f)),
 
                 // Spassky's scripted P3 beats. These play in the interrogation
                 // room with the mic down, so they are pre-rendered rather than

@@ -67,6 +67,18 @@ namespace FalsePositive.Flow
         [SerializeField] private SettingsPanel settingsPanel;
         [SerializeField] private OutcomeScreen outcomeScreen;
 
+        [Header("Transition audio")]
+        /// <summary>2D one-shot source living in _Persistent, which is never
+        /// unloaded — so the clip keeps playing straight through
+        /// SceneRouter.EnsureLoaded/Activate and decays into the scene that
+        /// just came up. A source in either scene would be cut off mid-swap.
+        /// This is deliberately the only place a scene change makes a sound:
+        /// the cutscene recipes used to carry their own fuzzy_whoosh beat,
+        /// which covered four transitions and left Menu -> P1, P4 -> Outcome
+        /// and the memory interludes silent.</summary>
+        [SerializeField] private AudioSource transitionSource;
+        [SerializeField] private AudioClip transitionClip;
+
         [Header("Scene names — must match Build Settings exactly")]
         [SerializeField] private string mainMenuSceneName = "MainMenu";
         [SerializeField] private string interrogationSceneName = "Interrogation";
@@ -448,9 +460,27 @@ namespace FalsePositive.Flow
             StartCoroutine(MemoryInterludeRoutine(memoryPhase, id, onComplete));
         }
 
+        /// <summary>The scene-change sound, for every scene change. PlayOneShot
+        /// rather than Play so an interlude that returns to Interrogation while
+        /// the outbound clip is still ringing layers instead of cutting itself
+        /// off. Silently no-ops if the persistent source or clip is unwired —
+        /// a missing sound must never stall a transition.</summary>
+        private void PlayTransitionSound()
+        {
+            if (transitionSource != null && transitionClip != null)
+            {
+                transitionSource.PlayOneShot(transitionClip);
+            }
+        }
+
         private IEnumerator MemoryInterludeRoutine(GamePhase memoryPhase, CutsceneId id, Action onComplete)
         {
             string memoryScene = SceneNameFor(memoryPhase);
+
+            // Hard cut, but not a silent one — this is still the player being
+            // dropped into a memory, and it is one of the transitions that had
+            // no sound at all before.
+            PlayTransitionSound();
 
             if (sceneRouter != null && !string.IsNullOrEmpty(memoryScene))
             {
@@ -480,6 +510,8 @@ namespace FalsePositive.Flow
             _transitioning = true;
             PhaseExiting?.Invoke(Phase);
             CancelSpokenPrompt(); // a phase can never leave a spoken prompt pending for the next one
+
+            PlayTransitionSound();
 
             float fadeDuration = config != null ? config.fadeDurationSeconds : 0.25f;
             if (fader != null) yield return fader.FadeToBlack(fadeDuration);

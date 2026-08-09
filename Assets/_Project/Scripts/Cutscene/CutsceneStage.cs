@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using FalsePositive.CabinNight;
@@ -239,15 +240,95 @@ namespace FalsePositive.Cutscene
                 MoveActor(ivy, ivyFloor, 3.5f));
         }
 
+        /// <summary>True from the moment OutIntoTheSnow starts M2_DoorOpen.playable
+        /// until control is fully back with the player. The beat's VO recipe is
+        /// 7.5 s and the cinematic is 13.4 s, so anything that used to chain off
+        /// the VO finishing has to wait on this instead — see
+        /// RunAfterDoorSequence and M2MorningController.OnDoorOpened.</summary>
+        public bool DoorSequenceRunning { get; private set; }
+
+        /// <summary>Invokes onDone once the door cinematic has finished, or
+        /// immediately if it is not running. Exists because RequestCutscene's
+        /// callback fires when the *VO* ends, five seconds before the cinematic
+        /// does, which would start the lift interlude over the top of the orbit.</summary>
+        public void RunAfterDoorSequence(Action onDone)
+        {
+            if (!DoorSequenceRunning)
+            {
+                onDone?.Invoke();
+                return;
+            }
+
+            StartCoroutine(WaitForDoorSequence(onDone));
+        }
+
+        private IEnumerator WaitForDoorSequence(Action onDone)
+        {
+            while (DoorSequenceRunning) yield return null;
+            onDone?.Invoke();
+        }
+
         private IEnumerator OutIntoTheSnow()
         {
             GameObject aaron = GameObject.Find("Aaron Teague (Male)");
             GameObject ivy = GameObject.Find("Ivy Teague (Female)");
             GameObject priya = GameObject.Find("Priya Raman (Female)");
             GameObject body = GameObject.Find("Prop_NickBody");
-            GameObject player = GameObject.Find("Player (Male - First Person)");
             Vector3 bodyPos = body != null ? body.transform.position : new Vector3(2.3f, 0.1f, -6.3f);
             Vector3 nearBody = bodyPos + new Vector3(1.2f, 0f, 0.5f);
+
+            // The cast still walks out on coroutines — only the player's camera,
+            // the player's arm and the door itself moved to Timeline. They stop
+            // 1.3-1.7 m from the body, i.e. inside the 2.2 m circle the camera
+            // orbits on, so the orbit never clips through anyone.
+            Vector3[] aaronPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody };
+            Vector3[] ivyPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(-0.6f, 0f, 0.2f) };
+            Vector3[] priyaPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(0.4f, 0f, -0.6f) };
+
+            M2DoorOpenSequence sequence = FindDoorSequence();
+            if (sequence == null)
+            {
+                Debug.LogWarning("[CutsceneStage] No M2DoorOpenSequence in the scene — run " +
+                                 "'Tools/False Positive/Bootstrap/T05 - Build M2 Door Timeline'. " +
+                                 "Falling back to the pre-Timeline walk-out.");
+                yield return LegacyOutIntoTheSnow(bodyPos, aaronPath, ivyPath, priyaPath);
+                yield break;
+            }
+
+            // Set before Play, because Play invokes its callback synchronously
+            // on every failure path (no bindings, no player) — the flag then
+            // clears in the same frame and the wait below simply falls through.
+            DoorSequenceRunning = true;
+            sequence.Play(() => DoorSequenceRunning = false);
+
+            // The three walks are timed to 7 s and the cinematic runs 13.4 s, so
+            // the cast is already standing over the body by the time the camera
+            // finishes crossing to it. Deliberate — the player arrives last.
+            yield return RunTogether(
+                MoveActorAlong(aaron, aaronPath, SpeedFor(aaron, aaronPath)),
+                MoveActorAlong(ivy, ivyPath, SpeedFor(ivy, ivyPath)),
+                MoveActorAlong(priya, priyaPath, SpeedFor(priya, priyaPath)));
+
+            while (DoorSequenceRunning) yield return null;
+        }
+
+        private static M2DoorOpenSequence FindDoorSequence()
+        {
+            GameObject sequencing = GameObject.Find("Sequencing");
+            return sequencing != null ? sequencing.GetComponent<M2DoorOpenSequence>() : null;
+        }
+
+        /// <summary>The coroutine walk-out this beat used before M2_DoorOpen.playable,
+        /// kept as the fallback for a scene that has not had the Timeline builder
+        /// run over it. Not dead code — a fresh MemorySceneBuilderV2 pass drops
+        /// the proxy rig and the director, and this is what stops the beat from
+        /// leaving the player indoors and gated when that happens.</summary>
+        private IEnumerator LegacyOutIntoTheSnow(Vector3 bodyPos, Vector3[] aaronPath, Vector3[] ivyPath, Vector3[] priyaPath)
+        {
+            GameObject aaron = GameObject.Find("Aaron Teague (Male)");
+            GameObject ivy = GameObject.Find("Ivy Teague (Female)");
+            GameObject priya = GameObject.Find("Priya Raman (Female)");
+            GameObject player = GameObject.Find("Player (Male - First Person)");
 
             // Pulled back from the body (was (-1.0, 0, 0.3), ~1.0 m out) to
             // (-1.6, 0, 0.6), ~1.7 m out — close enough to keep
@@ -270,16 +351,7 @@ namespace FalsePositive.Cutscene
             PlayerInputRouter input = FindPlayerInput();
             input?.SetMovementGated(true);
 
-            // The door itself never physically opened before — DoorInteractable
-            // played a creak and fired Opened, but nothing rotated the mesh,
-            // so "out into the snow" played out with a still-shut door. Swing
-            // it open across this same beat, alongside the cast walking
-            // through it — including the player, who used to phase straight
-            // through the wall several metres from the actual doorway.
             Vector3[] playerPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, playerSpot };
-            Vector3[] aaronPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody };
-            Vector3[] ivyPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(-0.6f, 0f, 0.2f) };
-            Vector3[] priyaPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(0.4f, 0f, -0.6f) };
 
             // CutsceneRecipeBuilder gives OutIntoTheSnow three beats totalling
             // 7.5 s. The routed path (through the doorway, around the chamfer
@@ -440,7 +512,9 @@ namespace FalsePositive.Cutscene
             // RunCarryArrival), and a live collider on the body would fight
             // the player's CharacterController the whole way. Re-enabled by
             // RunCarryArrival once the carry actually ends.
-            Object.Destroy(liftGo);
+            // Qualified: `using System` (added for Action, above) makes a bare
+            // `Object` ambiguous with System.Object.
+            UnityEngine.Object.Destroy(liftGo);
 
             if (ivyLiftLineClip != null)
             {
@@ -780,7 +854,7 @@ namespace FalsePositive.Cutscene
             foreach (BorrowedActor b in _borrowed)
             {
                 if (!b.WantsPose || b.Go == null || !b.Go.activeSelf) continue;
-                PlantFeet(b.Go);
+                PlantFeet(b.Go, b.Pose);
             }
         }
 
@@ -796,34 +870,14 @@ namespace FalsePositive.Cutscene
         /// player rig at +0.92, i.e. a full hip-height below the floor, while
         /// the CapsuleCollider stayed correctly at 0.
         ///
-        /// Uses the humanoid foot bones, NOT renderer bounds. SkinnedMeshRenderer
-        /// bounds are a conservative box that does not hug the animated pose:
-        /// measuring those over-lifted the whole cast by ~0.35m and left them
-        /// visibly hovering with their feet at y = 0.40.</summary>
-        private static void PlantFeet(GameObject go)
+        /// The measurement itself now lives in CabinNight.CabinFootPlanter, so
+        /// the cutscene path and the scene-build path share one implementation
+        /// — and this path picks up the ground raycast it never had. It used to
+        /// plant feet at the actor's own root Y, which is only the floor if
+        /// whoever authored that root Y guessed the floor correctly.</summary>
+        private static void PlantFeet(GameObject go, CabinIdleProfile profile)
         {
-            Animator animator = go.GetComponentInChildren<Animator>();
-            if (animator == null || !animator.isHuman) return;
-
-            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (leftFoot == null && rightFoot == null) return;
-
-            float lowest = leftFoot == null ? rightFoot.position.y
-                : rightFoot == null ? leftFoot.position.y
-                : Mathf.Min(leftFoot.position.y, rightFoot.position.y);
-
-            float scale = Mathf.Approximately(go.transform.lossyScale.y, 0f) ? 1f : go.transform.lossyScale.y;
-            // The foot bone is the ankle, not the sole — leave a boot's worth
-            // of clearance under it or the character sinks to the shins.
-            const float SoleToAnkle = 0.09f;
-            float target = go.transform.position.y + SoleToAnkle * scale;
-
-            float lift = target - lowest;
-            if (Mathf.Abs(lift) < 0.005f) return;
-
-            Transform body = animator.transform;
-            body.localPosition += new Vector3(0f, lift / scale, 0f);
+            CabinFootPlanter.Plant(go, profile);
         }
 
         private void ReturnBorrowed()
@@ -1103,7 +1157,7 @@ namespace FalsePositive.Cutscene
             // bent — and PlantFeet would bake in a correction for that
             // transitional pose instead of the settled standing one.
             yield return new WaitForSeconds(0.3f);
-            if (nick != null) PlantFeet(nick);
+            if (nick != null) PlantFeet(nick, CabinIdleProfile.Confrontational);
             if (fader != null) yield return fader.FadeFromBlack(0.12f);
 
             // 5-11s — the argument, David and Nick alone at the fire.

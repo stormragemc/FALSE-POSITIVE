@@ -279,10 +279,10 @@ namespace FalsePositive.Editor
         /// <summary>Loop AudioSource, playOnAwake, on the given GameObject — clock tick, and (from MemorySceneBuilderV2) fire crackle / interior wind.</summary>
         private static void AddAmbientLoop(GameObject go, string clipName, float volume = 1f, float maxDistance = 4f)
         {
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
+            AudioClip clip = LoadSfx(clipName);
             if (clip == null)
             {
-                Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}{clipName}.mp3 not found — skipping ambient loop on {go.name}.");
+                Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}{clipName}.wav/.mp3 not found — skipping ambient loop on {go.name}.");
                 return;
             }
             AudioSource source = go.AddComponent<AudioSource>();
@@ -302,13 +302,24 @@ namespace FalsePositive.Editor
             go.AddComponent<FalsePositive.Audio.LoopOnEnable>();
         }
 
+        /// <summary>Loads a clip from Art/Audio/SFX by bare filename, preferring
+        /// .wav over .mp3. The original library is all mp3; newer clips arrive as
+        /// wav, and a replacement drops in beside the old file rather than
+        /// overwriting it, so wav-first is what makes the swap take effect.
+        /// Same shape as CutsceneRecipeBuilder.VoBeat's extension fallback.</summary>
+        internal static AudioClip LoadSfx(string clipName)
+        {
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".wav")
+                ?? AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
+        }
+
         /// <summary>Sets a serialized AudioClip field by name, loading from Art/Audio/SFX by filename.</summary>
         private static void SetClip(Interactable interactable, string fieldName, string clipName)
         {
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + clipName + ".mp3");
+            AudioClip clip = LoadSfx(clipName);
             if (clip == null)
             {
-                Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}{clipName}.mp3 not found — {interactable.name}.{fieldName} left unset.");
+                Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}{clipName}.wav/.mp3 not found — {interactable.name}.{fieldName} left unset.");
                 return;
             }
             SerializedObject so = new SerializedObject(interactable);
@@ -438,9 +449,9 @@ namespace FalsePositive.Editor
             SetClip(radio, "tuningSweepClip", "radio_tuning_sweep");
             SetClip(radio, "lockOnClip", "radio_lock_on");
 
-            AudioClip staticClip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + "radio_static_loop.mp3");
+            AudioClip staticClip = LoadSfx("radio_static_loop");
             if (staticClip != null) staticSource.clip = staticClip;
-            else Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}radio_static_loop.mp3 not found — radio static loop left unset.");
+            else Debug.LogWarning($"[MemorySceneDressing] {SfxRoot}radio_static_loop.wav/.mp3 not found — radio static loop left unset.");
         }
 
         // SM_Cabin_Stairs measured in Memory_CabinNight: x in [3.90, 5.00]

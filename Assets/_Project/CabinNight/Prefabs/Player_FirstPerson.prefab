@@ -96,7 +96,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
@@ -148,7 +148,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4d995679856d48c98114604652532d2d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Player.FirstPersonCameraMotion
   referenceWalkSpeed: 3.2
   walkFrequency: 1.7
@@ -180,6 +180,7 @@ GameObject:
   - component: {fileID: 3385422190330072213}
   - component: {fileID: 6705264634460684273}
   - component: {fileID: 5521722407932056763}
+  - component: {fileID: 924249687555136932}
   m_Layer: 0
   m_Name: Player_FirstPerson
   m_TagString: Untagged
@@ -214,7 +215,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0b15f1a3a2bb3774698e6fe67d0d6fca, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinAnimatorDriver
   defaultProfile: 1
 --- !u!143 &4005779333941546554
@@ -300,6 +301,28 @@ MonoBehaviour:
   raycastCamera: {fileID: 7985865594081419532}
   input: {fileID: 3385422190330072213}
   maxDistance: 3
+--- !u!114 &924249687555136932
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4227249352877608016}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18da4f16ca808b9498e9cd505fcf6834, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Player.DrunkCameraSway
+  cutsceneId: 4
+  playerCamera: {fileID: 7626765035674342967}
+  rampInSeconds: 0.4
+  rampOutSeconds: 1.5
+  yawDegrees: 3.5
+  pitchDegrees: 2
+  rollDegrees: 2.5
+  yawHz: 0.22
+  pitchHz: 0.31
+  rollHz: 0.17
 --- !u!1001 &4462539593484673842
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -166,13 +166,31 @@ namespace FalsePositive.Dialogue
 
         private void EnterP1()
         {
-            if (!_hasSeatedOnce && binder != null && binder.PlayerState != null)
+            bool firstEntry = !_hasSeatedOnce;
+            if (firstEntry && binder != null && binder.PlayerState != null)
             {
                 binder.PlayerState.BeginSeated();
                 _hasSeatedOnce = true;
             }
 
             Dialogue?.Suspend();
+
+            // CutsceneId.Wake -- waking up at the table, disoriented, to "David.
+            // David. David!" on the intercom -- only plays on the actual first
+            // entry into P1. Screen-lit, and DrunkCutsceneBinder ramps the drunk
+            // post-process across it (Rendering/DrunkColorPulseFeature).
+            if (firstEntry)
+            {
+                _flow.RequestCutscene(CutsceneId.Wake, BeginSpokenPrompt);
+            }
+            else
+            {
+                BeginSpokenPrompt();
+            }
+        }
+
+        private void BeginSpokenPrompt()
+        {
             _flow.RequestSpokenPrompt("Who are you? Where am I?", requireLoud: false, onSatisfied: () =>
             {
                 // The prompt is already answered and hidden at this point —

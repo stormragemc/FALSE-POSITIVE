@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using FalsePositive.CabinNight;
 using FalsePositive.Core;
+using FalsePositive.Flow;
 using FalsePositive.Interaction;
 using FalsePositive.Player;
 using UnityEditor;
@@ -317,6 +318,18 @@ namespace FalsePositive.Editor
             SetField(rig, "input", router);
             SetField(rig, "playerCamera", view);
             SetField(rig, "config", config);
+
+            // DrunkCameraSway (the same component driving the sway across
+            // CutsceneId.Wake in Interrogation.unity) reused for M1_Night's own
+            // wake-up, CutsceneId.StandFromChair — it only needs a camera
+            // Transform and finds CutsceneDirector itself, so it works
+            // unchanged on this rig. Applied to the prefab asset by
+            // Editor/ProjectBootstrapBuilder's caller chain, not just this
+            // scene instance, per docs/UNITY_CLIENT.md.
+            DrunkCameraSway sway = player.GetComponent<DrunkCameraSway>();
+            if (sway == null) sway = player.AddComponent<DrunkCameraSway>();
+            SetField(sway, "playerCamera", view);
+            SetField(sway, "cutsceneId", CutsceneId.StandFromChair);
         }
 
         /// <summary>

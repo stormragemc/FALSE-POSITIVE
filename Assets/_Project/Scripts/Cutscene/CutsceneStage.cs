@@ -220,11 +220,18 @@ namespace FalsePositive.Cutscene
             Vector3 standing = new Vector3(view.localPosition.x, 1.64f, view.localPosition.z);
             view.localPosition = seated;
 
-            // CutsceneRecipeBuilder gives StandFromChair a single 0.6s SFX
-            // beat (chair_creak) — this must finish within that window or
-            // the fade-in reveals the camera still mid-rise.
+            // A slow, heavy stand -- stretched from the original 0.5s to sell the
+            // same disorientation Wake gets from its drunk post-process/fade/sway
+            // (Rendering/DrunkEffectController.cs, Player/DrunkCameraSway.cs, both
+            // now also driven off CutsceneId.StandFromChair via a second
+            // Cutscene/DrunkCutsceneBinder instance in _Persistent). The recipe's
+            // chair_creak SFX beat alone is far shorter than this -- CutsceneRecipeBuilder
+            // pads it with a HoldBeat so the total beat time covers the rise;
+            // shortening this constant without shortening that pad (or vice versa)
+            // will make Finished fire while the camera is still mid-rise, or leave
+            // the beat holding on an empty room after the player is already standing.
             float t = 0f;
-            const float duration = 0.5f;
+            const float duration = 5f;
             while (t < duration)
             {
                 t += Time.deltaTime;
@@ -1102,10 +1109,18 @@ namespace FalsePositive.Cutscene
 
         /// <summary>CS-16B — when it went wrong, ~13 s. Same room and cast as
         /// CS-16A so the difference is carried by blocking and performance, per
-        /// §5's memory-pair rule. Two staged moments separated by a hard blink:
-        /// the table with everyone still present, then David and Nick alone at
-        /// the fire. Ends with Nick out through the front door and the scene
-        /// handed back exactly as M1_Night left it.</summary>
+        /// §5's memory-pair rule. Two staged moments: the table with everyone
+        /// still present, then David and Nick alone at the fire. Ends with Nick
+        /// out through the front door and the scene handed back exactly as
+        /// M1_Night left it.
+        ///
+        /// The room swap between those two moments used to hide under a 0.12s
+        /// hard blink (this recipe plays screen-lit, so that was its own local
+        /// cover, not CutsceneDirector's). Removed along with every other
+        /// cutscene's black cover -- the room now visibly re-arranges itself
+        /// rather than cutting under black. If that reads as a jump cut rather
+        /// than a transition, the fix is staging Ivy/Aaron's exit and Nick's
+        /// walk to the fire as a move, not this blink coming back.</summary>
         private IEnumerator WhenItWentWrong()
         {
             Vector3 table = TableCentre();

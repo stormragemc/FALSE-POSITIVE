@@ -130,6 +130,7 @@ namespace FalsePositive.Editor
             element.FindPropertyRelative("fadeOutSeconds").floatValue = recipe.fadeOutSeconds;
             element.FindPropertyRelative("fadeInSeconds").floatValue = recipe.fadeInSeconds;
             element.FindPropertyRelative("keepScreenLit").boolValue = recipe.keepScreenLit;
+            element.FindPropertyRelative("endsBlack").boolValue = recipe.endsBlack;
 
             SerializedProperty beatsProp = element.FindPropertyRelative("beats");
             beatsProp.arraySize = recipe.beats.Length;
@@ -159,6 +160,17 @@ namespace FalsePositive.Editor
             speaker = speaker,
             line = line,
             holdSecondsIfNoClip = hold,
+            memoryFlagToSet = flag,
+        };
+
+        /// <summary>A wordless, clipless beat that just waits — for padding a recipe's
+        /// total beat time past what its dialogue/SFX beats alone add up to, e.g. so
+        /// Finished doesn't fire while CutsceneStage is still mid-animation for a beat
+        /// with no VO of its own (see StandFromChair, stretched to a 5s stand-up in
+        /// CutsceneStage.cs but carrying only a sub-second chair_creak SFX beat).</summary>
+        private static CutsceneBeat HoldBeat(float seconds, string flag = null) => new CutsceneBeat
+        {
+            holdSecondsIfNoClip = seconds,
             memoryFlagToSet = flag,
         };
 
@@ -245,11 +257,36 @@ namespace FalsePositive.Editor
             beats = beats,
         };
 
+        /// <summary>Same as Recipe(), but the screen never fades back in at the
+        /// end — it fades to black, plays, and stays black (CutsceneRecipe.
+        /// endsBlack). For the four Fuzzy* recipes only: they ARE a scene
+        /// transition (§10: "the same asset, parameterised"), and every one of
+        /// their call sites immediately follows with GameFlowDirector.
+        /// AdvancePhase()/GoToPhase(), which fades back in itself once the new
+        /// scene is loaded. A plain Recipe() here used to fade back in for that
+        /// one idle moment and then immediately fade out again for the phase
+        /// transition — a visible flash of the old scene between two blacks.</summary>
+        private static CutsceneRecipe TransitionRecipe(CutsceneId id, float fadeOut, params CutsceneBeat[] beats) => new CutsceneRecipe
+        {
+            id = id,
+            fadeOutSeconds = fadeOut,
+            fadeInSeconds = 0f,
+            endsBlack = true,
+            beats = beats,
+        };
+
         private static CutsceneRecipe[] BuildRecipes()
         {
             CutsceneRecipe[] recipes =
             {
-                Recipe(CutsceneId.Wake, 0f, 0.6f,
+                // Screen-lit rather than the old instant-black form -- this is
+                // what the player actually watches when the drunk post-process
+                // (Rendering/DrunkColorPulseFeature) ramps up as they come to at
+                // the interrogation table, driven by Cutscene/DrunkCutsceneBinder
+                // off this recipe's Started/Finished. See
+                // PhaseDialogueController.EnterP1 for where it's now requested --
+                // it used to be authored with no call site at all.
+                VisibleRecipe(CutsceneId.Wake,
                     Beat("???", "David.", 1.2f),
                     Beat("???", "David.", 1.0f),
                     Beat("???", "David!", 1.0f)),
@@ -273,33 +310,51 @@ namespace FalsePositive.Editor
                 // share one rewind-whoosh SFX, distinguished only by fade timing —
                 // FuzzyToNight is the reverse/rewind (long, disorienting), the
                 // other three are the forward return (shorter, snappier).
-                Recipe(CutsceneId.FuzzyToNight, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToNight, 1.2f,
                     SfxBeat("fuzzy_whoosh", 1.4f)),
-                Recipe(CutsceneId.StandFromChair, 0.2f, 0.4f,
-                    SfxBeat("chair_creak", 0.6f)),
+                // Screen-lit -- CutsceneStage stages this one (chair/actor pose)
+                // while the fade covered it before; that staging is now visible.
+                // Slow/echoed VO, the drunk post-process and DrunkCameraSway all
+                // ramp across this one too (a second Cutscene/DrunkCutsceneBinder
+                // instance in _Persistent keyed to this id) -- HoldBeat pads the
+                // total beat time to match CutsceneStage.StandFromChair()'s 5s
+                // rise. chair_creak.mp3 is 1.54s, played at the binder's 0.75x
+                // slow pitch during this beat (CutsceneDirector.PlayBeat divides
+                // hold by voSource.pitch) -> ~2.06s, so the pad is ~2.95s rather
+                // than 5 minus the raw 1.54s. Re-measure both if either the
+                // pitch or the SFX asset ever changes.
+                VisibleRecipe(CutsceneId.StandFromChair,
+                    SfxBeat("chair_creak", 0.6f),
+                    HoldBeat(2.95f)),
 
-                Recipe(CutsceneId.RadioClears, 0.2f, 0.3f,
+                VisibleRecipe(CutsceneId.RadioClears,
                     Beat("RADIO", "A snowstorm is moving through the area. Please stay indoors until conditions improve.", 3f,
                         MemoryFlagIds.HeardRadioWarning)),
 
-                Recipe(CutsceneId.SomeoneLeft, 0.3f, 0.3f,
+                // Screen-lit -- CutsceneStage stages this one (door swing) while
+                // the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.SomeoneLeft,
                     SfxBeat("door_latch_close", 1.5f, MemoryFlagIds.SawDoorClose)),
 
                 // Never actually raised by M1NightController.cs (the call-for-Nick
                 // beat is a RequestSpokenPrompt, not a cutscene) — filled anyway so
                 // a future direct call never hits an empty stub.
-                Recipe(CutsceneId.CallForNick, 0.2f, 0.3f,
+                VisibleRecipe(CutsceneId.CallForNick,
                     SfxBeat("wind_gust_roar", 1.8f)),
-                Recipe(CutsceneId.FuzzyToInterrogation, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToInterrogation, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
-                Recipe(CutsceneId.FuzzyToMorning, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToMorning, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
-                Recipe(CutsceneId.PriyaScreams, 0.3f, 0.5f,
+                // Screen-lit -- CutsceneStage stages this one (actor poses) while
+                // the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.PriyaScreams,
                     Beat("PRIYA", "Guys! Help! Something's happened to Nick! Ivy! Aaron! David! Please, come here!", 4f,
                         MemoryFlagIds.SawBody)),
 
-                Recipe(CutsceneId.TheyComeDown, 0.2f, 0.3f,
+                // Screen-lit -- CutsceneStage walks actors down for this one while
+                // the fade covered it before; that staging is now visible.
+                VisibleRecipe(CutsceneId.TheyComeDown,
                     SfxBeat("footsteps_stairs", 1.6f)),
 
                 // These three beats used to be fade-to-black+VO like everything
@@ -326,7 +381,7 @@ namespace FalsePositive.Editor
                     VoBeat("PRIYA", "Nick? Nick, can you hear me?", "PRIYA-006", 2.5f),
                     VoBeat("PRIYA", "Police? Our friend is hurt. We found him outside in the snow. Please send someone. Please hurry.", "PRIYA-007", 5f)),
 
-                Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
+                TransitionRecipe(CutsceneId.FuzzyToVerdict, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
                 // Spassky's scripted P3 beats. These play in the interrogation

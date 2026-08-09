@@ -59,6 +59,17 @@ namespace FalsePositive.Cutscene
         /// ScreenFader.Fade's duration&lt;=0 branch snaps straight to
         /// canvasGroup.alpha = 1 (fully black), it doesn't skip the fade.</summary>
         public bool keepScreenLit;
+
+        /// <summary>When true, PlayRoutine skips the trailing FadeFromBlack —
+        /// the cutscene fades to black, plays, and stays black. Only safe for a
+        /// recipe whose every call site immediately hands off to something else
+        /// that fades back in (a scene swap under GameFlowDirector.AdvancePhase,
+        /// or GoToPhase's own TransitionRoutine): the four Fuzzy* transitions
+        /// ARE that hand-off, not a cutscene watched for its own sake, so ending
+        /// them still-black plus ScreenFader.Fade's already-there early-out
+        /// collapses what used to be "fade in, immediately fade out again" into
+        /// one continuous fade. See CutsceneRecipeBuilder.TransitionRecipe.</summary>
+        public bool endsBlack;
     }
 
     [Serializable]
@@ -276,7 +287,8 @@ namespace FalsePositive.Cutscene
 
             if (timeline != null) timeline.Stop();
 
-            if (!keepScreenLit && fader != null) yield return fader.FadeFromBlack(recipe?.fadeInSeconds ?? 0.5f);
+            bool endsBlack = recipe != null && recipe.endsBlack;
+            if (!keepScreenLit && !endsBlack && fader != null) yield return fader.FadeFromBlack(recipe?.fadeInSeconds ?? 0.5f);
 
             IsPlaying = false;
             _playheadStart = -1f;
@@ -307,12 +319,25 @@ namespace FalsePositive.Cutscene
             }
 
             bool spoken = beat.voClip != null;
+
+            // AudioClip.length is fixed regardless of AudioSource.pitch -- at a
+            // lowered pitch (Cutscene/DrunkCutsceneBinder slows CutsceneId.Wake's
+            // VO for a slow-motion/drunk feel) actual playback takes
+            // length/pitch seconds, longer than length. Dividing by pitch here
+            // keeps the beat's hold (and therefore the subtitle) in sync with
+            // what's actually still playing, instead of cutting the slowed clip
+            // off mid-word. Only meaningful when this director owns the audio --
+            // when Timeline owns it, the clip plays to Timeline's own baked
+            // schedule and dividing here would hold the subtitle off it. No-op
+            // at the default pitch of 1 for every other cutscene.
+            float pitch = !timelineOwnsAudio && voSource != null ? Mathf.Max(0.01f, voSource.pitch) : 1f;
+
             // When Timeline owns the audio the hold must be the clip's exact
             // length: Timeline is playing to its own baked schedule, and any
             // padding here would slide the subtitle off the voice, cumulatively,
             // for the rest of the cutscene.
             float hold = spoken
-                ? beat.voClip.length + (timelineOwnsAudio ? 0f : audioTailSeconds)
+                ? beat.voClip.length / pitch + (timelineOwnsAudio ? 0f : audioTailSeconds)
                 : beat.holdSecondsIfNoClip;
 
             if (!string.IsNullOrEmpty(beat.line))

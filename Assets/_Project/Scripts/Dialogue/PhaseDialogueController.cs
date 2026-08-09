@@ -277,7 +277,10 @@ namespace FalsePositive.Dialogue
             if (_currentPhase == GamePhase.P2_Recall && !_awaitingClosingAnswer && (Marks.AllCovered || capReached))
             {
                 _awaitingClosingAnswer = true;
-                Dialogue.QueueSceneInstruction(
+                // Once, not standing. As a standing briefing the server re-applied
+                // this every turn, so the officer asked "What happened to Nick?"
+                // forever and P2 could never hand over to the verdict.
+                Dialogue.QueueSceneInstructionOnce(
                     "The witness has covered enough ground for this phase. Ask exactly: " +
                     "\"What happened to Nick?\" as your next question, then wait for their answer.");
                 return; // one more turn — the closing question and its answer — before advancing

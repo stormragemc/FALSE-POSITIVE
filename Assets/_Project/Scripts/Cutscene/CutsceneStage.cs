@@ -49,6 +49,11 @@ namespace FalsePositive.Cutscene
         private static readonly Quaternion DoorClosedRotation = Quaternion.Euler(270f, 0f, 0f);
         private const float DoorOpenYawDegrees = 100f;
 
+        /// <summary>Each half of the blink covering CS-16B's hour-long jump
+        /// forward. Long enough to read as a deliberate cut; the cast swap
+        /// happens inside it.</summary>
+        private const float JumpBlinkSeconds = 0.45f;
+
         // BO_Sofa's measured collider (Unity_RunCommand, Cabin_v2/Memory_CabinMorning):
         // center (0.75, 0.43, 0.25), size (1.0, 0.85, 3.5) -> x in [0.25, 1.25],
         // z in [-1.5, 2.0] at the sofa's ORIGINAL yaw 0. The sofa's open face
@@ -114,6 +119,35 @@ namespace FalsePositive.Cutscene
         {
             IEnumerator routine = isMorning ? MorningRoutine(id) : NightRoutine(id);
             if (routine != null) StartCoroutine(routine);
+        }
+
+        /// <summary>Holds until the dialogue reaches beat
+        /// <paramref name="beatIndex"/> of <paramref name="id"/>.
+        ///
+        /// Staging is choreographed against the script's beats, not against a
+        /// stopwatch. The fixed WaitForSeconds chain this replaces was written
+        /// against one particular set of clip lengths and silently went out of
+        /// step whenever the pacing moved.</summary>
+        private IEnumerator AtBeat(CutsceneId id, int beatIndex)
+        {
+            if (_director == null) yield break;
+            float target = _director.BeatStartTime(id, beatIndex);
+            while (_director.IsPlaying && _director.Playhead < target) yield return null;
+        }
+
+        /// <summary>Holds until the cutscene is completely over.
+        ///
+        /// Every teardown must go through this. Returning borrowed actors on a
+        /// timer is what emptied the cabin mid-toast: ReturnBorrowed
+        /// SetActive(false)s Nick, Aaron and Ivy back to how M1_Night had them,
+        /// so firing it early does not just stop the staging — it deletes the
+        /// cast from a scene that is still talking.</summary>
+        private IEnumerator UntilCutsceneEnds(CutsceneId id)
+        {
+            if (_director == null) yield break;
+            // The director clears IsPlaying only after its final beat, outro and
+            // fade, so this covers the tail as well as the dialogue.
+            while (_director.IsPlaying) yield return null;
         }
 
         private IEnumerator NightRoutine(CutsceneId id)
@@ -999,36 +1033,43 @@ namespace FalsePositive.Cutscene
 
             yield return PoseBorrowed();
 
-            // 0-4s — old friends. Priya holds up the school photograph of David
-            // and Nick. Parented to her hand rather than placed in the air, so
-            // it tracks her breathing idle instead of hanging beside her.
+            // Beat 0, PRIYA-014 "Fifteen years and you two still act exactly the
+            // same." — Priya holds up the school photograph of David and Nick.
+            // Parented to her hand rather than placed in the air, so it tracks
+            // her breathing idle instead of hanging beside her.
             GameObject schoolPhoto = PhotoProps.PutInHand(priya, david, "photo_school_david_nick");
-            yield return new WaitForSeconds(3.95f);
 
-            // 4-8s — Aaron and Ivy. Ivy turns to Aaron, then the half-second
-            // where Nick and Ivy look at each other instead of at him. Held
-            // under half a second: catchable, not certain.
-            // 4-8s — Priya swipes to the wedding photo on her phone. Smaller
-            // than a print because it is a phone screen, per §4.
+            // Beat 2, PRIYA-015 "And two years for these two." — she swipes to
+            // the wedding photo. Smaller than a print because it is a phone
+            // screen, per §4. Ivy turns to Aaron.
+            yield return AtBeat(CutsceneId.GoodYears, 2);
             PhotoProps.Discard(schoolPhoto);
             GameObject weddingPhoto = PhotoProps.PutInHand(priya, david, "photo_aaron_ivy_wedding", 0.075f, 0.055f);
-
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
-            yield return new WaitForSeconds(3.2f);
+
+            // Beat 3, AARON-004 "Barely survived it." — Ivy leans into Aaron,
+            // and for under half a second Nick and Ivy look at each other
+            // instead of at him. Catchable, not certain.
+            yield return AtBeat(CutsceneId.GoodYears, 3);
             if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, ivyAt), 0f);
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, nickAt), 0f);
             yield return new WaitForSeconds(0.45f);
             if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, table), 0f);
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
-            yield return new WaitForSeconds(0.35f);
 
-            // 8-11s — the toast. Everyone turns in to the middle of the table.
+            // Beat 4, PRIYA-016 "To us. Somehow." — the toast. Everyone turns in
+            // to the middle of the table.
+            yield return AtBeat(CutsceneId.GoodYears, 4);
             TurnAllToward(table, nick, aaron, ivy, priya);
-            yield return new WaitForSeconds(3f);
 
-            // 11-13s — the coat swap. Nick turns to David and throws the parka.
+            // Beat 6, NICK-004 "Here. You look fucking freezing." — the coat
+            // swap. Nick turns to David and throws the parka.
+            yield return AtBeat(CutsceneId.GoodYears, 6);
             if (nick != null) nick.transform.rotation = Quaternion.Euler(0f, YawToward(nickAt, david), 0f);
-            yield return new WaitForSeconds(2f);
+
+            // Teardown waits for the cutscene itself, never a timer. Anything
+            // earlier removes the cast from a room that is still speaking.
+            yield return UntilCutsceneEnds(CutsceneId.GoodYears);
 
             // The photographs belong to this memory only — they must not be left
             // in the cabin for the player to find during M1.
@@ -1068,15 +1109,24 @@ namespace FalsePositive.Cutscene
 
             yield return PoseBorrowed();
 
-            yield return new WaitForSeconds(2.55f);
-            // Ivy freezes: she looks at Nick, then at Aaron.
+            // Beat 2, AARON-005 "…Two years?" — Ivy freezes and looks at Aaron.
+            yield return AtBeat(CutsceneId.WhenItWentWrong, 2);
             if (ivy != null) ivy.transform.rotation = Quaternion.Euler(0f, YawToward(ivyAt, aaronAt), 0f);
-            yield return new WaitForSeconds(2.4f);
 
-            // Hard blink into the second moment. §4 jumps forward without
-            // anyone leaving the room, so the room has to change under a cut
-            // rather than have Ivy and Aaron walk out in front of the player.
-            if (fader != null) yield return fader.FadeToBlack(0.12f);
+            // Beat 4 — the jump forward to roughly 00:50. §4 moves an hour on
+            // without anyone leaving, so the room changes under a cut rather
+            // than having Ivy and Aaron walk out in front of the player.
+            //
+            // This blink is also the transition the player reads as "different
+            // scene now", so it runs long enough to be seen. It was 0.12s, which
+            // is below the threshold at which a cut registers as anything but a
+            // flicker — part of why the two halves looked like one continuous
+            // conversation. The matching time card is on the beat itself; the
+            // recipe deliberately does NOT also set dipToBlackBefore, because
+            // the swap has to happen inside *this* fade, where the cast is
+            // actually being changed.
+            yield return AtBeat(CutsceneId.WhenItWentWrong, 4);
+            if (fader != null) yield return fader.FadeToBlack(JumpBlinkSeconds);
 
             if (ivy != null) ivy.SetActive(false);
             if (aaron != null) aaron.SetActive(false);
@@ -1104,19 +1154,21 @@ namespace FalsePositive.Cutscene
             // transitional pose instead of the settled standing one.
             yield return new WaitForSeconds(0.3f);
             if (nick != null) PlantFeet(nick);
-            if (fader != null) yield return fader.FadeFromBlack(0.12f);
-
-            // 5-11s — the argument, David and Nick alone at the fire.
-            yield return new WaitForSeconds(3.4f);
+            if (fader != null) yield return fader.FadeFromBlack(JumpBlinkSeconds);
 
             // 11-13s — Nick goes outside, still in David's thin jacket. The
             // door is opened rather than walked through, then shut behind him.
             // Routed via the doorway waypoints: the front door sits in the
             // chamfered corner and a direct line crosses solid wall.
+            // Beat 8, RADIO-004 — Nick is already moving. Leaving on the radio
+            // line rather than on his own puts the door latch (beat 9) under the
+            // SFX beat written for it.
+            yield return AtBeat(CutsceneId.WhenItWentWrong, 8);
             yield return SwingFrontDoor(open: true, duration: 0.5f);
             yield return MoveActorAlong(nick, new[] { DoorwayCentre, DoorwayOutside }, 2.6f);
             yield return SwingFrontDoor(open: false, duration: 0.4f);
 
+            yield return UntilCutsceneEnds(CutsceneId.WhenItWentWrong);
             ReturnBorrowed();
         }
 

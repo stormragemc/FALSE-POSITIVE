@@ -173,6 +173,43 @@ namespace FalsePositive.Cutscene
             GameFlowDirector.Instance?.RegisterCutscenePlayer(this);
         }
 
+        /// <summary>Seconds since the current cutscene's first beat began.
+        /// CutsceneStage uses this to keep its staging on the same clock as the
+        /// dialogue.</summary>
+        public float Playhead => _playheadStart < 0f ? 0f : Time.time - _playheadStart;
+
+        private float _playheadStart = -1f;
+
+        /// <summary>When beat <paramref name="beatIndex"/> of
+        /// <paramref name="id"/> starts, measured from the first beat.
+        ///
+        /// Exists so staging never has to hardcode a time. CutsceneStage used to
+        /// choreograph CS-16A/CS-16B on its own fixed WaitForSeconds chain,
+        /// which was already ~4s shorter than the dialogue and drifted further
+        /// the moment pacing changed — it called ReturnBorrowed at 12.95s while
+        /// the audio ran to 17.2s, so the cast vanished from their chairs partway
+        /// through the toast and the last two lines played to an empty room.
+        /// Deriving both from the same recipe makes that class of bug
+        /// impossible.</summary>
+        public float BeatStartTime(CutsceneId id, int beatIndex)
+        {
+            if (_byId == null || !_byId.TryGetValue(id, out CutsceneRecipe recipe) || recipe == null)
+            {
+                return 0f;
+            }
+
+            float gap = CutscenePacing.BeatGapFor(id);
+            float time = 0f;
+            int last = Mathf.Min(beatIndex, recipe.beats.Length);
+            for (int i = 0; i < last; i++)
+            {
+                CutsceneBeat beat = recipe.beats[i];
+                time += beat.voClip != null ? beat.voClip.length : beat.holdSecondsIfNoClip;
+                time += gap;
+            }
+            return time;
+        }
+
         public void Play(CutsceneId id) => StartCoroutine(PlayRoutine(id));
 
         private IEnumerator PlayRoutine(CutsceneId id)
@@ -199,6 +236,7 @@ namespace FalsePositive.Cutscene
                 // field so the subtitles cannot drift off the voices — see
                 // CutscenePacing.
                 float beatGap = CutscenePacing.BeatGapFor(id);
+                _playheadStart = Time.time;
 
                 for (int i = 0; i < recipe.beats.Length; i++)
                 {
@@ -226,6 +264,7 @@ namespace FalsePositive.Cutscene
             if (!keepScreenLit && fader != null) yield return fader.FadeFromBlack(recipe?.fadeInSeconds ?? 0.5f);
 
             IsPlaying = false;
+            _playheadStart = -1f;
             Finished?.Invoke(id);
         }
 

@@ -392,7 +392,10 @@ namespace FalsePositive.Editor
                     // his half of the argument is subtitle-only by design — a
                     // plain Beat with no VO name, never a missing-clip warning.
                     Card(Beat("DAVID", "You need to tell him.", 1.8f),
-                        "00:50", "About an hour later — David and Nick, alone", dipToBlack: true),
+                        "00:50", "About an hour later — David and Nick, alone"),
+                    // No dipToBlack here: CutsceneStage.WhenItWentWrong already
+                    // blinks across this jump, and the cast swap has to happen
+                    // inside that fade. Two dips would read as a stutter.
                     VoBeat("NICK", "He already knows.", "NICK-006", 1.6f),
                     Beat("DAVID", "Then say it to his face.", 1.8f),
                     VoBeat("NICK", "I need some air.", "NICK-007", 1.6f),

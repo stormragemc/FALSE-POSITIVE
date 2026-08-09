@@ -29,6 +29,28 @@ namespace FalsePositive.CabinNight
         [SerializeField] private CabinIdleProfile profile;
         [SerializeField] private float seed;
 
+        /// <summary>Read-only — lets CabinPoseTunerWindow discover which profile
+        /// an already-placed character is using without re-deriving it, so
+        /// Character mode can seed its baseline from the right defaults.</summary>
+        public CabinIdleProfile Profile => profile;
+
+        // Per-character overrides on top of the profile defaults below —
+        // written by CabinPoseTunerWindow's Character mode, e.g. to make one
+        // person at the table slouch further than the shared SeatedForward
+        // profile without moving everyone else. Gated on a bool rather than
+        // relying on the float fields' C# initializers: Unity does not
+        // reliably re-run a field initializer added to an already-serialized
+        // MonoBehaviour on existing prefab instances (it can deserialize as
+        // the CLR default, 0, instead), which for breathScale/headDriftScale
+        // would silently freeze breathing/drift on every already-built cast
+        // member. useIdleOverrides defaults false, so that failure mode can't
+        // happen — the no-override path below is byte-for-byte what shipped
+        // before these fields existed.
+        [SerializeField] private bool useIdleOverrides;
+        [SerializeField] private float leanDegreesOverride;
+        [SerializeField] private float breathScale = 1f;
+        [SerializeField] private float headDriftScale = 1f;
+
         private readonly List<BoneState> _spines = new();
         private readonly List<BoneState> _necks = new();
         private readonly List<BoneState> _heads = new();
@@ -53,41 +75,8 @@ namespace FalsePositive.CabinNight
             float breath = Mathf.Sin(time * breathingSpeed);
             float drift = Mathf.Sin(time * 0.31f + seed * 4.7f);
 
-            float breathDegrees = profile switch
-            {
-                CabinIdleProfile.Confrontational => 0.65f,
-                CabinIdleProfile.Controlled => 0.28f,
-                CabinIdleProfile.Guarded => 0.45f,
-                CabinIdleProfile.Sleeping => 1.1f,
-                CabinIdleProfile.Panicked => 1.4f,
-                CabinIdleProfile.Walking => 0.5f,
-                CabinIdleProfile.Carrying => 0.9f,
-                CabinIdleProfile.Kneeling => 0.6f,
-                CabinIdleProfile.Seated => 0.35f,
-                // Sat back and open-chested reads as the most relaxed breath in
-                // the room; leaning over the table compresses it.
-                CabinIdleProfile.SeatedBack => 0.5f,
-                CabinIdleProfile.SeatedForward => 0.25f,
-                _ => 0.4f
-            };
-
-            float headYaw = profile switch
-            {
-                CabinIdleProfile.Confrontational => drift * 0.8f,
-                CabinIdleProfile.Controlled => drift * 0.35f,
-                CabinIdleProfile.Guarded => drift * 1.5f,
-                CabinIdleProfile.Sleeping => drift * 0.18f,
-                CabinIdleProfile.Panicked => drift * 2.2f,
-                CabinIdleProfile.Walking => drift * 0.4f,
-                CabinIdleProfile.Carrying => drift * 0.15f,
-                CabinIdleProfile.Kneeling => drift * 0.3f,
-                CabinIdleProfile.Seated => drift * 0.4f,
-                // Someone sat back scans the room; someone leaning in is fixed
-                // on the person opposite.
-                CabinIdleProfile.SeatedBack => drift * 0.7f,
-                CabinIdleProfile.SeatedForward => drift * 0.2f,
-                _ => 0f
-            };
+            float breathDegrees = BreathDegreesFor(profile);
+            float headYaw = drift * HeadYawMultiplierFor(profile);
 
             // The seated lean rides on the same spine write as the breathing.
             // It lives here rather than in CabinPoseLibrary because a muscle
@@ -100,17 +89,71 @@ namespace FalsePositive.CabinNight
             // arms, head — and leaves the hips and legs exactly where the
             // seated pose put them, which is what leaning from the waist
             // actually is. Positive X on this rig's spine is forward.
-            float leanDegrees = profile switch
+            float leanDegrees = LeanDegreesFor(profile);
+
+            if (useIdleOverrides)
             {
-                CabinIdleProfile.SeatedForward => 16f,
-                CabinIdleProfile.SeatedBack => -18f,
-                _ => 0f
-            };
+                leanDegrees = leanDegreesOverride;
+                breathDegrees *= breathScale;
+                headYaw *= headDriftScale;
+            }
 
             Apply(_spines, Quaternion.Euler(leanDegrees + breath * breathDegrees, 0f, 0f));
             Apply(_necks, Quaternion.Euler(-breath * breathDegrees * 0.25f, headYaw * 0.35f, 0f));
             Apply(_heads, Quaternion.Euler(0f, headYaw, drift * 0.22f));
         }
+
+        /// <summary>The profile default leanDegrees LateUpdate uses when
+        /// useIdleOverrides is off — pulled out so CabinPoseTunerWindow can seed
+        /// its Waist lean slider from the real default instead of duplicating
+        /// this switch.</summary>
+        public static float LeanDegreesFor(CabinIdleProfile profile) => profile switch
+        {
+            CabinIdleProfile.SeatedForward => 16f,
+            CabinIdleProfile.SeatedBack => -18f,
+            _ => 0f
+        };
+
+        /// <summary>The profile default breathing amplitude, in degrees —
+        /// pulled out for the same reason as LeanDegreesFor.</summary>
+        public static float BreathDegreesFor(CabinIdleProfile profile) => profile switch
+        {
+            CabinIdleProfile.Confrontational => 0.65f,
+            CabinIdleProfile.Controlled => 0.28f,
+            CabinIdleProfile.Guarded => 0.45f,
+            CabinIdleProfile.Sleeping => 1.1f,
+            CabinIdleProfile.Panicked => 1.4f,
+            CabinIdleProfile.Walking => 0.5f,
+            CabinIdleProfile.Carrying => 0.9f,
+            CabinIdleProfile.Kneeling => 0.6f,
+            CabinIdleProfile.Seated => 0.35f,
+            // Sat back and open-chested reads as the most relaxed breath in
+            // the room; leaning over the table compresses it.
+            CabinIdleProfile.SeatedBack => 0.5f,
+            CabinIdleProfile.SeatedForward => 0.25f,
+            _ => 0.4f
+        };
+
+        /// <summary>The profile default head-drift multiplier — LateUpdate
+        /// multiplies this by the shared sin(time) drift signal to get
+        /// headYaw. Pulled out for the same reason as LeanDegreesFor.</summary>
+        public static float HeadYawMultiplierFor(CabinIdleProfile profile) => profile switch
+        {
+            CabinIdleProfile.Confrontational => 0.8f,
+            CabinIdleProfile.Controlled => 0.35f,
+            CabinIdleProfile.Guarded => 1.5f,
+            CabinIdleProfile.Sleeping => 0.18f,
+            CabinIdleProfile.Panicked => 2.2f,
+            CabinIdleProfile.Walking => 0.4f,
+            CabinIdleProfile.Carrying => 0.15f,
+            CabinIdleProfile.Kneeling => 0.3f,
+            CabinIdleProfile.Seated => 0.4f,
+            // Someone sat back scans the room; someone leaning in is fixed
+            // on the person opposite.
+            CabinIdleProfile.SeatedBack => 0.7f,
+            CabinIdleProfile.SeatedForward => 0.2f,
+            _ => 0f
+        };
 
         private void CacheBones(string boneName, ICollection<BoneState> target)
         {

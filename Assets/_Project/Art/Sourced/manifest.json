@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "downloaded_utc_date": "2026-08-09",
+  "default_source": "polyhaven",
+  "sources": {
+    "polyhaven": { "name": "Poly Haven", "url": "https://polyhaven.com/", "api": "https://api.polyhaven.com/" },
+    "ambientcg": { "name": "ambientCG", "url": "https://ambientcg.com/" }
+  },
+  "license": {
+    "name": "CC0 1.0 Universal",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  "policy": "FBX plus game-ready PBR maps only; no Blender, glTF, USD, or displacement files.",
+  "note": "This manifest covers Assets/_Project/Art/Sourced/Cabin/. Nine of the entries below (ArmChair_01 through sofa_03) were downloaded on 2026-08-07 as part of the same pass documented in Assets/_Project/Art/PolyHaven/manifest.json, but were never recorded in a manifest of their own — this file backfills that gap. Their local texture files were renamed from Poly Haven's `_2k` naming to a flat `_diff/_nor/_arm` scheme and `_metallicSmoothness.png` is project-generated (metallic in RGB, `1 - roughness` in alpha, same convention as Art/PolyHaven/README.md) during that original import, so per-file checksums against the original Poly Haven downloads are not meaningful for those nine and are omitted (`checksum_source: \"not_tracked\"`). The four entries from Shelf_01 onward were downloaded 2026-08-09 for the cabin cozy-decor pass and keep their original Poly Haven/ambientCG filenames with verified checksums.",
+  "assets": [
+    {
+      "id": "ArmChair_01",
+      "type": "model",
+      "authors": { "Kirill Sannikov": "All" },
+      "dimensions_mm": [848.4309, 765.7603, 1065.0876],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/ArmChair_01",
+      "in_game_use": "Decor_ArmChair — armchair by the fireplace",
+      "files": [
+        { "path": "ArmChair_01/ArmChair_01_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "ArmChair_01/textures/ArmChair_01_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "ArmChair_01/textures/ArmChair_01_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "ArmChair_01/textures/ArmChair_01_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "ArmChair_01/textures/ArmChair_01_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "vintage_cabinet_01",
+      "type": "model",
+      "authors": { "Rico Cilliers": "All" },
+      "dimensions_mm": [2021.7605, 669.8038, 2235.0515],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/vintage_cabinet_01",
+      "in_game_use": "Decor_Cabinet — kitchen-nook cabinet against the fireplace wall",
+      "files": [
+        { "path": "vintage_cabinet_01/vintage_cabinet_01_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "vintage_cabinet_01/textures/vintage_cabinet_01_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "vintage_cabinet_01/textures/vintage_cabinet_01_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "vintage_cabinet_01/textures/vintage_cabinet_01_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "vintage_cabinet_01/textures/vintage_cabinet_01_alpha.jpg", "checksum_source": "not_tracked" },
+        { "path": "vintage_cabinet_01/textures/vintage_cabinet_01_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "wicker_basket_01",
+      "type": "model",
+      "authors": { "Kuutti Siitonen": "All" },
+      "dimensions_mm": [383.2243, 295.0152, 117.4229],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/wicker_basket_01",
+      "in_game_use": "Decor_LogBasket — log/storage basket beside the hearth",
+      "files": [
+        { "path": "wicker_basket_01/wicker_basket_01_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "wicker_basket_01/textures/wicker_basket_01_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "wicker_basket_01/textures/wicker_basket_01_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "wicker_basket_01/textures/wicker_basket_01_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "wicker_basket_01/textures/wicker_basket_01_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "wooden_lantern_01",
+      "type": "model",
+      "authors": { "James Ray Cock": "All" },
+      "dimensions_mm": [221.0481, 234.7244, 530.1366],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/wooden_lantern_01",
+      "in_game_use": "Decor_TableLantern — lantern on the dining table",
+      "files": [
+        { "path": "wooden_lantern_01/wooden_lantern_01_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "wooden_lantern_01/textures/wooden_lantern_01_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "wooden_lantern_01/textures/wooden_lantern_01_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "wooden_lantern_01/textures/wooden_lantern_01_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "wooden_lantern_01/textures/wooden_lantern_01_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "wooden_candlestick",
+      "type": "model",
+      "authors": { "Josh Dean": "All" },
+      "dimensions_mm": [98.3029, 99.8790, 219.7441],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/wooden_candlestick",
+      "in_game_use": "Decor_MantelCandle — candlestick on the mantel",
+      "files": [
+        { "path": "wooden_candlestick/wooden_candlestick_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "wooden_candlestick/textures/wooden_candlestick_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "wooden_candlestick/textures/wooden_candlestick_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "wooden_candlestick/textures/wooden_candlestick_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "wooden_candlestick/textures/wooden_candlestick_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "wine_bottles_01",
+      "type": "model",
+      "authors": { "Rico Cilliers": "Modeling", "Jurita Burger": "Graphic design" },
+      "dimensions_mm": [676.3247, 80.5629, 331.3672],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/wine_bottles_01",
+      "in_game_use": "Not yet placed — reserved for retargeting Prop_Bottles (MemorySceneDressing.cs), not this decor pass. See Cabin_v2 README 'Decor pass' notes.",
+      "files": [
+        { "path": "wine_bottles_01/wine_bottles_01_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "wine_bottles_01/textures/wine_bottles_01_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "wine_bottles_01/textures/wine_bottles_01_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "wine_bottles_01/textures/wine_bottles_01_alpha.jpg", "checksum_source": "not_tracked" },
+        { "path": "wine_bottles_01/textures/wine_bottles_01_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "mantel_clock_01",
+      "type": "model",
+      "authors": { "Rico Cilliers": "Modeling & Texturing", "Yann Kervran": "Rigging" },
+      "dimensions_mm": [483.6634, 250.8050, 160.9499],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/mantel_clock_01",
+      "in_game_use": "Not yet placed — reserved for retargeting Prop_MantelClock (MemorySceneDressing.cs), not this decor pass. See Cabin_v2 README 'Decor pass' notes.",
+      "files": [
+        { "path": "mantel_clock_01/mantel_clock_01_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "mantel_clock_01/textures/mantel_clock_01_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "mantel_clock_01/textures/mantel_clock_01_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "mantel_clock_01/textures/mantel_clock_01_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "mantel_clock_01/textures/mantel_clock_01_alpha.jpg", "checksum_source": "not_tracked" },
+        { "path": "mantel_clock_01/textures/mantel_clock_01_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "portable_cassette_player",
+      "type": "model",
+      "authors": { "Mateusz Sadek": "All" },
+      "dimensions_mm": [172.2553, 39.6716, 130.3056],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/portable_cassette_player",
+      "in_game_use": "Not yet placed — reserved for retargeting Prop_Radio (MemorySceneDressing.cs), not this decor pass. See Cabin_v2 README 'Decor pass' notes.",
+      "files": [
+        { "path": "portable_cassette_player/portable_cassette_player_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "portable_cassette_player/textures/portable_cassette_player_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "portable_cassette_player/textures/portable_cassette_player_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "portable_cassette_player/textures/portable_cassette_player_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "portable_cassette_player/textures/portable_cassette_player_alpha.jpg", "checksum_source": "not_tracked" },
+        { "path": "portable_cassette_player/textures/portable_cassette_player_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "sofa_03",
+      "type": "model",
+      "authors": { "Fran Calvente": "All" },
+      "dimensions_mm": [2731.1773, 925.0842, 1118.264],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/sofa_03",
+      "in_game_use": "Not yet placed — a duplicate of the copy already documented in Art/PolyHaven/manifest.json (used there for BO_Sofa's real-model replacement). Deferred: see Cabin_v2 README 'Decor pass' notes on why swapping BO_Sofa needs a CutsceneStage.cs change first.",
+      "files": [
+        { "path": "sofa_03/sofa_03_2k.fbx", "checksum_source": "not_tracked" },
+        { "path": "sofa_03/textures/sofa_03_diff.jpg", "checksum_source": "not_tracked" },
+        { "path": "sofa_03/textures/sofa_03_nor.jpg", "checksum_source": "not_tracked" },
+        { "path": "sofa_03/textures/sofa_03_arm.jpg", "checksum_source": "not_tracked" },
+        { "path": "sofa_03/textures/sofa_03_metallicSmoothness.png", "checksum_source": "not_tracked" }
+      ]
+    },
+    {
+      "id": "Shelf_01",
+      "type": "model",
+      "source": "polyhaven",
+      "authors": { "Gabriel Radić": "All" },
+      "dimensions_mm": [1003.4, 257.0, 2080.3],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/Shelf_01",
+      "in_game_use": "Decor_Shelf — freestanding bookcase on the window wall",
+      "files": [
+        { "path": "Shelf_01/Shelf_01_2k.fbx", "md5": "4bd3925d8edb2d6b3f53dc9a4af3d769", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/2k/Shelf_01/Shelf_01_2k.fbx" },
+        { "path": "Shelf_01/Shelf_01_diff_2k.jpg", "md5": "0dec8a0fb92a5a45b3f8d15694ab3520", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/Shelf_01/Shelf_01_diff_2k.jpg" },
+        { "path": "Shelf_01/Shelf_01_nor_gl_2k.exr", "md5": "adb3557bcb477fa73780f943a9ac7420", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/Shelf_01/Shelf_01_nor_gl_2k.exr" }
+      ]
+    },
+    {
+      "id": "book_encyclopedia_set_01",
+      "type": "model",
+      "source": "polyhaven",
+      "authors": { "DaDrood": "All" },
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/book_encyclopedia_set_01",
+      "in_game_use": "Decor_Books — books on Decor_Shelf",
+      "files": [
+        { "path": "book_encyclopedia_set_01/book_encyclopedia_set_01_2k.fbx", "md5": "ed8571f7ed741073bbeaf7f0d4b93af3", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/2k/book_encyclopedia_set_01/book_encyclopedia_set_01_2k.fbx" },
+        { "path": "book_encyclopedia_set_01/book_encyclopedia_set_01_cover_diff_2k.jpg", "md5": "5bdc3656803da131709b8459d7cc2622", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/book_encyclopedia_set_01/book_encyclopedia_set_01_cover_diff_2k.jpg" },
+        { "path": "book_encyclopedia_set_01/book_encyclopedia_set_01_cover_nor_gl_2k.jpg", "md5": "d0b3c80e2d4c6735e2d53d2f9de81b4f", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/book_encyclopedia_set_01/book_encyclopedia_set_01_cover_nor_gl_2k.jpg" }
+      ]
+    },
+    {
+      "id": "ceramic_vase_01",
+      "type": "model",
+      "source": "polyhaven",
+      "authors": { "James Ray Cock": "All" },
+      "dimensions_mm": [204.8719, 206.3767, 401.3798],
+      "resolution": "2k",
+      "page": "https://polyhaven.com/a/ceramic_vase_01",
+      "in_game_use": "Decor_Vase — vase on Decor_Shelf",
+      "files": [
+        { "path": "ceramic_vase_01/ceramic_vase_01_2k.fbx", "md5": "9580b5bf2d7d753fb1490cde46b8fa49", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/fbx/2k/ceramic_vase_01/ceramic_vase_01_2k.fbx" },
+        { "path": "ceramic_vase_01/ceramic_vase_01_diff_2k.jpg", "md5": "1319c32a8430caff72d94c192657fa00", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/ceramic_vase_01/ceramic_vase_01_diff_2k.jpg" },
+        { "path": "ceramic_vase_01/ceramic_vase_01_nor_gl_2k.exr", "md5": "836b4b9565f70c84b34c17e0700c3b16", "checksum_source": "published", "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/ceramic_vase_01/ceramic_vase_01_nor_gl_2k.exr" }
+      ]
+    },
+    {
+      "id": "Carpet016",
+      "type": "texture",
+      "source": "ambientcg",
+      "authors": { "ambientCG (Lennart Demes)": "All" },
+      "resolution": "2k",
+      "page": "https://ambientcg.com/view?id=Carpet016",
+      "in_game_use": "Decor_Rug_Hearth, Decor_Rug_Dining, Decor_WallArt_02 (M_Rug_Oxblood_Hearth, M_Rug_Oxblood_Dining, M_Textile_WallHanging)",
+      "files": [
+        { "path": "Carpet016/Carpet016_diff_2k.jpg", "sha256": "3b22ad51cc1d4a081959e71f50b53f1a353a48252cbd6e3a7461b7a30fec001e", "checksum_source": "computed", "url": "https://ambientcg.com/get?file=Carpet016_2K-JPG.zip (Color.jpg, renamed)" },
+        { "path": "Carpet016/Carpet016_nor_gl_2k.jpg", "sha256": "03d722fdddeec83dfd53c9d5df5a6ba83a11d406dec38c6bcbd856e840e86b8c", "checksum_source": "computed", "url": "https://ambientcg.com/get?file=Carpet016_2K-JPG.zip (NormalGL.jpg, renamed)" }
+      ]
+    }
+  ]
+}

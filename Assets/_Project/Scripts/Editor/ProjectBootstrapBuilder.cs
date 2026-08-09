@@ -288,6 +288,49 @@ namespace FalsePositive.Editor
             Text timeCardCaption = CreateText(timeCardGo.transform, "CaptionText", string.Empty, 18);
             timeCardCaption.alignment = TextAnchor.UpperRight;
             AnchorBottomStretch(timeCardCaption.gameObject, 0f, 34f);
+            // TrustMeterUI — top-left. Shows SessionScore.Credibility, the same
+            // value EndingSelector gates the verdict on.
+            GameObject trustGo = new GameObject("TrustMeterUI", typeof(RectTransform));
+            trustGo.transform.SetParent(hud.transform, false);
+            AnchorTopLeft(trustGo, new Vector2(40f, -40f), new Vector2(300f, 74f));
+
+            Text trustCaption = CreateText(trustGo.transform, "CaptionText", string.Empty, 16);
+            trustCaption.alignment = TextAnchor.LowerLeft;
+            AnchorBottomStretch(trustCaption.gameObject, 0f, 24f);
+
+            Text trustValue = CreateText(trustGo.transform, "ValueText", string.Empty, 22);
+            trustValue.fontStyle = FontStyle.Bold;
+            trustValue.alignment = TextAnchor.UpperRight;
+            AnchorTopStretch(trustValue.gameObject, 0f, 28f);
+
+            Text trustLabel = CreateText(trustGo.transform, "LabelText", "TRUST", 16);
+            trustLabel.alignment = TextAnchor.UpperLeft;
+            AnchorTopStretch(trustLabel.gameObject, 4f, 24f);
+
+            // Track behind, fill in front. Filled horizontally so fillAmount
+            // maps straight onto a 0..1 credibility with no rescaling.
+            GameObject trackGo = new GameObject("Track", typeof(RectTransform));
+            trackGo.transform.SetParent(trustGo.transform, false);
+            AnchorTopStretch(trackGo, 32f, 10f);
+            Image track = trackGo.AddComponent<Image>();
+            track.color = new Color(1f, 1f, 1f, 0.15f);
+
+            GameObject fillGo = new GameObject("Fill", typeof(RectTransform));
+            fillGo.transform.SetParent(trackGo.transform, false);
+            StretchFill(fillGo);
+            Image trustFill = fillGo.AddComponent<Image>();
+            trustFill.type = Image.Type.Filled;
+            trustFill.fillMethod = Image.FillMethod.Horizontal;
+            trustFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            trustFill.fillAmount = 1f;
+
+            TrustMeterUI trustMeter = trustGo.AddComponent<TrustMeterUI>();
+            SetField(trustMeter, "root", trustGo);
+            SetField(trustMeter, "fill", trustFill);
+            SetField(trustMeter, "valueText", trustValue);
+            SetField(trustMeter, "captionText", trustCaption);
+            trustGo.SetActive(false);
+
             TimeCardUI timeCardUi = timeCardGo.AddComponent<TimeCardUI>();
             SetField(timeCardUi, "root", timeCardGo);
             SetField(timeCardUi, "group", timeCardGroup);

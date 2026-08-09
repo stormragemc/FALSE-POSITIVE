@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using FalsePositive.Flow;
 
 namespace FalsePositive.Dialogue
 {
@@ -47,9 +48,16 @@ namespace FalsePositive.Dialogue
         /// <summary>Neutral by design — see the G6 note on the class.</summary>
         private const string QuoteHeader = "You said:";
 
-        public static string Compose(IReadOnlyList<QuotedLine> quotable)
+        /// <summary>Builds the card for the ending that actually happened.
+        ///
+        /// <paramref name="outcome"/> is stated plainly and once. §4 closes every
+        /// ending on the same fixed card, and that stays — but on its own it
+        /// never says what became of anyone, so a player who missed the four
+        /// seconds of ending VO had no idea which of the four they had reached.
+        /// One factual line fixes that without commenting on it.</summary>
+        public static string Compose(Suspect outcome, IReadOnlyList<QuotedLine> quotable)
         {
-            var card = new StringBuilder(FixedCard);
+            var card = new StringBuilder(OutcomeLine(outcome)).Append("\n\n").Append(FixedCard);
             if (quotable == null || quotable.Count == 0) return card.ToString();
 
             var kept = new List<QuotedLine>(MaxQuotes);
@@ -75,6 +83,21 @@ namespace FalsePositive.Dialogue
                     .Append(line.Text).Append('"');
             }
             return card.ToString();
+        }
+
+        /// <summary>Who was charged. Stated as a record entry, not a verdict on
+        /// anybody — the card reports the outcome, it does not endorse it, and
+        /// the whole point of the game is that the outcome may well be wrong.
+        /// </summary>
+        private static string OutcomeLine(Suspect outcome)
+        {
+            switch (outcome)
+            {
+                case Suspect.Aaron: return "Aaron Teague was charged with the killing of Nick Vlahos.";
+                case Suspect.Ivy: return "Ivy Teague was charged with the killing of Nick Vlahos.";
+                case Suspect.Priya: return "Priya Raman was charged with the killing of Nick Vlahos.";
+                default: return "David Kessler was charged with the killing of Nick Vlahos.";
+            }
         }
 
         private static string Shorten(string text)

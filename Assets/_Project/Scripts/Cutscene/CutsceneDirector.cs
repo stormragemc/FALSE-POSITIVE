@@ -131,6 +131,11 @@ namespace FalsePositive.Cutscene
         /// roughly twice this.</summary>
         [SerializeField, Range(0.1f, 2f)] private float dipToBlackSeconds = 0.45f;
 
+        /// <summary>Logs each beat with the playhead time it actually started
+        /// at, next to the time the schedule says it should have. On while the
+        /// memory pair is being tuned.</summary>
+        [SerializeField] private bool logBeatTiming = true;
+
         /// <summary>Cap on waiting for a still-playing clip. Guards against a
         /// beat hanging forever if a clip loops or an AudioSource is left
         /// paused by something else.</summary>
@@ -252,6 +257,16 @@ namespace FalsePositive.Cutscene
 
                 for (int i = 0; i < recipe.beats.Length; i++)
                 {
+                    if (logBeatTiming)
+                    {
+                        // Compare against the .playable's baked clip starts: if
+                        // these drift apart, subtitles and voices have desynced
+                        // and the timelines need regenerating (bootstrap 11).
+                        Debug.Log($"[Beat] {id} #{i} at {Playhead:0.00}s " +
+                            $"(expected {BeatStartTime(id, i):0.00}s) " +
+                            $"\"{recipe.beats[i].line}\"");
+                    }
+
                     yield return PlayBeat(recipe.beats[i], timeline != null);
 
                     // Between beats only. The pause after the *last* beat is

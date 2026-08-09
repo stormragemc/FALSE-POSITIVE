@@ -47,5 +47,9 @@ namespace FalsePositive.Flow
         P3Photograph,
         P3AfterGoodYears,
         P3WhoDavid,
+
+        // Appended to preserve every existing serialized enum index. Plays
+        // the canonical David/Nick fire argument before M1 free roam begins.
+        NightArgument,
     }
 }

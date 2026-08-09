@@ -12,6 +12,7 @@ using FalsePositive.Flow;
 using FalsePositive.Menu;
 using FalsePositive.Net;
 using FalsePositive.Player;
+using FalsePositive.Rendering;
 using FalsePositive.UI;
 using FalsePositive.Voice;
 using TMPro;
@@ -125,8 +126,7 @@ namespace FalsePositive.Editor
             MemorySceneDressing.DressBothScenes();
             MemorySceneWiring.WireBoth();
             RewriteBuildSettings();
-            CutsceneRecipeBuilder.PopulateRecipes();
-            CutsceneRecipeBuilder.AttachVoClips();
+            VoTimelineBuilder.BuildAll();
             Debug.Log("[ProjectBootstrapBuilder] Full scaffold rebuilt.");
         }
 
@@ -269,6 +269,31 @@ namespace FalsePositive.Editor
             SetField(subtitleUi, "lineText", lineText);
             subtitleGo.SetActive(false);
 
+            // TimeCardUI — the "00:50 / About an hour later" caption for jumps
+            // forward in time inside a cutscene. Top-right, opposite the
+            // subtitles at bottom-centre, because it is the film speaking
+            // rather than a character.
+            GameObject timeCardGo = new GameObject("TimeCardUI", typeof(RectTransform));
+            timeCardGo.transform.SetParent(hud.transform, false);
+            AnchorTopRight(timeCardGo, new Vector2(-40f, -40f), new Vector2(420f, 76f));
+            CanvasGroup timeCardGroup = timeCardGo.AddComponent<CanvasGroup>();
+            timeCardGroup.alpha = 0f;
+            timeCardGroup.interactable = false;
+            timeCardGroup.blocksRaycasts = false;
+            Text timeCardTime = CreateText(timeCardGo.transform, "TimeText", string.Empty, 30);
+            timeCardTime.fontStyle = FontStyle.Bold;
+            timeCardTime.alignment = TextAnchor.UpperRight;
+            AnchorTopStretch(timeCardTime.gameObject, 0f, 40f);
+            Text timeCardCaption = CreateText(timeCardGo.transform, "CaptionText", string.Empty, 18);
+            timeCardCaption.alignment = TextAnchor.UpperRight;
+            AnchorBottomStretch(timeCardCaption.gameObject, 0f, 34f);
+            TimeCardUI timeCardUi = timeCardGo.AddComponent<TimeCardUI>();
+            SetField(timeCardUi, "root", timeCardGo);
+            SetField(timeCardUi, "group", timeCardGroup);
+            SetField(timeCardUi, "timeText", timeCardTime);
+            SetField(timeCardUi, "captionText", timeCardCaption);
+            timeCardGo.SetActive(false);
+
             // InteractionPromptUI — centre-screen "[E] <prompt>", the on-
             // screen prompt InteractionRaycaster never had (see its doc
             // comment). Replaces the floating TextMesh labels
@@ -393,11 +418,65 @@ namespace FalsePositive.Editor
             // Cop's uLipSync at this during CutsceneId.SpasskyAnswer so the
             // mouth syncs to the real cutscene VO, not just live dialogue turns.
             ULS.uLipSyncAudioSource cutsceneVoLipSync = voSourceGo.AddComponent<ULS.uLipSyncAudioSource>();
+            // Disabled by default (no echo on ordinary VO) — DrunkCutsceneBinder
+            // enables it only across CutsceneId.Wake and disables it again on
+            // Finished. Lives on the shared VO source rather than a dedicated
+            // one because every cutscene's line already plays through this
+            // single AudioSource (see CutsceneDirector.PlayBeat).
+            AudioEchoFilter cutsceneVoEcho = voSourceGo.AddComponent<AudioEchoFilter>();
+            cutsceneVoEcho.enabled = false;
+            cutsceneVoEcho.delay = 180f;
+            cutsceneVoEcho.decayRatio = 0.35f;
+            cutsceneVoEcho.wetMix = 0.5f;
+            cutsceneVoEcho.dryMix = 1f;
+
+            GameObject sfxSourceGo = new GameObject("CutsceneSfxSource", typeof(AudioSource));
+            sfxSourceGo.transform.SetParent(cutsceneGo.transform, false);
+            AudioSource cutsceneSfxSource = sfxSourceGo.GetComponent<AudioSource>();
             CutsceneDirector cutsceneDirector = cutsceneGo.AddComponent<CutsceneDirector>();
             SetField(cutsceneDirector, "fader", fader);
             SetField(cutsceneDirector, "subtitles", subtitleUi);
+            SetField(cutsceneDirector, "timeCards", timeCardUi);
             SetField(cutsceneDirector, "voSource", cutsceneVoSource);
+            SetField(cutsceneDirector, "sfxSource", cutsceneSfxSource);
             SetField(cutsceneDirector, "voSourceLipSync", cutsceneVoLipSync);
+
+            // DrunkEffectController + DrunkCutsceneBinder — drives the URP drunk
+            // post-process, the slow fade-in, and the slowed/echoed VO across
+            // CutsceneId.Wake (waking up at the interrogation table). Sibling of
+            // CutsceneDirector for the same reason: one instance for the whole
+            // game, in _Persistent.
+            GameObject drunkGo = new GameObject("DrunkEffectController");
+            drunkGo.transform.SetParent(cutsceneGo.transform, false);
+            DrunkEffectController drunkEffect = drunkGo.AddComponent<DrunkEffectController>();
+            DrunkCutsceneBinder drunkBinder = drunkGo.AddComponent<DrunkCutsceneBinder>();
+            SetField(drunkBinder, "effect", drunkEffect);
+            SetField(drunkBinder, "fader", fader);
+            SetField(drunkBinder, "voSource", cutsceneVoSource);
+            SetField(drunkBinder, "voEcho", cutsceneVoEcho);
+
+            // Second DrunkCutsceneBinder instance for CutsceneId.StandFromChair
+            // (M1_Night's own wake-up, stretched to a 5s stand in
+            // CutsceneStage.StandFromChair) — a separate GameObject rather than
+            // generalizing the binder to multiple ids, since Wake and
+            // StandFromChair never play concurrently and can safely share the
+            // same DrunkEffectController/ScreenFader/VO source underneath.
+            // Timings are slower than Wake's to match the longer beat: ramp in
+            // over roughly the first fifth of the rise, hold, then bleed out
+            // into the "Fix the radio" free-roam that follows.
+            GameObject drunkStandGo = new GameObject("DrunkCutsceneBinder (StandFromChair)");
+            drunkStandGo.transform.SetParent(cutsceneGo.transform, false);
+            DrunkCutsceneBinder drunkStandBinder = drunkStandGo.AddComponent<DrunkCutsceneBinder>();
+            SetField(drunkStandBinder, "cutsceneId", CutsceneId.StandFromChair);
+            SetField(drunkStandBinder, "effect", drunkEffect);
+            SetField(drunkStandBinder, "fader", fader);
+            SetField(drunkStandBinder, "voSource", cutsceneVoSource);
+            SetField(drunkStandBinder, "voEcho", cutsceneVoEcho);
+            SetField(drunkStandBinder, "rampInSeconds", 1f);
+            SetField(drunkStandBinder, "rampOutSeconds", 2f);
+            SetField(drunkStandBinder, "blackSnapSeconds", 0.15f);
+            SetField(drunkStandBinder, "fadeInSeconds", 4f);
+            SetField(drunkStandBinder, "slowPitch", 0.75f);
 
             // EventSystem — the project uses the new Input System exclusively
             // (Active Input Handling = Input System Package), so this must be

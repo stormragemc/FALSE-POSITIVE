@@ -27,6 +27,12 @@ namespace FalsePositive.UI
 
         private int _fadeGeneration;
 
+        /// <summary>Current fade alpha (0 = fully lit, 1 = fully black). Lets a
+        /// caller that is about to fade to the same value it's already at skip
+        /// the redundant fade instead of burning its duration doing nothing —
+        /// see the early-out in Fade() below.</summary>
+        public float Alpha => canvasGroup != null ? canvasGroup.alpha : 0f;
+
         private void Awake()
         {
             if (canvasGroup == null) return;
@@ -50,8 +56,19 @@ namespace FalsePositive.UI
         {
             if (canvasGroup == null) yield break;
 
-            int generation = ++_fadeGeneration;
             float from = canvasGroup.alpha;
+
+            // Already there — e.g. a cutscene recipe that ends black (see
+            // CutsceneRecipe.endsBlack) followed by TransitionRoutine's own
+            // FadeToBlack. Without this, that pair burns a full duration
+            // fading black-to-black while nothing changes on screen.
+            if (Mathf.Approximately(from, to))
+            {
+                canvasGroup.alpha = to;
+                yield break;
+            }
+
+            int generation = ++_fadeGeneration;
 
             if (duration <= 0f)
             {

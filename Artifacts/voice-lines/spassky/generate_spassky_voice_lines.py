@@ -1,9 +1,8 @@
 """Generate Officer Spassky's production dialogue with the selected Maksim voice.
 
-Lines are read straight out of `docs/HUMAN_SCRIPT.md` rather than copied here, so
-the rendered audio cannot drift from the script. Delivery follows the register
-table in `Artifacts/voice_guide/Spassky.md` §4.3, which is also what the sidecar
-applies to Spassky's live turns — pre-rendered and live lines therefore match.
+Lines are read straight out of `docs/HUMAN_SCRIPT.md` rather than copied here,
+so the rendered audio cannot drift from the script. The authored registers map
+to the validated ElevenLabs V3 mood vocabulary used by Spassky's live turns.
 """
 
 from argparse import ArgumentParser
@@ -27,10 +26,11 @@ REPOSITORY_ROOT = OUTPUT_DIRECTORY.parents[2]
 SCRIPT_PATH = REPOSITORY_ROOT / "docs" / "HUMAN_SCRIPT.md"
 
 VOICE_ID = "6sXsAlJKKBf265ucBSRt"  # Maksim — "Raw, unpolished, deep", Russian
-MODEL_ID = "eleven_multilingual_v2"
+MODEL_ID = "eleven_v3"
 OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
 PEAK_CEILING = 0.97
+ACCENT_TAG = "strong Russian accent"
 CLEANUP_FILTER = (
     "afftdn=nr=12:nf=-55:tn=1:gs=5,"
     "areverse,afade=t=in:st=0:d=0.020,areverse,"
@@ -54,36 +54,32 @@ _SCENE_PHASES = {
 
 @dataclass(frozen=True)
 class Delivery:
-    """One delivery register. Fields are clamped to the API's accepted ranges."""
+    """One authored V3 performance register."""
 
     name: str
-    stability: float
-    similarity_boost: float
-    style: float
-    speed: float
+    mood: str | None
     gain_db: float
 
     def __post_init__(self) -> None:
-        clamp = lambda value, low, high: max(low, min(high, value))
-        object.__setattr__(self, "stability", clamp(self.stability, 0.0, 1.0))
-        object.__setattr__(self, "similarity_boost", clamp(self.similarity_boost, 0.0, 1.0))
-        object.__setattr__(self, "style", clamp(self.style, 0.0, 1.0))
-        object.__setattr__(self, "speed", clamp(self.speed, 0.7, 1.2))
-        object.__setattr__(self, "gain_db", clamp(self.gain_db, -6.0, 6.0))
+        object.__setattr__(self, "gain_db", max(-6.0, min(6.0, self.gain_db)))
 
     def voice_settings(self) -> VoiceSettings:
         return VoiceSettings(
-            stability=self.stability,
-            similarity_boost=self.similarity_boost,
-            style=self.style,
-            speed=self.speed,
+            stability=1.0,
+            similarity_boost=1.0,
+            style=0.0,
+            use_speaker_boost=True,
         )
 
+    def tagged(self, text: str) -> str:
+        direction = ACCENT_TAG if self.mood is None else f"{ACCENT_TAG}, {self.mood}"
+        return f"[{direction}] {text}"
 
-FLAT = Delivery("FLAT", 0.28, 1.00, 0.62, 0.92, 0.0)
-PRESS = Delivery("PRESS", 0.20, 1.00, 0.78, 0.90, 1.0)
-RAISED = Delivery("RAISED", 0.15, 1.00, 0.92, 0.95, 2.5)
-LOW = Delivery("LOW", 0.15, 1.00, 0.85, 0.85, -1.5)
+
+FLAT = Delivery("FLAT", None, 0.0)
+PRESS = Delivery("PRESS", "impatient", 1.0)
+RAISED = Delivery("RAISED", "shouting", 2.5)
+LOW = Delivery("LOW", "quietly menacing", -1.5)
 
 _LOW_PHASES = frozenset({"P3_VERDICT", "P4_ENDING"})
 
@@ -318,7 +314,7 @@ def main() -> int:
 
         chunks = client.text_to_speech.convert(
             voice_id=VOICE_ID,
-            text=apply_pronunciation_aliases(text),
+            text=delivery.tagged(apply_pronunciation_aliases(text)),
             model_id=MODEL_ID,
             output_format=OUTPUT_FORMAT,
             voice_settings=delivery.voice_settings(),

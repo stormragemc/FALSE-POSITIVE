@@ -107,9 +107,17 @@ namespace FalsePositive.Editor
             // it becomes invisible AND unpickable (GetComponentInParent
             // finds no Interactable on the hanger). Offset along +Z, clear
             // of that box, to read as hung on the front peg instead.
+            // customVisualBuilder replaces the old Prop_CoatOnChair.fbx (a
+            // deformed 40-vertex box, "Cube.007") with a mesh composed from
+            // primitives that actually reads as a hung garment — see
+            // BuildDrapedCoatVisual. `color` is unused by that branch;
+            // size/lookPrompt/memoryFlag are untouched, since those are what
+            // saw_coat_swap and the raycast/prompt tuning depend on
+            // (ART_DIRECTION.md: keep the same silhouette and footprint).
             AddProp<InspectPoint>(root, "Prop_CoatOnChair", new Vector3(-1.4f, 1.45f, -4.10f),
                 new Vector3(0.4f, 0.5f, 0.15f), new Color(0.5f, 0.15f, 0.15f), "Nick's Coat",
-                "Look at the coat", MemoryFlagIds.SawCoatSwap);
+                "Look at the coat", MemoryFlagIds.SawCoatSwap,
+                customVisualBuilder: BuildDrapedCoatVisual);
 
             // The M1 front door — same Door_v2 instance MemorySceneBuilderV2
             // places as "Prop_FrontDoor_Locked", but DressNight never
@@ -541,7 +549,8 @@ namespace FalsePositive.Editor
             GameObject parent, string name, Vector3 position, Vector3 size, Color color,
             string labelText, string lookPrompt, string memoryFlag, bool glass = false,
             GameObject overrideModel = null, bool keepOriginalMaterials = false,
-            Quaternion? rotation = null, Vector3? interactionVolume = null) where T : Interactable
+            Quaternion? rotation = null, Vector3? interactionVolume = null,
+            Action<Transform> customVisualBuilder = null) where T : Interactable
         {
             GameObject go = new GameObject(name);
             go.transform.SetParent(parent.transform, false);
@@ -555,13 +564,23 @@ namespace FalsePositive.Editor
             // (Radio/Clock — real Asset-Store packs with their own PBR
             // textures, see DressNight) bypasses the ModelRoot+name.fbx
             // lookup entirely; `keepOriginalMaterials` skips the flat-color
-            // recolor below for the same reason.
+            // recolor below for the same reason. `customVisualBuilder`
+            // (the coat — see BuildDrapedCoatVisual) bypasses BOTH: some
+            // props need a shape composed from primitives because no FBX
+            // exists and a placeholder cube reads as exactly that, a cube.
             GameObject modelPrefab = overrideModel != null
                 ? overrideModel
                 : AssetDatabase.LoadAssetAtPath<GameObject>(ModelRoot + name + ".fbx");
             GameObject visual;
             Bounds localBounds;
-            if (modelPrefab != null)
+            if (customVisualBuilder != null)
+            {
+                visual = new GameObject("Visual");
+                visual.transform.SetParent(go.transform, false);
+                customVisualBuilder(visual.transform);
+                localBounds = ComputeLocalBounds(visual, go.transform);
+            }
+            else if (modelPrefab != null)
             {
                 visual = (GameObject)PrefabUtility.InstantiatePrefab(modelPrefab, go.transform);
                 visual.name = "Visual";
@@ -626,6 +645,74 @@ namespace FalsePositive.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
 
             return interactable;
+        }
+
+        private const string CoatMaterialPath = "Assets/_Project/Art/Cabin_v2/Materials/M_Fabric_Coat.mat";
+
+        /// <summary>Composes a hanging coat from primitives instead of
+        /// loading Prop_CoatOnChair.fbx — that file is a real mesh, but it's
+        /// literally a deformed 40-vertex box ("Cube.007") that reads as
+        /// exactly that. docs/ART_DIRECTION.md:173 already notes no CC0
+        /// heavy-parka model could be sourced and recommends a better static
+        /// mesh with a cloth-look material instead of chasing a download —
+        /// this is that. There's no cloth simulation in this project (the
+        /// built-in Cloth module is unused and only works on a
+        /// SkinnedMeshRenderer anyway), so "draped" here means shoulders
+        /// wider than the hem, sleeves flaring outward and tipped slightly
+        /// forward off the shoulder line, and a small collar breaking the
+        /// flat top edge — not literal physics.
+        ///
+        /// Sized to land close to the story-mandated 0.49 x 0.52 x 0.155 m
+        /// footprint (ART_DIRECTION.md:173) the raycast/prompt tuning around
+        /// Prop_CoatOnChair assumes — keep it in that neighbourhood if this
+        /// gets tuned further, don't let it grow into a different-sized
+        /// prop.
+        ///
+        /// `parent` is a fresh "Visual" GameObject created by AddProp<T>'s
+        /// customVisualBuilder branch, with no baked FBX import rotation —
+        /// plain Y-up math is correct here (same as BuildRug/CreatePanelPart
+        /// in CabinV2Builder.cs), unlike anywhere this file touches
+        /// Cabin.fbx's own shell geometry.</summary>
+        private static void BuildDrapedCoatVisual(Transform parent)
+        {
+            Material coat = AssetDatabase.LoadAssetAtPath<Material>(CoatMaterialPath);
+            if (coat == null)
+            {
+                Debug.LogWarning($"[MemorySceneDressing] No material at {CoatMaterialPath} — " +
+                    "run Tools/False Positive/Bootstrap/0 first. Coat will render pink/default.");
+            }
+
+            CreateCoatPart(parent, "Yoke", new Vector3(0.40f, 0.08f, 0.13f),
+                new Vector3(0f, 0.20f, 0f), Quaternion.identity, coat);
+            CreateCoatPart(parent, "Torso", new Vector3(0.28f, 0.32f, 0.12f),
+                new Vector3(0f, -0.05f, -0.005f), Quaternion.identity, coat);
+            CreateCoatPart(parent, "Collar", new Vector3(0.15f, 0.05f, 0.09f),
+                new Vector3(0f, 0.255f, 0.015f), Quaternion.identity, coat);
+            // Narrower, longer, and tucked closer to the torso, with much
+            // less outward rotation than the first pass — 14 degrees of
+            // z-rotation flared the sleeves into a wing/V shape; 6 reads as
+            // sleeves hanging close to the body with a slight natural droop.
+            CreateCoatPart(parent, "Sleeve_Left", new Vector3(0.065f, 0.32f, 0.08f),
+                new Vector3(-0.165f, -0.02f, 0.005f), Quaternion.Euler(4f, 0f, 6f), coat);
+            CreateCoatPart(parent, "Sleeve_Right", new Vector3(0.065f, 0.32f, 0.08f),
+                new Vector3(0.165f, -0.02f, 0.005f), Quaternion.Euler(4f, 0f, -6f), coat);
+        }
+
+        private static void CreateCoatPart(Transform parent, string name, Vector3 size,
+            Vector3 localPosition, Quaternion localRotation, Material material)
+        {
+            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = localPosition;
+            part.transform.localRotation = localRotation;
+            part.transform.localScale = size;
+
+            // AddProp<T> already adds one BoxCollider around the whole
+            // visual — per-part colliders here would be redundant.
+            UnityEngine.Object.DestroyImmediate(part.GetComponent<BoxCollider>());
+            Renderer renderer = part.GetComponent<Renderer>();
+            if (renderer != null && material != null) renderer.sharedMaterial = material;
         }
 
         private static Bounds ComputeLocalBounds(GameObject visual, Transform relativeTo)

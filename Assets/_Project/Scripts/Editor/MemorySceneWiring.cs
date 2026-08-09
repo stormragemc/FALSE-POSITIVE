@@ -110,10 +110,10 @@ namespace FalsePositive.Editor
                 SetField(stage, "liftEffortClip", liftClip);
 
                 AudioClip ivyLine = AssetDatabase.LoadAssetAtPath<AudioClip>(
-                    "Assets/_Project/Art/Audio/VO/ivy_careful_lift.mp3");
+                    "Assets/_Project/Art/Audio/VO/Production/IVY-004.wav");
                 if (ivyLine == null)
                 {
-                    Debug.LogWarning("[MemorySceneWiring] Assets/_Project/Art/Audio/VO/ivy_careful_lift.mp3 " +
+                    Debug.LogWarning("[MemorySceneWiring] Assets/_Project/Art/Audio/VO/Production/IVY-004.wav " +
                         "not found — CutsceneStage.ivyLiftLineClip left unset.");
                 }
                 SetField(stage, "ivyLiftLineClip", ivyLine);

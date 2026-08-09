@@ -60,6 +60,27 @@ namespace FalsePositive.Flow
         [SerializeField] private ObjectiveHud objectives;
         [SerializeField] private SceneRouter sceneRouter;
         [SerializeField] private MemoryFlagCatalog memoryFlagCatalog;
+
+        [Header("Memory interlude pacing")]
+        /// <summary>Silence held in the room the player is currently in, after
+        /// the last line and before the cut to memory.
+        ///
+        /// docs/STORY_SCRIPT.md §4 asks for hard cuts, and these stay hard —
+        /// but a hard cut still has to land in a gap rather than on top of a
+        /// word. Without this the swap fired on the frame the previous
+        /// cutscene reported Finished, which is why Spassky kept getting cut
+        /// off mid-sentence on the way into the flashback.</summary>
+        [SerializeField, Range(0f, 3f)] private float interludeLeadInSeconds = 0.8f;
+
+        /// <summary>Silence held after the memory ends, before the cut back.
+        /// Lets the last line of the flashback land before the room returns.
+        /// </summary>
+        [SerializeField, Range(0f, 3f)] private float interludeCutBackSeconds = 0.7f;
+
+        /// <summary>Silence held once the interrogation room is live again,
+        /// before the caller continues. The room needs a moment to re-register
+        /// as the present before the officer speaks into it.</summary>
+        [SerializeField, Range(0f, 3f)] private float interludeSettleSeconds = 0.9f;
         [SerializeField] private MicConsentFlow consentFlow;
         [SerializeField] private MicCalibration calibration;
         [SerializeField] private CalibrationPanelUI calibrationPanel;
@@ -450,8 +471,12 @@ namespace FalsePositive.Flow
         /// itself, and its own coroutine would stop, halfway through. This
         /// component lives in _Persistent and survives the swap.
         ///
-        /// No fade: §4 asks for a hard cut in and a hard cut back. The scene is
-        /// loaded additively first (invisible — additive loading does not touch
+        /// Both scene swaps now fade to/from black, same shape as
+        /// TransitionRoutine below (one full black frame before the swap, so
+        /// nothing ever pops mid-fade). This used to be a hard cut by design --
+        /// section 4 originally asked for one -- until every scene transition
+        /// was made to fade consistently; a hard cut here would have been the
+        /// one exception left. The scene is loaded additively first (invisible — additive loading does not touch
         /// the scene on screen) so that Activate is an instant swap rather than
         /// a hitch. By P3 the memory scene is normally already loaded from M1,
         /// which makes EnsureLoaded a no-op.</summary>
@@ -476,6 +501,10 @@ namespace FalsePositive.Flow
         private IEnumerator MemoryInterludeRoutine(GamePhase memoryPhase, CutsceneId id, Action onComplete)
         {
             string memoryScene = SceneNameFor(memoryPhase);
+            float fadeDuration = config != null ? config.fadeDurationSeconds : 0.25f;
+
+            if (fader != null) yield return fader.FadeToBlack(fadeDuration);
+            yield return null; // one full frame fully black before swapping, same as TransitionRoutine
 
             // Hard cut, but not a silent one — this is still the player being
             // dropped into a memory, and it is one of the transitions that had
@@ -484,18 +513,42 @@ namespace FalsePositive.Flow
 
             if (sceneRouter != null && !string.IsNullOrEmpty(memoryScene))
             {
-                // Load before cutting, so the cut itself costs nothing.
+                // Load before cutting, so the cut itself costs nothing. Loading
+                // first also means the lead-in below is real silence in the
+                // present rather than a loading stall.
                 yield return sceneRouter.EnsureLoaded(memoryScene);
+
+                if (interludeLeadInSeconds > 0f)
+                {
+                    yield return new WaitForSeconds(interludeLeadInSeconds);
+                }
                 yield return sceneRouter.Activate(memoryScene);
             }
+
+            if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
 
             bool finished = false;
             RequestCutscene(id, () => finished = true);
             while (!finished) yield return null;
 
+            if (interludeCutBackSeconds > 0f)
+            {
+                yield return new WaitForSeconds(interludeCutBackSeconds);
+            }
+
+            if (fader != null) yield return fader.FadeToBlack(fadeDuration);
+            yield return null;
+
             if (sceneRouter != null && !string.IsNullOrEmpty(interrogationSceneName))
             {
                 yield return sceneRouter.Activate(interrogationSceneName);
+            }
+
+            if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
+
+            if (interludeSettleSeconds > 0f)
+            {
+                yield return new WaitForSeconds(interludeSettleSeconds);
             }
 
             // Invoked only after Interrogation's roots are live again, so a

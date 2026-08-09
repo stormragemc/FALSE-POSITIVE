@@ -194,9 +194,9 @@ this entirely.
 
 **Honesty notes**, per `docs/GAME_COMPLETION_PLAN.md` §10's "never fake" rule:
 
-- Every cutscene is the documented **cheap form** — a fade, a subtitle, and either recorded VO or
-  a diegetic sound effect — not a Unity Timeline sequence, even though `com.unity.timeline` is in
-  the manifest.
+- Most cutscenes are the documented **cheap form** — a fade, a subtitle, and either recorded VO or
+  a diegetic sound effect. One beat, the radio-tuning performance (`RadioClears`), plays a real
+  `com.unity.timeline` sequence instead — see `Scripts/Editor/RadioTuneTimelineBuilder.cs`.
 - The four endings are picked by a **client-side stopgap**: whichever suspect's name you say
   unambiguously in P3, or nobody's, falls to the David ending. The full credibility/fabrication/
   clue-citation rule in `docs/STORY_SCRIPT.md` §8 is Day-2 scope (`A10`).

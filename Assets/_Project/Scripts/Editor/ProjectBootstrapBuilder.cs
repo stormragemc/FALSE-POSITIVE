@@ -46,6 +46,18 @@ namespace FalsePositive.Editor
         private const string MorningScenePath = "Assets/_Project/Scenes/Memory_CabinMorning.unity";
         private const string PromptsRoot = "Assets/_Project/Prompts/";
         private const string ConfigRoot = "Assets/_Project/Config/";
+        private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
+
+        /// <summary>Loads an SFX clip from a path with no extension, preferring
+        /// .wav over .mp3. The original library is all mp3; newer clips arrive
+        /// as wav and land beside the file they replace rather than on top of
+        /// it, so wav-first is what makes a swap take effect. Same fallback
+        /// MemorySceneDressing.LoadSfx and CutsceneRecipeBuilder.VoBeat use.</summary>
+        private static AudioClip LoadAudio(string pathWithoutExtension)
+        {
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(pathWithoutExtension + ".wav")
+                ?? AssetDatabase.LoadAssetAtPath<AudioClip>(pathWithoutExtension + ".mp3");
+        }
 
         private static readonly DefaultControls.Resources UIResources = BuildUiResources();
 
@@ -113,6 +125,7 @@ namespace FalsePositive.Editor
             MemorySceneBuilderV2.BuildBoth();
             MemorySceneDressing.DressBothScenes();
             MemorySceneWiring.WireBoth();
+            RadioTuneTimelineBuilder.BuildAndWire();
             RewriteBuildSettings();
             VoTimelineBuilder.BuildAll();
             Debug.Log("[ProjectBootstrapBuilder] Full scaffold rebuilt.");
@@ -538,6 +551,24 @@ namespace FalsePositive.Editor
             MemoryFlagCatalog catalog = AssetDatabase.LoadAssetAtPath<MemoryFlagCatalog>(ConfigRoot + "MemoryFlagCatalog.asset");
             if (catalog != null) SetField(gfd, "memoryFlagCatalog", catalog);
             else Debug.LogWarning("[ProjectBootstrapBuilder] MemoryFlagCatalog.asset not found yet — run step 3 (Build Config Assets) and re-run step 1, or it will bind on the next pass.");
+
+            // --- Transition sound ---
+            // Lives on the GameFlowDirector object rather than in either scene:
+            // _Persistent is never unloaded, so an 11.7s clip started on the
+            // fade-out survives the scene swap and rings out into the scene it
+            // just brought up. 2D and bypassing listener effects so a scene's
+            // reverb/ambience can never colour it mid-swap.
+            AudioSource transitionSource = gfdGo.AddComponent<AudioSource>();
+            transitionSource.playOnAwake = false;
+            transitionSource.loop = false;
+            transitionSource.spatialBlend = 0f;
+            transitionSource.volume = 0.7f;
+            transitionSource.bypassListenerEffects = true;
+            SetField(gfd, "transitionSource", transitionSource);
+
+            AudioClip transitionClip = LoadAudio(SfxRoot + "scene_transition_ghostly");
+            if (transitionClip != null) SetField(gfd, "transitionClip", transitionClip);
+            else Debug.LogWarning($"[ProjectBootstrapBuilder] {SfxRoot}scene_transition_ghostly.wav/.mp3 not found — scene transitions will be silent.");
 
             SaveScene(scene, PersistentScenePath);
             Debug.Log("[ProjectBootstrapBuilder] _Persistent.unity rebuilt.");
@@ -1945,6 +1976,17 @@ namespace FalsePositive.Editor
             }
             SetField(gesture, "spine1", FindBone("Spine1"));
             SetField(gesture, "lipSync", cop.GetComponent<ULS.uLipSync>());
+
+            // Table to plant his hands on. The scene's "Table" is a bare
+            // Transform whose only child is the SM_Table visual prefab, scaled
+            // and offset — so its own position says nothing useful about where
+            // the actual top surface is. CopTalkGestureAnimator therefore
+            // measures the renderers underneath it at runtime rather than
+            // taking a hardcoded height from here. Left null in scenes with no
+            // table (the reach then never engages and the gesture stays as it
+            // was), so this is deliberately not an error.
+            GameObject table = GameObject.Find("Table");
+            SetField(gesture, "tableSurface", table != null ? table.transform : null);
 
             // CopTalkGestureAnimator's spine1 accent is additive on top of
             // whatever CopIdleAnimator's breathing curve wrote to spine1

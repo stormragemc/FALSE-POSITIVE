@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using FalsePositive.CabinNight;
@@ -6,6 +7,8 @@ using FalsePositive.Interaction;
 using FalsePositive.Player;
 using FalsePositive.UI;
 using UnityEngine;
+using UnityEngine.Playables;
+using UnityEngine.Rendering;
 
 namespace FalsePositive.Cutscene
 {
@@ -13,9 +16,11 @@ namespace FalsePositive.Cutscene
     /// Per-memory-scene procedural staging: who walks where, where the
     /// camera looks, what gets posed, for the cutscene beats that need more
     /// than CutsceneDirector's default fade+VO (see the plan's Phase 4
-    /// table). Everything else — fuzzy transitions, wake, Spassky's answer,
-    /// radio clears, flashbacks, endings — is fade/VO-only and needs nothing
-    /// here.
+    /// table). RadioClears is the one beat that hands off to a Timeline
+    /// (RadioTune, below) rather than doing its own procedural work — see
+    /// RadioTuneTimelineBuilder. Everything else — fuzzy transitions, wake,
+    /// Spassky's answer, flashbacks, endings — is fade/VO-only and needs
+    /// nothing here.
     ///
     /// One instance per memory scene (added by MemorySceneBuilderV2, `isMorning`
     /// set per scene). Subscribes to the single persistent CutsceneDirector's
@@ -43,6 +48,18 @@ namespace FalsePositive.Cutscene
         // dialogue through CutsceneRecipeBuilder the way TheCarry/TheSofa do;
         // this is played directly instead.
         [SerializeField] private AudioClip ivyLiftLineClip;
+
+        // Wired by Editor.RadioTuneTimelineBuilder.WireNightScene, same
+        // reflection-SetField pattern as liftEffortClip above. The director's
+        // own track bindings (body/camera Animators, the two AudioSources)
+        // are re-asserted by that same method on every build — not stored
+        // here, since PlayableDirector already owns them.
+        [SerializeField] private PlayableDirector radioTuneDirector;
+
+        // Empty child of Prop_Radio, facing +Z — see RadioTuneTimelineBuilder
+        // for the exact placement. Muscle-space animation is root-relative,
+        // so the player has to be moved here before the clip plays.
+        [SerializeField] private Transform radioTuneAnchor;
 
         public void Configure(bool isMorningScene) => isMorning = isMorningScene;
 
@@ -133,6 +150,48 @@ namespace FalsePositive.Cutscene
         /// stopwatch. The fixed WaitForSeconds chain this replaces was written
         /// against one particular set of clip lengths and silently went out of
         /// step whenever the pacing moved.</summary>
+        /// <summary>Logs where every borrowed actor's feet, hips and head
+        /// actually are, in world space, against the cabin floor at y = 0.
+        ///
+        /// Sinking is not diagnosable by eye — "buried to the shins" and
+        /// "standing on the floor" differ by about the length of a boot, and by
+        /// the time it is obvious on screen it is already several beats too
+        /// late to see which actor and which beat caused it. This prints the
+        /// numbers so the staging can be checked against the floor rather than
+        /// against an impression.
+        ///
+        /// A healthy standing actor reads foot ~0.09-0.16 (the bone is the
+        /// ankle, not the sole). Negative anything means below the floorboards.
+        /// Head below hips means the actor is lying or has been rotated into
+        /// the ground.</summary>
+        private void LogCastHeights(string label)
+        {
+            if (!logStagingTiming) return;
+
+            foreach (BorrowedActor b in _borrowed)
+            {
+                if (b.Go == null) continue;
+                Animator a = b.Go.GetComponentInChildren<Animator>(true);
+                if (a == null || !a.isHuman) continue;
+
+                Transform hips = a.GetBoneTransform(HumanBodyBones.Hips);
+                Transform foot = a.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform head = a.GetBoneTransform(HumanBodyBones.Head);
+
+                float footY = foot != null ? foot.position.y : float.NaN;
+                bool sunk = !float.IsNaN(footY) && footY < -0.02f;
+
+                string line = $"[CastY] {label} :: {b.Go.name} " +
+                    $"root={b.Go.transform.position.y:0.000} " +
+                    $"foot={footY:0.000} " +
+                    $"hips={(hips != null ? hips.position.y : float.NaN):0.000} " +
+                    $"head={(head != null ? head.position.y : float.NaN):0.000}" +
+                    (sunk ? "   <-- BELOW FLOOR" : string.Empty);
+
+                if (sunk) Debug.LogWarning(line); else Debug.Log(line);
+            }
+        }
+
         private IEnumerator AtBeat(CutsceneId id, int beatIndex)
         {
             if (_director == null)
@@ -181,6 +240,8 @@ namespace FalsePositive.Cutscene
                     return StandFromChair();
                 case CutsceneId.SomeoneLeft:
                     return SomeoneLeft();
+                case CutsceneId.RadioClears:
+                    return RadioTune();
                 case CutsceneId.GoodYears:
                     return GoodYears();
                 case CutsceneId.WhenItWentWrong:
@@ -275,6 +336,151 @@ namespace FalsePositive.Cutscene
             }
         }
 
+        /// <summary>Radio-tuning beat (RadioClears): steady the radio, reach
+        /// out, turn the knob, the storm comes through, return. See
+        /// RadioTuneTimelineBuilder for the two animation clips and the
+        /// Timeline asset this plays; this method only does the runtime
+        /// half — align the player, show the arm, hand off to the director,
+        /// wait, then restore everything it touched.</summary>
+        private IEnumerator RadioTune()
+        {
+            if (radioTuneDirector == null || radioTuneAnchor == null)
+            {
+                Debug.LogError("[CutsceneStage] RadioTune fields unassigned — run " +
+                    "Tools/False Positive/Bootstrap/9c - Build Radio Tune Timeline.");
+                yield break;
+            }
+
+            GameObject player = GameObject.Find("Player (Male - First Person)");
+            if (player == null) yield break;
+
+            FreeLookCameraRig rig = FindPlayerRig();
+            PlayerInputRouter input = FindPlayerInput();
+            InteractionRaycaster raycaster = player.GetComponent<InteractionRaycaster>();
+            CharacterController controller = player.GetComponent<CharacterController>();
+            Transform view = FindPlayerView();
+            FirstPersonCameraMotion motion = view != null ? view.GetComponent<FirstPersonCameraMotion>() : null;
+
+            // 1. Gate — FreeLookCameraRig.Update writes rotation
+            // unconditionally, so gating input alone does not stop it; it
+            // must be disabled directly. Interact is deliberately left live
+            // by SetMovementGated, so InteractionRaycaster needs its own
+            // disable or E would still fire mid-animation.
+            input?.SetMovementGated(true);
+            if (rig != null) rig.enabled = false;
+            if (motion != null) motion.enabled = false;
+            if (raycaster != null) raycaster.enabled = false;
+
+            // 2. Align, 0.35s lerp — into both the anchor and the Timeline
+            // clip's own frame-0 rest pose, so the Timeline taking over at
+            // t=0 doesn't snap the view.
+            if (controller != null) controller.enabled = false;
+
+            Vector3 startPos = player.transform.position;
+            Quaternion startRot = player.transform.rotation;
+            Vector3 targetPos = radioTuneAnchor.position;
+            float anchorYaw = radioTuneAnchor.eulerAngles.y;
+            Quaternion targetRot = Quaternion.Euler(0f, anchorYaw, 0f);
+
+            Vector3 viewStartPos = view != null ? view.localPosition : Vector3.zero;
+            Quaternion viewStartRot = view != null ? view.localRotation : Quaternion.identity;
+            Vector3 viewRestPos = new Vector3(0f, 1.64f, 0.04f);
+            Quaternion viewRestRot = Quaternion.identity;
+
+            const float alignDuration = 0.35f;
+            float t = 0f;
+            while (t < alignDuration)
+            {
+                t += Time.deltaTime;
+                float frac = Mathf.Clamp01(t / alignDuration);
+                player.transform.position = Vector3.Lerp(startPos, targetPos, frac);
+                player.transform.rotation = Quaternion.Slerp(startRot, targetRot, frac);
+                if (view != null)
+                {
+                    view.localPosition = Vector3.Lerp(viewStartPos, viewRestPos, frac);
+                    view.localRotation = Quaternion.Slerp(viewStartRot, viewRestRot, frac);
+                }
+                yield return null;
+            }
+            player.transform.position = targetPos;
+            player.transform.rotation = targetRot;
+            if (view != null)
+            {
+                view.localPosition = viewRestPos;
+                view.localRotation = viewRestRot;
+            }
+
+            // 3. Show — only the _LOD1 unified renderer; ConfigurePlayer set
+            // every renderer ShadowsOnly, and flipping both the base and
+            // _LOD1 copies would render two coincident meshes.
+            SkinnedMeshRenderer unified = FindUnifiedBodyRenderer(player);
+            ShadowCastingMode previousMode = ShadowCastingMode.ShadowsOnly;
+            if (unified != null)
+            {
+                previousMode = unified.shadowCastingMode;
+                unified.shadowCastingMode = ShadowCastingMode.On;
+            }
+
+            // 4. Play
+            radioTuneDirector.time = 0;
+            radioTuneDirector.Play();
+
+            // 5. Wait — hard timeout so a user's Timeline edit (or a stuck
+            // graph) can never hang the game with input gated.
+            float timeout = (float)radioTuneDirector.duration + 0.5f;
+            float waited = 0f;
+            while (radioTuneDirector.state == PlayState.Playing && waited < timeout)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            // 6. Restore, idempotent. Timeline does not restore scene
+            // bindings at runtime — the clip's last key gets the view back
+            // to rest, this is belt-and-braces. SeedYaw zeroes pitch, so it
+            // must run before SeedPitch, and both must run before the rig is
+            // re-enabled so its first live Update already has the right
+            // values instead of snapping one frame late.
+            radioTuneDirector.Stop();
+            if (unified != null) unified.shadowCastingMode = previousMode;
+            if (view != null)
+            {
+                view.localPosition = viewRestPos;
+                view.localRotation = viewRestRot;
+            }
+            if (rig != null)
+            {
+                rig.SeedYaw(anchorYaw);
+                rig.SeedPitch(0f);
+                rig.enabled = true;
+            }
+            if (motion != null) motion.enabled = true;
+            if (raycaster != null) raycaster.enabled = true;
+            if (controller != null) controller.enabled = true;
+            input?.SetMovementGated(false);
+        }
+
+        /// <summary>Matches AssignBodyMaterials' "unified" substring filter
+        /// (Editor/CabinNightCharacterBuilder.cs) but disambiguates the base
+        /// o3n_male_unified_low renderer from its o3n_male_unified_LOD1
+        /// twin — both match "unified", only the _LOD1 one should ever be
+        /// shown, since there is no LODGroup culling the other away.</summary>
+        private static SkinnedMeshRenderer FindUnifiedBodyRenderer(GameObject player)
+        {
+            Transform body = player.transform.Find("Body");
+            if (body == null) return null;
+
+            SkinnedMeshRenderer fallback = null;
+            foreach (SkinnedMeshRenderer renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                string lower = renderer.name.ToLowerInvariant();
+                if (!lower.Contains("unified")) continue;
+                if (lower.Contains("lod1")) return renderer;
+                fallback = renderer;
+            }
+            return fallback;
+        }
+
         // ---- M2_Morning ----
 
         private IEnumerator PriyaScreams()
@@ -303,15 +509,95 @@ namespace FalsePositive.Cutscene
                 MoveActor(ivy, ivyFloor, 3.5f));
         }
 
+        /// <summary>True from the moment OutIntoTheSnow starts M2_DoorOpen.playable
+        /// until control is fully back with the player. The beat's VO recipe is
+        /// 7.5 s and the cinematic is 13.4 s, so anything that used to chain off
+        /// the VO finishing has to wait on this instead — see
+        /// RunAfterDoorSequence and M2MorningController.OnDoorOpened.</summary>
+        public bool DoorSequenceRunning { get; private set; }
+
+        /// <summary>Invokes onDone once the door cinematic has finished, or
+        /// immediately if it is not running. Exists because RequestCutscene's
+        /// callback fires when the *VO* ends, five seconds before the cinematic
+        /// does, which would start the lift interlude over the top of the orbit.</summary>
+        public void RunAfterDoorSequence(Action onDone)
+        {
+            if (!DoorSequenceRunning)
+            {
+                onDone?.Invoke();
+                return;
+            }
+
+            StartCoroutine(WaitForDoorSequence(onDone));
+        }
+
+        private IEnumerator WaitForDoorSequence(Action onDone)
+        {
+            while (DoorSequenceRunning) yield return null;
+            onDone?.Invoke();
+        }
+
         private IEnumerator OutIntoTheSnow()
         {
             GameObject aaron = GameObject.Find("Aaron Teague (Male)");
             GameObject ivy = GameObject.Find("Ivy Teague (Female)");
             GameObject priya = GameObject.Find("Priya Raman (Female)");
             GameObject body = GameObject.Find("Prop_NickBody");
-            GameObject player = GameObject.Find("Player (Male - First Person)");
             Vector3 bodyPos = body != null ? body.transform.position : new Vector3(2.3f, 0.1f, -6.3f);
             Vector3 nearBody = bodyPos + new Vector3(1.2f, 0f, 0.5f);
+
+            // The cast still walks out on coroutines — only the player's camera,
+            // the player's arm and the door itself moved to Timeline. They stop
+            // 1.3-1.7 m from the body, i.e. inside the 2.2 m circle the camera
+            // orbits on, so the orbit never clips through anyone.
+            Vector3[] aaronPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody };
+            Vector3[] ivyPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(-0.6f, 0f, 0.2f) };
+            Vector3[] priyaPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(0.4f, 0f, -0.6f) };
+
+            M2DoorOpenSequence sequence = FindDoorSequence();
+            if (sequence == null)
+            {
+                Debug.LogWarning("[CutsceneStage] No M2DoorOpenSequence in the scene — run " +
+                                 "'Tools/False Positive/Bootstrap/T05 - Build M2 Door Timeline'. " +
+                                 "Falling back to the pre-Timeline walk-out.");
+                yield return LegacyOutIntoTheSnow(bodyPos, aaronPath, ivyPath, priyaPath);
+                yield break;
+            }
+
+            // Set before Play, because Play invokes its callback synchronously
+            // on every failure path (no bindings, no player) — the flag then
+            // clears in the same frame and the wait below simply falls through.
+            DoorSequenceRunning = true;
+            sequence.Play(() => DoorSequenceRunning = false);
+
+            // The three walks are timed to 7 s and the cinematic runs 13.4 s, so
+            // the cast is already standing over the body by the time the camera
+            // finishes crossing to it. Deliberate — the player arrives last.
+            yield return RunTogether(
+                MoveActorAlong(aaron, aaronPath, SpeedFor(aaron, aaronPath)),
+                MoveActorAlong(ivy, ivyPath, SpeedFor(ivy, ivyPath)),
+                MoveActorAlong(priya, priyaPath, SpeedFor(priya, priyaPath)));
+
+            while (DoorSequenceRunning) yield return null;
+        }
+
+        private static M2DoorOpenSequence FindDoorSequence()
+        {
+            GameObject sequencing = GameObject.Find("Sequencing");
+            return sequencing != null ? sequencing.GetComponent<M2DoorOpenSequence>() : null;
+        }
+
+        /// <summary>The coroutine walk-out this beat used before M2_DoorOpen.playable,
+        /// kept as the fallback for a scene that has not had the Timeline builder
+        /// run over it. Not dead code — a fresh MemorySceneBuilderV2 pass drops
+        /// the proxy rig and the director, and this is what stops the beat from
+        /// leaving the player indoors and gated when that happens.</summary>
+        private IEnumerator LegacyOutIntoTheSnow(Vector3 bodyPos, Vector3[] aaronPath, Vector3[] ivyPath, Vector3[] priyaPath)
+        {
+            GameObject aaron = GameObject.Find("Aaron Teague (Male)");
+            GameObject ivy = GameObject.Find("Ivy Teague (Female)");
+            GameObject priya = GameObject.Find("Priya Raman (Female)");
+            GameObject player = GameObject.Find("Player (Male - First Person)");
 
             // Pulled back from the body (was (-1.0, 0, 0.3), ~1.0 m out) to
             // (-1.6, 0, 0.6), ~1.7 m out — close enough to keep
@@ -334,16 +620,7 @@ namespace FalsePositive.Cutscene
             PlayerInputRouter input = FindPlayerInput();
             input?.SetMovementGated(true);
 
-            // The door itself never physically opened before — DoorInteractable
-            // played a creak and fired Opened, but nothing rotated the mesh,
-            // so "out into the snow" played out with a still-shut door. Swing
-            // it open across this same beat, alongside the cast walking
-            // through it — including the player, who used to phase straight
-            // through the wall several metres from the actual doorway.
             Vector3[] playerPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, playerSpot };
-            Vector3[] aaronPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody };
-            Vector3[] ivyPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(-0.6f, 0f, 0.2f) };
-            Vector3[] priyaPath = { DoorwayCentre, DoorwayOutside, ChamferCorner, nearBody + new Vector3(0.4f, 0f, -0.6f) };
 
             // CutsceneRecipeBuilder gives OutIntoTheSnow three beats totalling
             // 7.5 s. The routed path (through the doorway, around the chamfer
@@ -504,7 +781,9 @@ namespace FalsePositive.Cutscene
             // RunCarryArrival), and a live collider on the body would fight
             // the player's CharacterController the whole way. Re-enabled by
             // RunCarryArrival once the carry actually ends.
-            Object.Destroy(liftGo);
+            // Qualified: `using System` (added for Action, above) makes a bare
+            // `Object` ambiguous with System.Object.
+            UnityEngine.Object.Destroy(liftGo);
 
             if (ivyLiftLineClip != null)
             {
@@ -841,11 +1120,15 @@ namespace FalsePositive.Cutscene
             // finishes. Wait past the fade, not one frame.
             yield return new WaitForSeconds(0.3f);
 
+            LogCastHeights("after pose, before PlantFeet");
+
             foreach (BorrowedActor b in _borrowed)
             {
                 if (!b.WantsPose || b.Go == null || !b.Go.activeSelf) continue;
-                PlantFeet(b.Go);
+                PlantFeet(b.Go, b.Pose);
             }
+
+            LogCastHeights("after PlantFeet");
         }
 
         /// <summary>Drops the character so its feet rest on the floor.
@@ -860,34 +1143,14 @@ namespace FalsePositive.Cutscene
         /// player rig at +0.92, i.e. a full hip-height below the floor, while
         /// the CapsuleCollider stayed correctly at 0.
         ///
-        /// Uses the humanoid foot bones, NOT renderer bounds. SkinnedMeshRenderer
-        /// bounds are a conservative box that does not hug the animated pose:
-        /// measuring those over-lifted the whole cast by ~0.35m and left them
-        /// visibly hovering with their feet at y = 0.40.</summary>
-        private static void PlantFeet(GameObject go)
+        /// The measurement itself now lives in CabinNight.CabinFootPlanter, so
+        /// the cutscene path and the scene-build path share one implementation
+        /// — and this path picks up the ground raycast it never had. It used to
+        /// plant feet at the actor's own root Y, which is only the floor if
+        /// whoever authored that root Y guessed the floor correctly.</summary>
+        private static void PlantFeet(GameObject go, CabinIdleProfile profile)
         {
-            Animator animator = go.GetComponentInChildren<Animator>();
-            if (animator == null || !animator.isHuman) return;
-
-            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (leftFoot == null && rightFoot == null) return;
-
-            float lowest = leftFoot == null ? rightFoot.position.y
-                : rightFoot == null ? leftFoot.position.y
-                : Mathf.Min(leftFoot.position.y, rightFoot.position.y);
-
-            float scale = Mathf.Approximately(go.transform.lossyScale.y, 0f) ? 1f : go.transform.lossyScale.y;
-            // The foot bone is the ankle, not the sole — leave a boot's worth
-            // of clearance under it or the character sinks to the shins.
-            const float SoleToAnkle = 0.09f;
-            float target = go.transform.position.y + SoleToAnkle * scale;
-
-            float lift = target - lowest;
-            if (Mathf.Abs(lift) < 0.005f) return;
-
-            Transform body = animator.transform;
-            body.localPosition += new Vector3(0f, lift / scale, 0f);
+            CabinFootPlanter.Plant(go, profile);
         }
 
         private void ReturnBorrowed()
@@ -1091,6 +1354,7 @@ namespace FalsePositive.Cutscene
             // to the middle of the table.
             yield return AtBeat(CutsceneId.GoodYears, 4);
             TurnAllToward(table, nick, aaron, ivy, priya);
+            LogCastHeights("CS-16A beat 4 (the toast)");
 
             // Beat 6, NICK-004 "Here. You look fucking freezing." — the coat
             // swap. Nick turns to David and throws the parka.
@@ -1099,6 +1363,7 @@ namespace FalsePositive.Cutscene
 
             // Teardown waits for the cutscene itself, never a timer. Anything
             // earlier removes the cast from a room that is still speaking.
+            LogCastHeights("CS-16A beat 6 (coat swap)");
             yield return UntilCutsceneEnds(CutsceneId.GoodYears);
 
             // The photographs belong to this memory only — they must not be left
@@ -1200,7 +1465,8 @@ namespace FalsePositive.Cutscene
             // bent — and PlantFeet would bake in a correction for that
             // transitional pose instead of the settled standing one.
             yield return new WaitForSeconds(0.3f);
-            if (nick != null) PlantFeet(nick);
+            if (nick != null) PlantFeet(nick, CabinIdleProfile.Confrontational);
+            LogCastHeights("CS-16B after jump (Nick moved to fire)");
             if (fader != null) yield return fader.FadeFromBlack(JumpBlinkSeconds);
 
             // 11-13s — Nick goes outside, still in David's thin jacket. The

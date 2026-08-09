@@ -169,6 +169,14 @@ the talk gesture both run straight through `SpasskyAnswer` uninterrupted.
 `CopAnimationBuilder.cs` and its baked assets are left on disk unreferenced,
 matching this project's convention for the superseded T1 cop assets.
 
+The binding-orphan bug itself — not just this one cutscene — has since been
+fixed properly: `Editor/RadioTuneTimelineBuilder.cs` (the radio-tuning
+performance during `CutsceneId.RadioClears`) resolves its Timeline's tracks
+by name and re-asserts every `SetGenericBinding` on each run instead of
+deleting and recreating `TrackAsset`s, so its scene bindings survive
+bootstrap re-runs. Timeline was never structurally unworkable here — only
+`CopAnimationBuilder`'s delete/recreate pattern was.
+
 ## Cutscenes: screen cover and the drunk effect
 
 `UI/ScreenFader.cs` is the only full-screen black cover in the game — a

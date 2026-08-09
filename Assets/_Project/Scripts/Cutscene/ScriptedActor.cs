@@ -66,6 +66,7 @@ namespace FalsePositive.Cutscene
             }
 
             _driver.PlayState(walkProfile == CabinIdleProfile.Carrying ? "Walk_Carry" : "Walk", 0.2f);
+            SetSolid(false);
 
             while (Vector3.Distance(transform.position, worldPosition) > 0.05f)
             {
@@ -75,7 +76,32 @@ namespace FalsePositive.Cutscene
             }
 
             transform.position = worldPosition;
+            SetSolid(true);
             _driver.PlayProfile(walkProfile == CabinIdleProfile.Carrying ? CabinIdleProfile.Carrying : CabinIdleProfile.Controlled);
+        }
+
+        /// <summary>Turns this actor's body collider off for the duration of a
+        /// scripted walk.
+        ///
+        /// Cast members are solid so the player can bump into them
+        /// (CabinNight.CabinFootPlanter fits the volume to the pose). A solid
+        /// body being teleported along a waypoint path each frame is a
+        /// different thing though — it has no Rigidbody, so it does not push,
+        /// it interpenetrates, and the player's CharacterController then
+        /// resolves that overlap by shoving the player out of the way on their
+        /// next Move. Nick walking out in "OutIntoTheSnow" would barge straight
+        /// through whoever is standing in the doorway.
+        ///
+        /// Fetched fresh rather than cached: CabinFootPlanter.FitCollider can
+        /// swap a capsule for a box (or back) when the pose changes, so a
+        /// cached reference here would be destroyed out from under us.</summary>
+        private void SetSolid(bool solid)
+        {
+            foreach (Collider collider in GetComponents<Collider>())
+            {
+                if (collider is CharacterController) continue;
+                collider.enabled = solid;
+            }
         }
 
         /// <summary>
@@ -106,6 +132,7 @@ namespace FalsePositive.Cutscene
             }
 
             _driver.PlayState(walkProfile == CabinIdleProfile.Carrying ? "Walk_Carry" : "Walk", 0.2f);
+            SetSolid(false);
 
             foreach (Vector3 waypoint in waypoints)
             {
@@ -118,6 +145,7 @@ namespace FalsePositive.Cutscene
                 transform.position = waypoint;
             }
 
+            SetSolid(true);
             _driver.PlayProfile(walkProfile == CabinIdleProfile.Carrying ? CabinIdleProfile.Carrying : CabinIdleProfile.Controlled);
         }
     }

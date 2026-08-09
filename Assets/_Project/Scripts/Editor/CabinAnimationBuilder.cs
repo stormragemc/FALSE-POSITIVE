@@ -66,6 +66,13 @@ namespace FalsePositive.Editor
         public const string StateWalkCarry = "Walk_Carry";
         public const string StateLiftCrouch = "Lift_Crouch";
 
+        /// <summary>M2's door-open cinematic. Not reachable through
+        /// CabinAnimatorDriver — Scripts/Editor/M2DoorTimelineBuilder.cs binds
+        /// this clip straight onto an AnimationTrack in M2_DoorOpen.playable.
+        /// Built here anyway so all humanoid muscle authoring stays in one
+        /// file with one set of helpers.</summary>
+        public const string StateReachDoorKnob = "Reach_DoorKnob";
+
         /// <summary>The Y offset CabinAnimatorDriver must apply on top of these two
         /// states, mirroring CabinPoseLibrary.Apply's pose.bodyPosition += calls
         /// for Kneeling/Sleeping — see class doc fact #2 for why a clip can't
@@ -171,13 +178,82 @@ namespace FalsePositive.Editor
             AnimationClip liftCrouch = BlendClip(StateLiftCrouch, CabinIdleProfile.Controlled, crouchOverrides,
                 CabinIdleProfile.Carrying, 1.6f);
 
+            AnimationClip reachDoorKnob = BuildReachDoorKnob();
+
             BuildController(
                 idleConfrontational, idleControlled, idleGuarded, idlePanicked, idleSleeping, idleWalking,
                 poseCarrying, poseKneeling, poseSeated, poseSeatedBack, poseSeatedForward,
-                walk, walkCarry, liftCrouch);
+                walk, walkCarry, liftCrouch, reachDoorKnob);
 
             AssetDatabase.SaveAssets();
             Debug.Log("[CabinAnimationBuilder] Cast animation clips + CabinCast.controller built.");
+        }
+
+        // ---- M2 door-open reach ----
+
+        /// <summary>The player's right arm reaching out to the cabin door knob,
+        /// gripping, and pulling the door toward them. Timings are clip-local;
+        /// M2_DoorOpen.playable places this clip at t = 0.35 s, so contact
+        /// lands at timeline 1.20 s — exactly when Door_SwingOpen starts.
+        ///
+        /// This is a pose, not an IK solve: the project has no first-person
+        /// viewmodel and no hand IK, so the hand is authored to land *near* a
+        /// knob roughly 1.0 m up and 0.7 m ahead. M2DoorOpenSequence snapping
+        /// the player to a fixed door mark is what makes that read correctly
+        /// and identically every playthrough.
+        ///
+        /// Returns to CabinIdleProfile.Controlled on the last key so the
+        /// Animator has nothing to blend out of when the track ends and
+        /// CabinAnimatorDriver takes its Animator back.</summary>
+        private static AnimationClip BuildReachDoorKnob()
+        {
+            // Muscle conventions (range -1..1): "Arm Down-Up" 0 is the T-pose
+            // horizontal and -1 is hanging at the side, so a reach at knob
+            // height sits around -0.55. "Arm Front-Back" is + forward.
+            // "Forearm Stretch" is + straight, - bent at the elbow.
+            // "Spine Front-Back" is - leaning forward, matching crouchOverrides.
+            Dictionary<string, float> reaching = new Dictionary<string, float>
+            {
+                ["Right Shoulder Front-Back"] = 0.35f,
+                ["Right Arm Down-Up"] = -0.55f,
+                ["Right Arm Front-Back"] = 0.55f,
+                ["Right Arm Twist In-Out"] = 0.15f,
+                ["Right Forearm Stretch"] = 0.55f,
+                ["Right Forearm Twist In-Out"] = 0.20f,
+                ["Right Hand Down-Up"] = -0.15f,
+                ["Spine Front-Back"] = -0.12f,
+                ["Spine Twist Left-Right"] = 0.08f,
+            };
+
+            // Grip: hand closes and the wrist settles, everything else holds.
+            Dictionary<string, float> gripping = new Dictionary<string, float>(reaching)
+            {
+                ["Right Hand Down-Up"] = -0.30f,
+                ["Right Forearm Twist In-Out"] = 0.30f,
+            };
+
+            // Pull: elbow folds, shoulder comes back, torso rotates with it.
+            Dictionary<string, float> pulling = new Dictionary<string, float>
+            {
+                ["Right Shoulder Front-Back"] = 0.10f,
+                ["Right Arm Down-Up"] = -0.62f,
+                ["Right Arm Front-Back"] = 0.10f,
+                ["Right Arm Twist In-Out"] = 0.10f,
+                ["Right Forearm Stretch"] = -0.35f,
+                ["Right Forearm Twist In-Out"] = 0.25f,
+                ["Right Hand Down-Up"] = -0.25f,
+                ["Spine Front-Back"] = -0.05f,
+                ["Spine Twist Left-Right"] = -0.15f,
+            };
+
+            return KeyedClip(StateReachDoorKnob, CabinIdleProfile.Controlled, 1.95f, new[]
+            {
+                new PoseKey(0.00f, null),       // timeline 0.35 — standing at the door mark
+                new PoseKey(0.85f, reaching),   // timeline 1.20 — hand meets the knob
+                new PoseKey(1.25f, gripping),   // timeline 1.60 — grip closes
+                new PoseKey(1.75f, pulling),    // timeline 2.10 — door is being pulled open
+                new PoseKey(1.95f, null),       // timeline 2.30 — released, back to Controlled
+            });
         }
 
         // ---- Oscillator-driven idle/walk clips ----
@@ -291,6 +367,75 @@ namespace FalsePositive.Editor
                 };
                 AnimationCurve curve = new AnimationCurve(keys);
                 for (int i = 0; i < curve.length; i++) curve.SmoothTangents(i, 0f);
+                WriteMuscle(clip, muscleName, curve);
+            }
+
+            SetClipSettings(clip, loop: false);
+            return clip;
+        }
+
+        // ---- Keyed clips (multi-step one-shot sequences) ----
+
+        /// <summary>One pose key: a time and the muscles that differ from the
+        /// base profile at that time. A null/empty override set means "the
+        /// base profile exactly", which is how a sequence returns to rest.</summary>
+        private readonly struct PoseKey
+        {
+            public readonly float Time;
+            public readonly Dictionary<string, float> Overrides;
+
+            public PoseKey(float time, Dictionary<string, float> overrides)
+            {
+                Time = time;
+                Overrides = overrides;
+            }
+        }
+
+        /// <summary>BlendClip generalised past its fixed from/mid/to shape: an
+        /// arbitrary number of pose keys at arbitrary times, every unlisted
+        /// muscle pinned to the base profile so the rest of the body stays
+        /// still. Smoothed tangents throughout, non-looping.</summary>
+        private static AnimationClip KeyedClip(string name, CabinIdleProfile basePose, float length, PoseKey[] keys)
+        {
+            if (keys == null || keys.Length < 2)
+            {
+                throw new InvalidOperationException($"[CabinAnimationBuilder] KeyedClip '{name}' needs at least two keys.");
+            }
+
+            float[] baseMuscles = BaseMuscles(basePose);
+            AnimationClip clip = LoadOrCreateClip(name);
+            ClearAllCurves(clip);
+
+            for (int m = 0; m < 55; m++)
+            {
+                string muscleName = HumanTrait.MuscleName[m];
+                Keyframe[] frames = new Keyframe[keys.Length];
+                bool moves = false;
+
+                for (int k = 0; k < keys.Length; k++)
+                {
+                    float value = baseMuscles[m];
+                    if (keys[k].Overrides != null && keys[k].Overrides.TryGetValue(muscleName, out float overrideValue))
+                    {
+                        value = overrideValue;
+                        moves = true;
+                    }
+                    frames[k] = new Keyframe(keys[k].Time, value);
+                }
+
+                // Muscles no key touches collapse to a single constant curve —
+                // same result, far fewer keyframes on 55 channels.
+                AnimationCurve curve;
+                if (moves)
+                {
+                    curve = new AnimationCurve(frames);
+                    for (int i = 0; i < curve.length; i++) curve.SmoothTangents(i, 0f);
+                }
+                else
+                {
+                    curve = AnimationCurve.Constant(0f, length, baseMuscles[m]);
+                }
+
                 WriteMuscle(clip, muscleName, curve);
             }
 

@@ -25,7 +25,11 @@ namespace FalsePositive.Editor
             { CutsceneId.Wake, new[] { "SPASSKY-001", "SPASSKY-002", "SPASSKY-003" } },
             { CutsceneId.SpasskyAnswer, new[] { "SPASSKY-005" } },
             { CutsceneId.NightArgument, new[] { null, "NICK-001" } },
-            { CutsceneId.RadioClears, new[] { "RADIO-001" } },
+            // Index 1, not 0: RadioClears gained a silent lead-in beat so the
+            // RadioTuneTimelineBuilder Timeline has room to play before the
+            // announcer speaks. The clip has to stay on the beat that carries
+            // the line, so adding the lead-in shifted it one along.
+            { CutsceneId.RadioClears, new[] { null, "RADIO-001" } },
             { CutsceneId.PriyaScreams, new[] { "PRIYA-001" } },
             { CutsceneId.OutIntoTheSnow, new[] { "PRIYA-002", "IVY-001", "AARON-001" } },
             { CutsceneId.TheCarry, new[]
@@ -167,7 +171,15 @@ namespace FalsePositive.Editor
         /// total beat time past what its dialogue/SFX beats alone add up to, e.g. so
         /// Finished doesn't fire while CutsceneStage is still mid-animation for a beat
         /// with no VO of its own (see StandFromChair, stretched to a 5s stand-up in
-        /// CutsceneStage.cs but carrying only a sub-second chair_creak SFX beat).</summary>
+        /// CutsceneStage.cs but carrying only a sub-second chair_creak SFX beat).
+        ///
+        /// Also what the four "fuzzy" transitions carry now that their own
+        /// fuzzy_whoosh SFX is gone: GameFlowDirector.PlayTransitionSound sounds
+        /// every scene change, these four included, so a clip here would double up.
+        /// The hold stays so the disorienting black gap keeps its length — and note
+        /// CutsceneDirector.PlayBeat holds for voClip.length whenever a clip exists,
+        /// so a clip would also stretch the black to that clip's full duration
+        /// rather than the authored hold.</summary>
         private static CutsceneBeat HoldBeat(float seconds, string flag = null) => new CutsceneBeat
         {
             holdSecondsIfNoClip = seconds,
@@ -182,10 +194,13 @@ namespace FalsePositive.Editor
         /// as the VO-attach path.</summary>
         private static CutsceneBeat SfxBeat(string sfxName, float hold, string flag = null)
         {
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".mp3");
+            // .wav first for the same reason VoBeat does it — replacement clips
+            // arrive as wav and land beside the mp3 they supersede.
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".wav")
+                ?? AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + sfxName + ".mp3");
             if (clip == null)
             {
-                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing SFX {sfxName}.mp3 under {SfxRoot} — beat will be a silent hold.");
+                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing SFX {sfxName}.wav/.mp3 under {SfxRoot} — beat will be a silent hold.");
             }
             return new CutsceneBeat
             {
@@ -195,11 +210,6 @@ namespace FalsePositive.Editor
             };
         }
 
-        /// <summary>A dialogue beat whose voClip is loaded directly from
-        /// Art/Audio/VO by filename, for lines added after the AttachVoClips
-        /// VoClipNames table was written (VoClipNames maps by beat index, which
-        /// gets fragile to extend for a single inserted line) — subtitle text
-        /// still comes from `line`, same as Beat().</summary>
         /// <summary>Attaches a top-right time card to a beat, and optionally a
         /// dip to black before it for a jump forward in time.
         ///
@@ -217,6 +227,11 @@ namespace FalsePositive.Editor
             return beat;
         }
 
+        /// <summary>A dialogue beat whose voClip is loaded directly from
+        /// Art/Audio/VO by filename, for lines added after the AttachVoClips
+        /// VoClipNames table was written (VoClipNames maps by beat index, which
+        /// gets fragile to extend for a single inserted line) — subtitle text
+        /// still comes from `line`, same as Beat().</summary>
         private static CutsceneBeat VoBeat(string speaker, string line, string voName, float holdIfMissing, string flag = null)
         {
             AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".wav");
@@ -307,11 +322,13 @@ namespace FalsePositive.Editor
                     Beat("NICK", "Not tonight, David. I can't do this with you right now. I need some air.", 4f)),
 
                 // The four "fuzzy" transitions (§10: "the same asset, parameterised")
-                // share one rewind-whoosh SFX, distinguished only by fade timing —
-                // FuzzyToNight is the reverse/rewind (long, disorienting), the
-                // other three are the forward return (shorter, snappier).
+                // are distinguished only by fade/hold timing — FuzzyToNight is the
+                // reverse/rewind (long, disorienting), the other three are the
+                // forward return (shorter, snappier). The shared rewind-whoosh SFX
+                // they used to carry is gone: GameFlowDirector.PlayTransitionSound
+                // now sounds every scene change, these four included.
                 TransitionRecipe(CutsceneId.FuzzyToNight, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 1.4f)),
+                    HoldBeat(1.4f)),
                 // Screen-lit -- CutsceneStage stages this one (chair/actor pose)
                 // while the fade covered it before; that staging is now visible.
                 // Slow/echoed VO, the drunk post-process and DrunkCameraSway all
@@ -327,9 +344,16 @@ namespace FalsePositive.Editor
                     SfxBeat("chair_creak", 0.6f),
                     HoldBeat(2.95f)),
 
+                // Kept lit for the RadioTuneTimelineBuilder Timeline beat
+                // (CutsceneStage.RadioTune) — a silent lead-in bracketing the
+                // 7.40s clip, then the storm-warning VO, then a short tail.
+                // Subtitle is the production RADIO-001 wording, not the older
+                // radio_storm_warning line the Timeline was first cut against.
                 VisibleRecipe(CutsceneId.RadioClears,
+                    Beat(null, null, 3.4f),
                     Beat("RADIO", "A snowstorm is moving through the area. Please stay indoors until conditions improve.", 3f,
-                        MemoryFlagIds.HeardRadioWarning)),
+                        MemoryFlagIds.HeardRadioWarning),
+                    Beat(null, null, 0.3f)),
 
                 // Screen-lit -- CutsceneStage stages this one (door swing) while
                 // the fade covered it before; that staging is now visible.
@@ -342,9 +366,9 @@ namespace FalsePositive.Editor
                 VisibleRecipe(CutsceneId.CallForNick,
                     SfxBeat("wind_gust_roar", 1.8f)),
                 TransitionRecipe(CutsceneId.FuzzyToInterrogation, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                    HoldBeat(0.9f)),
                 TransitionRecipe(CutsceneId.FuzzyToMorning, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                    HoldBeat(0.9f)),
 
                 // Screen-lit -- CutsceneStage stages this one (actor poses) while
                 // the fade covered it before; that staging is now visible.
@@ -382,7 +406,7 @@ namespace FalsePositive.Editor
                     VoBeat("PRIYA", "Police? Our friend is hurt. We found him outside in the snow. Please send someone. Please hurry.", "PRIYA-007", 5f)),
 
                 TransitionRecipe(CutsceneId.FuzzyToVerdict, 1.2f,
-                    SfxBeat("fuzzy_whoosh", 0.9f)),
+                    HoldBeat(0.9f)),
 
                 // Spassky's scripted P3 beats. These play in the interrogation
                 // room with the mic down, so they are pre-rendered rather than

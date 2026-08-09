@@ -65,23 +65,42 @@ namespace FalsePositive.Cutscene
                 return;
             }
 
+            // This callback fires when the *VO recipe* ends — three beats
+            // totalling 7.5 s — but the beat's cinematic (M2_DoorOpen.playable)
+            // runs 13.4 s, so acting on it directly would raise the lift prompt
+            // while the camera was still orbiting the body and the player still
+            // had no control. RunAfterDoorSequence bridges the gap; the VO plays
+            // over the front half of the cinematic, which is what this beat's
+            // keepScreenLit recipe was for in the first place.
             _flow.RequestCutscene(CutsceneId.OutIntoTheSnow, () =>
             {
-                _flow.Objectives?.Set("Help Aaron lift him.");
-
-                // Gameplay interlude, not a cutscene beat — CutsceneBeat can
-                // only WaitForSeconds, it has no way to wait on the player
-                // pressing E, so this runs directly on CutsceneStage between
-                // OutIntoTheSnow finishing and TheCarry starting.
                 if (_stage != null)
                 {
-                    _stage.RunLiftInterlude(() => RequestCarrySequence());
+                    _stage.RunAfterDoorSequence(StartLiftInterlude);
                 }
                 else
                 {
-                    RequestCarrySequence();
+                    StartLiftInterlude();
                 }
             });
+        }
+
+        private void StartLiftInterlude()
+        {
+            _flow.Objectives?.Set("Help Aaron lift him.");
+
+            // Gameplay interlude, not a cutscene beat — CutsceneBeat can
+            // only WaitForSeconds, it has no way to wait on the player
+            // pressing E, so this runs directly on CutsceneStage between
+            // OutIntoTheSnow finishing and TheCarry starting.
+            if (_stage != null)
+            {
+                _stage.RunLiftInterlude(() => RequestCarrySequence());
+            }
+            else
+            {
+                RequestCarrySequence();
+            }
         }
 
         private void RequestCarrySequence()

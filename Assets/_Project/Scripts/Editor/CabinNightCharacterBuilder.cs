@@ -61,13 +61,20 @@ namespace FalsePositive.Editor
                 UnityEngine.Object.DestroyImmediate(charactersRoot.GetChild(0).gameObject);
             }
 
+            // MaleBodyJeansShirt (not the bare MaleBodyJeans every other
+            // renderer here still uses) so the radio-tuning Timeline beat has
+            // a shirt to show when it flips the player's arm renderer visible
+            // — see RadioTuneTimelineBuilder. Purely additive: the shirt
+            // material only layers _TopOverlayMap on top of the same
+            // _BaseMap/_OverlayMap, so this is also strictly better for the
+            // player's normal shadow-only rendering.
             GameObject player = isMorning
                 ? BuildCharacter(charactersRoot, "Player (Male - First Person)", false,
                     new Vector3(0.75f, 0f, 0.25f), new Vector3(0f, -90f, 0f), 0.98f,
-                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null)
+                    Material("MaleBodyJeansShirt"), CabinIdleProfile.Controlled, null, null, null, null, null)
                 : BuildCharacter(charactersRoot, "Player (Male - First Person)", false,
                     new Vector3(-3.0f, 0f, 0.85f), new Vector3(0f, 0f, 0f), 0.98f,
-                    Material("MaleBodyJeans"), CabinIdleProfile.Controlled, null, null, null, null, null);
+                    Material("MaleBodyJeansShirt"), CabinIdleProfile.Controlled, null, null, null, null, null);
             ConfigurePlayer(player);
             ConvertToRouterRig(player);
             ConfigureInteraction(player);
@@ -187,6 +194,7 @@ namespace FalsePositive.Editor
                 // CutsceneStage (Phase 4) drives this NPC's movement/pose
                 // during cutscene beats — see Cutscene.ScriptedActor.
                 root.AddComponent<FalsePositive.Cutscene.ScriptedActor>();
+                GroundAndFit(root, profile);
             }
 
             return root;
@@ -223,8 +231,45 @@ namespace FalsePositive.Editor
             CabinCharacterIdle idle = root.AddComponent<CabinCharacterIdle>();
             idle.Configure(profile, Math.Abs(name.GetHashCode() % 1000) / 1000f);
             root.AddComponent<FalsePositive.Cutscene.ScriptedActor>();
+            GroundAndFit(root, profile);
 
             return root;
+        }
+
+        /// <summary>Bakes the ground query and the pose-fitted collider into the
+        /// prefab and the scene, rather than leaving both to the first frame of
+        /// play mode.
+        ///
+        /// Two reasons it runs here and not only at runtime: the cast is
+        /// visible in the Scene view and in the prefab Inspector, where a
+        /// character standing knee-deep in the floor is the bug being fixed;
+        /// and CabinAnimatorDriver caches the Body's rest local position in
+        /// Awake, so the lift baked here becomes the baseline its own
+        /// Kneeling/Sleeping/Seated offset is applied on top of, which is
+        /// exactly the layering CabinFootPlanter's doc describes.
+        ///
+        /// Note the y values passed to BuildCharacter/BuildNamedCharacter are
+        /// now only a SEED for the probe — the authored literal decides which
+        /// storey the character is on, and the collider under them decides the
+        /// exact height. That is what stops Aaron and Ivy hanging 0.22 m inside
+        /// the raised ceiling slab, and Nick's body floating over the snow.
+        ///
+        /// The player is excluded on purpose: they have a CharacterController
+        /// and gravity, so the floor finds them.</summary>
+        private static void GroundAndFit(GameObject root, CabinIdleProfile profile)
+        {
+            CabinFootPlanter.PlantAndFit(root, profile);
+
+            // The lift lands on the Body child, which is a nested FBX prefab
+            // instance — recorded explicitly for the same reason ApplyPose
+            // records its bone rotations, so SaveCharacter cannot drop it.
+            Animator animator = root.GetComponentInChildren<Animator>();
+            if (animator != null && PrefabUtility.IsPartOfPrefabInstance(animator.transform))
+            {
+                PrefabUtility.RecordPrefabInstancePropertyModifications(animator.transform);
+            }
+
+            EditorUtility.SetDirty(root);
         }
 
         private static void ConfigurePlayer(GameObject player)
@@ -271,6 +316,11 @@ namespace FalsePositive.Editor
             // teleported inside the sofa and the CharacterController re-enabled
             // in there — depenetration then popped them out stuck on top of it.
             recovery.Configure(FallRecoveryPoint);
+
+            // LAST, deliberately. The ShadowsOnly loop at the top of this method
+            // is what made Reach_DoorKnob invisible in the first place; building
+            // the arm before it would sweep the arm up with everything else.
+            FirstPersonArmBuilder.Build(player);
         }
 
         /// <summary>Where CabinFallRecovery puts a player who drops out of the

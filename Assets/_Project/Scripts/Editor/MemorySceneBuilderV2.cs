@@ -128,6 +128,13 @@ namespace FalsePositive.Editor
             BuildLighting(lighting, isMorning);
             BuildAtmosphere(atmosphere);
 
+            // Morning's weather. Runs here, inside the build, because
+            // OpenOrCreateEmptyScene only destroys root GameObjects —
+            // RenderSettings survive a rebuild, so without this the scene keeps
+            // whatever it was last saved with, which for morning was the night
+            // look verbatim. Also re-runnable on its own as T04e.
+            if (isMorning) MemoryAtmosphereBuilder.ApplyMorning();
+
             // CabinNightCharacterBuilder.ApplyPose wires CabinCast.controller
             // onto every cast member's Animator — must exist before the cast
             // is built, or the wiring step silently no-ops (LoadAssetAtPath
@@ -290,9 +297,13 @@ namespace FalsePositive.Editor
             Light fireLight = fireLightGo.AddComponent<Light>();
             fireLight.type = LightType.Point;
             fireLight.color = new Color(1f, 0.55f, 0.22f);
-            // Morning fire reads as embers in the grey daylight grade — dimmer,
-            // shorter range, no shadow — vs. the night scene's full blaze.
-            fireLight.intensity = isMorning ? 3.2f : 4.5f;
+            // Morning fire reads as embers in the grey daylight grade — shorter
+            // range, no shadow — vs. the night scene's full blaze. Its
+            // intensity went UP from 3.2 when MemoryAtmosphereBuilder raised
+            // morning ambient roughly fivefold (sky 0.075 -> 0.35): against the
+            // old night ambient 3.2 was a fire, against the new one it was a
+            // warm patch on the hearth.
+            fireLight.intensity = isMorning ? 4.2f : 4.5f;
             fireLight.range = isMorning ? 6f : 7.5f;
             fireLight.shadows = isMorning ? LightShadows.None : LightShadows.Soft;
             fireLight.shadowStrength = 0.8f;
@@ -491,7 +502,11 @@ namespace FalsePositive.Editor
             moonLight.shadows = LightShadows.Soft;
             if (isMorning)
             {
-                moon.transform.rotation = Quaternion.Euler(35f, 300f, 0f);
+                // 16 degrees, not 35: a low winter sun that rakes across the
+                // snow instead of standing over it, which is what gives the
+                // exterior any depth at all once MemoryAtmosphereBuilder's fog
+                // has flattened the distance.
+                moon.transform.rotation = Quaternion.Euler(16f, 300f, 0f);
                 moonLight.color = new Color(0.78f, 0.8f, 0.85f);
                 moonLight.intensity = 1.1f;
             }
@@ -502,30 +517,36 @@ namespace FalsePositive.Editor
                 moonLight.intensity = 0.52f;
             }
 
+            // Night only. Morning's Volume, profile and weight belong to
+            // MemoryAtmosphereBuilder (T04e, called at the tail of BuildScene):
+            // morning used to point at this same shared night profile at weight
+            // 0.4, and since CabinNightVolume.asset has `components: []` that
+            // was a no-op standing in for a grade nobody had authored yet.
+            //
             // Volume/VolumeProfile live in the render-pipeline core assembly,
             // which this asmdef deliberately doesn't reference (same reason
             // ProjectBootstrapBuilder.cs reaches UniversalAdditionalCameraData
             // via reflection instead of a hard reference — HDRP is also
             // installed per Packages/manifest.json).
-            Type profileType = Type.GetType("UnityEngine.Rendering.VolumeProfile, Unity.RenderPipelines.Core.Runtime");
-            Type volumeType = Type.GetType("UnityEngine.Rendering.Volume, Unity.RenderPipelines.Core.Runtime");
-            UnityEngine.Object profile = profileType != null
-                ? AssetDatabase.LoadAssetAtPath(NightGradeVolumePath, profileType)
-                : null;
-            if (profile != null && volumeType != null)
+            if (!isMorning)
             {
-                GameObject gradeGo = NewChild(root, isMorning ? "Cabin Morning Grade" : "Cabin Night Grade");
-                Component volume = gradeGo.AddComponent(volumeType);
-                volumeType.GetField("isGlobal")?.SetValue(volume, true);
-                volumeType.GetProperty("sharedProfile")?.SetValue(volume, profile);
-                // Morning is a lighter grade than the shared night profile
-                // affords — a rough-pass compromise (reusing rather than
-                // authoring a second profile) noted for a later lighting pass.
-                volumeType.GetField("weight")?.SetValue(volume, isMorning ? 0.4f : 1f);
-            }
-            else
-            {
-                Debug.LogWarning($"[MemorySceneBuilderV2] {NightGradeVolumePath} missing or Volume type unresolved — no color grade.");
+                Type profileType = Type.GetType("UnityEngine.Rendering.VolumeProfile, Unity.RenderPipelines.Core.Runtime");
+                Type volumeType = Type.GetType("UnityEngine.Rendering.Volume, Unity.RenderPipelines.Core.Runtime");
+                UnityEngine.Object profile = profileType != null
+                    ? AssetDatabase.LoadAssetAtPath(NightGradeVolumePath, profileType)
+                    : null;
+                if (profile != null && volumeType != null)
+                {
+                    GameObject gradeGo = NewChild(root, "Cabin Night Grade");
+                    Component volume = gradeGo.AddComponent(volumeType);
+                    volumeType.GetField("isGlobal")?.SetValue(volume, true);
+                    volumeType.GetProperty("sharedProfile")?.SetValue(volume, profile);
+                    volumeType.GetField("weight")?.SetValue(volume, 1f);
+                }
+                else
+                {
+                    Debug.LogWarning($"[MemorySceneBuilderV2] {NightGradeVolumePath} missing or Volume type unresolved — no color grade.");
+                }
             }
 
             // Box sized to the room, so the raised ceiling doesn't leave the

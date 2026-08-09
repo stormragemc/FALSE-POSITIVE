@@ -179,7 +179,12 @@ namespace FalsePositive.Editor
                     animationClipCount++;
                 }
 
-                cursor += duration;
+                // Space the next beat off this one. Clips used to butt end to
+                // end, which is what made the flashbacks unreadable — seven
+                // lines from five people the player has never met, delivered
+                // with no air between them. CutsceneDirector waits this same
+                // value between beats, so the subtitles track the voices.
+                cursor += duration + CutscenePacing.BeatGapFor(id);
             }
 
             EditorUtility.SetDirty(timeline);

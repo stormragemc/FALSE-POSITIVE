@@ -144,6 +144,13 @@ namespace FalsePositive.Editor
                 // Always write the generated result so inserting or reordering
                 // recipes cannot leak a clip from the old serialized array slot.
                 beatProp.FindPropertyRelative("voClip").objectReferenceValue = beat.voClip;
+
+                // Same reasoning as voClip above: written unconditionally, so a
+                // card cannot survive on a beat that no longer defines one.
+                beatProp.FindPropertyRelative("timeCard").stringValue = beat.timeCard ?? string.Empty;
+                beatProp.FindPropertyRelative("timeCardCaption").stringValue = beat.timeCardCaption ?? string.Empty;
+                beatProp.FindPropertyRelative("timeCardHoldSeconds").floatValue = beat.timeCardHoldSeconds;
+                beatProp.FindPropertyRelative("dipToBlackBefore").boolValue = beat.dipToBlackBefore;
             }
         }
 
@@ -181,6 +188,23 @@ namespace FalsePositive.Editor
         /// VoClipNames table was written (VoClipNames maps by beat index, which
         /// gets fragile to extend for a single inserted line) — subtitle text
         /// still comes from `line`, same as Beat().</summary>
+        /// <summary>Attaches a top-right time card to a beat, and optionally a
+        /// dip to black before it for a jump forward in time.
+        ///
+        /// Used only where the script itself jumps: §4 stages CS-16B at 23:40
+        /// and then "hard jump forward to roughly 00:50" in the same room. With
+        /// no marker those halves played as one scene, so the fireplace
+        /// conversation appeared to begin mid-thought.</summary>
+        private static CutsceneBeat Card(CutsceneBeat beat, string time, string caption = null,
+            bool dipToBlack = false, float hold = 3.5f)
+        {
+            beat.timeCard = time;
+            beat.timeCardCaption = caption;
+            beat.timeCardHoldSeconds = hold;
+            beat.dipToBlackBefore = dipToBlack;
+            return beat;
+        }
+
         private static CutsceneBeat VoBeat(string speaker, string line, string voName, float holdIfMissing, string flag = null)
         {
             AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".wav");
@@ -339,7 +363,8 @@ namespace FalsePositive.Editor
                 // missing, so the pair is playable now and completes itself
                 // when the clips land under Art/Audio/VO with these names.
                 VisibleRecipe(CutsceneId.GoodYears,
-                    VoBeat("PRIYA", "Fifteen years and you two still act exactly the same.", "PRIYA-014", 2.4f),
+                    Card(VoBeat("PRIYA", "Fifteen years and you two still act exactly the same.", "PRIYA-014", 2.4f),
+                        "21:00", "Earlier that night"),
                     VoBeat("NICK", "He was worse at seventeen.", "NICK-002", 1.6f),
                     VoBeat("PRIYA", "And two years for these two.", "PRIYA-015", 1.8f),
                     VoBeat("AARON", "Barely survived it.", "AARON-004", 1.4f),
@@ -355,7 +380,8 @@ namespace FalsePositive.Editor
                     // three broken pieces. These are cuts of radio_storm_warning
                     // rather than new lines; until they are cut, each is a
                     // subtitled silent hold.
-                    VoBeat("RADIO", "…snow storm…", "RADIO-002", 1.2f),
+                    Card(VoBeat("RADIO", "…snow storm…", "RADIO-002", 1.2f),
+                        "23:40", "Later. The fire is dying."),
                     VoBeat("NICK", "You've been saying \"after this trip\" for two years.", "NICK-005", 2.6f),
                     // Aaron does not shout and does not approach. This one quiet
                     // question is his entire visible reaction, and the moment the
@@ -365,7 +391,8 @@ namespace FalsePositive.Editor
                     // David is heard only through the player's microphone, so
                     // his half of the argument is subtitle-only by design — a
                     // plain Beat with no VO name, never a missing-clip warning.
-                    Beat("DAVID", "You need to tell him.", 1.8f),
+                    Card(Beat("DAVID", "You need to tell him.", 1.8f),
+                        "00:50", "About an hour later — David and Nick, alone", dipToBlack: true),
                     VoBeat("NICK", "He already knows.", "NICK-006", 1.6f),
                     Beat("DAVID", "Then say it to his face.", 1.8f),
                     VoBeat("NICK", "I need some air.", "NICK-007", 1.6f),

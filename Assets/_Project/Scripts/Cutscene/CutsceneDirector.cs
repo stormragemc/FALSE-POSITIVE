@@ -19,6 +19,28 @@ namespace FalsePositive.Cutscene
         public AudioClip voClip;
         public float holdSecondsIfNoClip = 2.5f;
         public string memoryFlagToSet;
+
+        /// <summary>Time shown in the top-right card raised before this beat,
+        /// e.g. "00:50". Empty means no card.</summary>
+        public string timeCard;
+
+        /// <summary>Second line of that card — where we are and who is here,
+        /// e.g. "Alone by the fire". Optional.</summary>
+        public string timeCardCaption;
+
+        /// <summary>Seconds the card stays at full opacity. It deliberately
+        /// outlives the beat that raised it so it is still legible over the
+        /// first line of the new scene.</summary>
+        public float timeCardHoldSeconds = 3.5f;
+
+        /// <summary>Dip the screen to black and back before this beat.
+        ///
+        /// For a jump forward in time inside a single cutscene. §4 asks for
+        /// hard cuts between the interrogation and a memory, and those stay
+        /// hard; this is the *internal* jump — 23:40 to 00:50 in the same room
+        /// — which had no marker at all and so read as one continuous scene.
+        /// </summary>
+        public bool dipToBlackBefore;
     }
 
     [Serializable]
@@ -74,6 +96,7 @@ namespace FalsePositive.Cutscene
     {
         [SerializeField] private ScreenFader fader;
         [SerializeField] private SubtitleUI subtitles;
+        [SerializeField] private TimeCardUI timeCards;
         [SerializeField] private AudioSource voSource;
         [SerializeField] private AudioSource sfxSource;
         [SerializeField] private uLipSync.uLipSyncAudioSource voSourceLipSync;
@@ -81,22 +104,20 @@ namespace FalsePositive.Cutscene
         [SerializeField] private CutsceneTimelineBinding[] timelineDirectors = Array.Empty<CutsceneTimelineBinding>();
 
         [Header("Pacing")]
-        /// <summary>Silence held after a spoken beat before the next one starts.
-        ///
-        /// Without it every line begins on the exact frame the previous one is
-        /// due to end, so a scripted exchange machine-guns and reads as rushed.
-        /// This is the single biggest lever on how the P3 memory sequence
-        /// feels; raise it if the delivery still runs together.</summary>
-        [SerializeField, Range(0f, 1.5f)] private float interBeatSeconds = 0.45f;
-
-        /// <summary>Extra hold on top of a clip's own length.
+        /// <summary>Extra hold on top of a clip's own length, for the case where
+        /// this director is playing the audio itself.
         ///
         /// A beat used to wait exactly voClip.length, but the wait is frame
         /// quantised and AudioSource.Play does not start on the same frame it
         /// is called, so the next beat reassigned source.clip while the tail of
-        /// the current line was still sounding — clipping the last syllable off
-        /// essentially every line. The tail absorbs that skew.</summary>
+        /// the current line was still sounding. Only applies when no Timeline is
+        /// bound for the cutscene — when one is, Timeline owns the audio and
+        /// adding to the hold here would push the subtitles off it.</summary>
         [SerializeField, Range(0f, 1f)] private float audioTailSeconds = 0.25f;
+
+        /// <summary>Each half of a mid-cutscene dip to black. Total darkness is
+        /// roughly twice this.</summary>
+        [SerializeField, Range(0.1f, 2f)] private float dipToBlackSeconds = 0.45f;
 
         /// <summary>Cap on waiting for a still-playing clip. Guards against a
         /// beat hanging forever if a clip loops or an AudioSource is left
@@ -173,6 +194,12 @@ namespace FalsePositive.Cutscene
 
             if (recipe != null)
             {
+                // The same gap VoTimelineBuilder baked between this cutscene's
+                // audio clips. Read from the shared source rather than a local
+                // field so the subtitles cannot drift off the voices — see
+                // CutscenePacing.
+                float beatGap = CutscenePacing.BeatGapFor(id);
+
                 for (int i = 0; i < recipe.beats.Length; i++)
                 {
                     yield return PlayBeat(recipe.beats[i], timeline != null);
@@ -181,10 +208,16 @@ namespace FalsePositive.Cutscene
                     // owned by whoever is cutting away next — see
                     // GameFlowDirector's interlude lead-in — so that a seam is
                     // paced once rather than twice.
-                    if (i < recipe.beats.Length - 1 && interBeatSeconds > 0f)
+                    if (i < recipe.beats.Length - 1 && beatGap > 0f)
                     {
-                        yield return new WaitForSeconds(interBeatSeconds);
+                        yield return new WaitForSeconds(beatGap);
                     }
+                }
+
+                // Let a flashback settle before it gives way.
+                if (CutscenePacing.IsMemory(id) && CutscenePacing.MemoryOutroSeconds > 0f)
+                {
+                    yield return new WaitForSeconds(CutscenePacing.MemoryOutroSeconds);
                 }
             }
 
@@ -203,8 +236,30 @@ namespace FalsePositive.Cutscene
                 GameFlowDirector.Instance?.Flags.Set(beat.memoryFlagToSet);
             }
 
+            // A jump forward in time inside this cutscene: black, then back.
+            // The dip is short on purpose — long enough to read as a cut rather
+            // than a glitch, short enough not to feel like a loading screen.
+            if (beat.dipToBlackBefore && fader != null)
+            {
+                yield return fader.FadeToBlack(dipToBlackSeconds);
+                yield return fader.FadeFromBlack(dipToBlackSeconds);
+            }
+
+            // Raised while the screen is coming back, so the card is already
+            // legible by the time the new scene is visible.
+            if (!string.IsNullOrEmpty(beat.timeCard))
+            {
+                timeCards?.Show(beat.timeCard, beat.timeCardCaption, beat.timeCardHoldSeconds);
+            }
+
             bool spoken = beat.voClip != null;
-            float hold = spoken ? beat.voClip.length + audioTailSeconds : beat.holdSecondsIfNoClip;
+            // When Timeline owns the audio the hold must be the clip's exact
+            // length: Timeline is playing to its own baked schedule, and any
+            // padding here would slide the subtitle off the voice, cumulatively,
+            // for the rest of the cutscene.
+            float hold = spoken
+                ? beat.voClip.length + (timelineOwnsAudio ? 0f : audioTailSeconds)
+                : beat.holdSecondsIfNoClip;
 
             if (!string.IsNullOrEmpty(beat.line))
             {

@@ -35,7 +35,6 @@ namespace FalsePositive.Editor
         private const string AnimRoot = "Assets/_Project/Art/Animations/RadioTune/";
         private const string TimelineRoot = "Assets/_Project/Art/Timelines/";
         private const string TimelinePath = TimelineRoot + "Cutscene_RadioTune.playable";
-        private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
         private const string NightScenePath = "Assets/_Project/Scenes/Memory_CabinNight.unity";
         private const string PersistentScenePath = "Assets/_Project/Scenes/_Persistent.unity";
         private const string PlayerPrefabPath = "Assets/_Project/CabinNight/Prefabs/Player_FirstPerson.prefab";
@@ -178,6 +177,21 @@ namespace FalsePositive.Editor
                             ok = false;
                         }
 
+                        // Audio tracks are checked by clip identity, not just
+                        // "is something bound". This verifier passed while the
+                        // Radio Static track still referenced the superseded
+                        // radio_static_loop.mp3 instead of the .wav that
+                        // replaced it — a binding can be non-null and still be
+                        // the wrong asset, which is silent at author time and
+                        // only audible in a playthrough.
+                        if (track is AudioTrack audioTrack)
+                        {
+                            string[] expected = track.name == TrackStatic
+                                ? new[] { "radio_static_loop" }
+                                : new[] { "radio_tuning_sweep", "radio_lock_on" };
+                            ok &= VerifyAudioTrackClips(audioTrack, expected);
+                        }
+
                         if (track.name == TrackCamera && track is AnimationTrack cameraTrack)
                         {
                             foreach (TimelineClip clip in cameraTrack.GetClips())
@@ -201,6 +215,45 @@ namespace FalsePositive.Editor
             Debug.Log(ok
                 ? "[RadioTuneTimelineBuilder] Verify: PASS."
                 : "[RadioTuneTimelineBuilder] Verify: FAIL — see errors above.");
+        }
+
+        /// <summary>Asserts an audio track's clips are exactly the expected SFX
+        /// assets, in order, resolved through the same wav-first LoadSfx the
+        /// builder uses — so "the file it should point at" is decided in one
+        /// place rather than restated here as a literal path.</summary>
+        private static bool VerifyAudioTrackClips(AudioTrack track, string[] expectedNames)
+        {
+            TimelineClip[] clips = track.GetClips().ToArray();
+            if (clips.Length != expectedNames.Length)
+            {
+                Debug.LogError($"[RadioTuneTimelineBuilder] Verify: track '{track.name}' has " +
+                    $"{clips.Length} clip(s), expected {expectedNames.Length} " +
+                    $"({string.Join(", ", expectedNames)}).");
+                return false;
+            }
+
+            bool ok = true;
+            for (int i = 0; i < clips.Length; i++)
+            {
+                AudioClip actual = (clips[i].asset as AudioPlayableAsset)?.clip;
+                AudioClip want = MemorySceneDressing.LoadSfx(expectedNames[i]);
+
+                if (want == null)
+                {
+                    Debug.LogError($"[RadioTuneTimelineBuilder] Verify: expected SFX " +
+                        $"'{expectedNames[i]}'.wav/.mp3 does not exist on disk.");
+                    ok = false;
+                }
+                else if (actual != want)
+                {
+                    string actualPath = actual == null ? "null" : AssetDatabase.GetAssetPath(actual);
+                    Debug.LogError($"[RadioTuneTimelineBuilder] Verify: track '{track.name}' clip {i} " +
+                        $"references {actualPath}, expected {AssetDatabase.GetAssetPath(want)}. " +
+                        "Re-run 9c - Build Radio Tune Timeline to rebind it.");
+                    ok = false;
+                }
+            }
+            return ok;
         }
 
         /// <summary>The restore in CutsceneStage.RadioTune() runs before
@@ -623,28 +676,68 @@ namespace FalsePositive.Editor
 
         private static void EnsureStaticClip(AudioTrack track)
         {
-            if (track.GetClips().Any()) return;
+            AudioClip staticLoop = LoadSfx("radio_static_loop");
+            if (TrackReferences(track, staticLoop)) return;
+            ClearClips(track);
 
-            TimelineClip clip = track.CreateClip(LoadSfx("radio_static_loop"));
+            TimelineClip clip = track.CreateClip(staticLoop);
             clip.start = 0;
             clip.duration = 1.90;
         }
 
         private static void EnsureTuneClips(AudioTrack track)
         {
-            if (track.GetClips().Any()) return;
+            AudioClip sweepClip = LoadSfx("radio_tuning_sweep");
+            AudioClip lockOnClip = LoadSfx("radio_lock_on");
+            if (TrackReferences(track, sweepClip, lockOnClip)) return;
+            ClearClips(track);
 
-            TimelineClip sweep = track.CreateClip(LoadSfx("radio_tuning_sweep"));
+            TimelineClip sweep = track.CreateClip(sweepClip);
             sweep.start = 1.45;
 
-            TimelineClip lockOn = track.CreateClip(LoadSfx("radio_lock_on"));
+            TimelineClip lockOn = track.CreateClip(lockOnClip);
             lockOn.start = 3.00;
         }
 
+        /// <summary>True when the track's clips already reference exactly
+        /// <paramref name="wanted"/>, in order.
+        ///
+        /// The check used to be "does this track have any clips at all", which
+        /// made a stale binding permanent: once a clip existed the builder
+        /// skipped the track forever, so replacing radio_static_loop.mp3 with
+        /// the .wav left the Timeline pointing at the superseded asset through
+        /// a full regeneration of the project. Comparing the actual clip
+        /// references means a swapped asset repairs itself on the next build,
+        /// while genuinely unchanged tracks are still left alone (so the
+        /// user's own clip timing survives, per BuildTimelineAsset's doc).</summary>
+        private static bool TrackReferences(AudioTrack track, params AudioClip[] wanted)
+        {
+            TimelineClip[] existing = track.GetClips().ToArray();
+            if (existing.Length != wanted.Length) return false;
+
+            for (int i = 0; i < existing.Length; i++)
+            {
+                if ((existing[i].asset as AudioPlayableAsset)?.clip != wanted[i]) return false;
+            }
+            return true;
+        }
+
+        private static void ClearClips(AudioTrack track)
+        {
+            foreach (TimelineClip clip in track.GetClips().ToArray())
+            {
+                track.DeleteClip(clip);
+            }
+        }
+
+        /// <summary>Wav-first, matching MemorySceneDressing and
+        /// ProjectBootstrapBuilder — reused rather than re-implemented, since
+        /// this builder having its own mp3-only copy is what bound the
+        /// Timeline to the old radio static.</summary>
         private static AudioClip LoadSfx(string name)
         {
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + name + ".mp3");
-            if (clip == null) throw new InvalidOperationException($"[RadioTuneTimelineBuilder] Missing SFX clip '{name}'.mp3.");
+            AudioClip clip = MemorySceneDressing.LoadSfx(name);
+            if (clip == null) throw new InvalidOperationException($"[RadioTuneTimelineBuilder] Missing SFX clip '{name}'.wav/.mp3.");
             return clip;
         }
 

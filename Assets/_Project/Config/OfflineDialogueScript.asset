@@ -14,46 +14,45 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Dialogue.OfflineDialogueScript
   p2Recall:
   - line: So. What's the last thing you remember?
-    voClip: {fileID: 8300000, guid: 0d716d4925ecbfa4a97cc5b5d73bb28d, type: 3}
+    voClip: {fileID: 8300000, guid: 9ac6e36e98cf2f341854c78099448146, type: 3}
     holdSecondsIfNoClip: 4
-  - line: Let's start simple. Were you drinking last night? With who, and until when?
-    voClip: {fileID: 8300000, guid: 7792deb24fd265e41a674943950c5266, type: 3}
-    holdSecondsIfNoClip: 4
-  - line: Tell me about the argument with Nick. What was it actually about?
-    voClip: {fileID: 8300000, guid: 65af13a0aec00a6488e6498018feb08a, type: 3}
-    holdSecondsIfNoClip: 4
-  - line: Did you see Nick go outside?
-    voClip: {fileID: 8300000, guid: 90cddfad0b8184044ba1175bde3ba243, type: 3}
+  - line: Who else was drinking with you?
+    voClip: {fileID: 8300000, guid: 21f2d3903055bfe4d95f5ff409745b1e, type: 3}
     holdSecondsIfNoClip: 3
-  - line: Did you go to the door yourself? Did you call out?
-    voClip: {fileID: 8300000, guid: 51d8e48409635ad4f817dfc86e44267b, type: 3}
-    holdSecondsIfNoClip: 3.5
-  - line: Was the door locked or unlocked, the last time you had anything to do with
-      it?
-    voClip: {fileID: 8300000, guid: e5c067dd7f0b21647a8820ca590ff2db, type: 3}
+  - line: How much did you have?
+    voClip: {fileID: 8300000, guid: e8894558afc1ca247b2cab133666032a, type: 3}
+    holdSecondsIfNoClip: 3
+  - line: Tell me about the argument with Nick. What was it really about?
+    voClip: {fileID: 8300000, guid: 688ae5f5ef9de544fa6073d29fe7c007, type: 3}
     holdSecondsIfNoClip: 4
-  - line: What did you do afterward? How long were you out for?
-    voClip: {fileID: 8300000, guid: 3f7880e69ae892f42ad16be9c70bffbc, type: 3}
-    holdSecondsIfNoClip: 4
-  - line: Walk me through what happened when the body was found the next morning.
-    voClip: {fileID: 8300000, guid: e68cf348faeaa2e47819852de3ff15ee, type: 3}
+  - line: What did Nick do after the argument?
+    voClip: {fileID: 8300000, guid: 8f59363e86c32ea42897a1f27b948a8e, type: 3}
+    holdSecondsIfNoClip: 3
+  - line: What did you do next?
+    voClip: {fileID: 8300000, guid: 4de312267c34e614a8209ddd5c6d6e02, type: 3}
+    holdSecondsIfNoClip: 3
+  - line: Was the door locked when you opened it?
+    voClip: {fileID: 8300000, guid: 4fc9710ec748cad4ba626f86dfb8c3ad, type: 3}
+    holdSecondsIfNoClip: 3
+  - line: Walk me through the morning. Start with Priya's scream.
+    voClip: {fileID: 8300000, guid: 7645ca6d1b6660d45aef47d8715fd91b, type: 3}
     holdSecondsIfNoClip: 4
   - line: What happened to Nick?
-    voClip: {fileID: 8300000, guid: 3392eb0bb6d2a7f4ea042158328a7d77, type: 3}
+    voClip: {fileID: 8300000, guid: dd1e2f7419ccb7f49b9558192ca903da, type: 3}
     holdSecondsIfNoClip: 3
   p3Verdict:
   - line: Tell me why I should spare your life.
-    voClip: {fileID: 8300000, guid: 0c50caa903d172f488b1a23fe4ae3ead, type: 3}
+    voClip: {fileID: 8300000, guid: fd08976b4c66682438d1e4ace3adf0f9, type: 3}
     holdSecondsIfNoClip: 4
-  - line: If it's not you, then tell me who did it?
-    voClip: {fileID: 8300000, guid: b043b234278599c4dbc2fb5471ef1995, type: 3}
+  - line: If it's not you, then tell me who did it.
+    voClip: {fileID: 8300000, guid: e154d106ff6d3524f8eba05c9a6884e1, type: 3}
     holdSecondsIfNoClip: 4
   - line: That's not an answer. Try again.
-    voClip: {fileID: 8300000, guid: 2f5d490228da61643a7f9d1a66fb91d1, type: 3}
+    voClip: {fileID: 8300000, guid: b9540096c2e9646438f469403e446505, type: 3}
     holdSecondsIfNoClip: 3
   - line: You understand how that sounds, don't you?
-    voClip: {fileID: 8300000, guid: 0bd93119706f22b47a1bc608dc195f86, type: 3}
+    voClip: {fileID: 8300000, guid: ab0e2ece830ed80428cf471bc91f3906, type: 3}
     holdSecondsIfNoClip: 3.5
   - line: Last chance. Who do you think did this?
-    voClip: {fileID: 8300000, guid: c235c7d81d2e18547b5721d6f663b8e2, type: 3}
+    voClip: {fileID: 8300000, guid: 1cdd2cd987ad5244dac29356d843e457, type: 3}
     holdSecondsIfNoClip: 3.5

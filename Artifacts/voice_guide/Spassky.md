@@ -1,8 +1,17 @@
 # Officer Spassky — voice and script-driven delivery
 
-**Status:** voice **shipped** 7 Aug 2026 (§4.1). Delivery registers (§4.3) designed, not yet
-implemented. Supersedes `STORY_SCRIPT.md` §2's voice-cast note and `GAME_COMPLETION_PLAN.md` §7 B0
-where they are now out of date (see §2).
+> **V3 supersession — 9 Aug 2026.** The shipped configuration now uses
+> `eleven_v3`, stability `1.0`, similarity boost `1.0`, style `0.0`, speaker
+> boost, and a mandatory `strong Russian accent` audio tag. The LLM may emit one
+> validated mood tag, which is stripped from subtitles and passed only to TTS.
+> The 62 prerecorded lines map the existing registers to V3 moods (`PRESS` →
+> `impatient`, `RAISED` → `shouting`, `LOW` → `quietly menacing`; `FLAT` has no
+> mood). The V2 measurements and rejected-design discussion below remain as
+> historical decision context, not current production settings.
+
+**Status:** V3 voice and mood-aware delivery **shipped** 9 Aug 2026. Supersedes
+`STORY_SCRIPT.md` §2's voice-cast note and `GAME_COMPLETION_PLAN.md` §7 B0 where
+they are now out of date (see §2).
 
 ---
 

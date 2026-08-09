@@ -1,10 +1,8 @@
 # Priya — voice and script-driven delivery
 
 **Status:** voice finalized. Eleven production WAVs exist in the working tree
-(§4.1–4.3). `PRIYA-002` through `PRIYA-008` are approved; `PRIYA-001` is pending
-re-review after its 9 Aug **DAY-vid** pronunciation correction, and the three
-good-years memory WAVs remain pending review. Unity import and cutscene wiring
-are not yet implemented (§4.4). Supersedes the
+(§4.1–4.3), and all passed post-cleanup listening review on 9 Aug 2026. Unity
+import and cutscene wiring are not yet implemented (§4.4). Supersedes the
 Jessica casting and six legacy Priya clip names in `Assets/_Project/Art/Audio/VO/README.md` where
 they conflict with this document.
 
@@ -164,7 +162,7 @@ The repeated words in `PRIYA-002` are deliberately separated by `?!`, unlike the
 take. The broken contour is the selected panic performance, not a typographical change to the
 canonical script.
 
-### 4.3 Assets and reproducibility — PARTIALLY REVIEWED
+### 4.3 Assets and reproducibility — REVIEWED
 
 Production files:
 
@@ -176,10 +174,11 @@ Artifacts/voice-lines/priya/PRIYA-015.wav
 Artifacts/voice-lines/priya/PRIYA-016.wav
 ```
 
-`PRIYA-002` through `PRIYA-008` are approved takes. `PRIYA-001` was regenerated
-with the project-wide synthesis alias `DAY-VID` and is pending re-review.
-`PRIYA-014` through `PRIYA-016` have the selected voice and documented prompts
-but remain pending audition approval.
+All eleven takes passed post-cleanup listening review on 9 Aug 2026.
+`PRIYA-001` uses the project-wide synthesis alias `DAY-VID`; its pronunciation,
+called names, and final plea were approved. The regenerated `PRIYA-014` passed
+review with a complete final word, and `PRIYA-015` and `PRIYA-016` were also
+approved in their connected toast scene.
 
 `Artifacts/voice-lines/priya/README.md` is the compact production manifest.
 `generate_priya_voice_lines.py` stores the public voice ID, model, settings, and exact prompts. It

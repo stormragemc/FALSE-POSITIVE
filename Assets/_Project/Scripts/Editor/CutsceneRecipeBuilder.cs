@@ -9,37 +9,51 @@ using UnityEngine.SceneManagement;
 namespace FalsePositive.Editor
 {
     /// <summary>
-    /// Populates CutsceneDirector's recipes with dialogue verbatim from
-    /// docs/STORY_SCRIPT.md §4/§5. Re-runnable and safe to call again once
-    /// Step 5 generates VO — VoClipAttacher (a separate pass) fills in the
-    /// AudioClip references this leaves null; this method only ever resets
-    /// the text/flag data, never clobbers clips, because it is meant to run
-    /// again if a line's wording changes.
+    /// Populates CutsceneDirector's recipes with canonical dialogue from
+    /// docs/HUMAN_SCRIPT.md. Re-runnable: the stable-ID mapping below replaces
+    /// legacy descriptive stems without changing story timing or flags.
     /// </summary>
     public static class CutsceneRecipeBuilder
     {
         private const string PersistentScenePath = "Assets/_Project/Scenes/_Persistent.unity";
 
-        private const string VoRoot = "Assets/_Project/Art/Audio/VO/";
+        private const string VoRoot = "Assets/_Project/Art/Audio/VO/Production/";
         private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";
 
         private static readonly Dictionary<CutsceneId, string[]> VoClipNames = new Dictionary<CutsceneId, string[]>
         {
-            { CutsceneId.Wake, new[] { "wake_call_1", "wake_call_2", "wake_call_3" } },
-            { CutsceneId.SpasskyAnswer, new[] { "spassky_answer" } },
-            { CutsceneId.RadioClears, new[] { "radio_storm_warning" } },
-            { CutsceneId.PriyaScreams, new[] { "priya_screams" } },
-            { CutsceneId.OutIntoTheSnow, new[] { "priya_what_do_we_do", "ivy_oh_my_god", "aaron_bring_him_in" } },
+            { CutsceneId.Wake, new[] { "SPASSKY-001", "SPASSKY-002", "SPASSKY-003" } },
+            { CutsceneId.SpasskyAnswer, new[] { "SPASSKY-005" } },
+            { CutsceneId.NightArgument, new[] { null, "NICK-001" } },
+            { CutsceneId.RadioClears, new[] { "RADIO-001" } },
+            { CutsceneId.PriyaScreams, new[] { "PRIYA-001" } },
+            { CutsceneId.OutIntoTheSnow, new[] { "PRIYA-002", "IVY-001", "AARON-001" } },
             { CutsceneId.TheCarry, new[]
                 {
-                    "priya_what_could_have_happened", "ivy_i_dont_know", "priya_all_night",
-                    "ivy_yes_all_night", "aaron_priya_not_now", "priya_door_locked", "aaron_lift_on_three",
+                    "PRIYA-003", "IVY-002", "PRIYA-004", "IVY-003",
+                    "AARON-002", "PRIYA-005", "AARON-003",
                 }
             },
-            { CutsceneId.EndingDavid, new[] { "spassky_ending_david" } },
-            { CutsceneId.EndingAaron, new[] { "spassky_ending_aaron" } },
-            { CutsceneId.EndingIvy, new[] { "spassky_ending_ivy" } },
-            { CutsceneId.EndingPriya, new[] { "spassky_ending_priya" } },
+            { CutsceneId.TheSofa, new[] { null, "PRIYA-006", "PRIYA-007" } },
+            { CutsceneId.P3Photograph, new[] { "SPASSKY-057", "SPASSKY-058", "SPASSKY-059" } },
+            { CutsceneId.P3AfterGoodYears, new[] { "SPASSKY-060", "SPASSKY-061" } },
+            { CutsceneId.P3WhoDavid, new[] { "SPASSKY-062" } },
+            { CutsceneId.GoodYears, new[]
+                {
+                    "PRIYA-014", "NICK-002", "PRIYA-015", "AARON-004",
+                    "PRIYA-016", "NICK-003", "NICK-004",
+                }
+            },
+            { CutsceneId.WhenItWentWrong, new[]
+                {
+                    "RADIO-002", "NICK-005", "AARON-005", "RADIO-003", null,
+                    "NICK-006", null, "NICK-007", "RADIO-004", null,
+                }
+            },
+            { CutsceneId.EndingDavid, new[] { "SPASSKY-053" } },
+            { CutsceneId.EndingAaron, new[] { "SPASSKY-054" } },
+            { CutsceneId.EndingIvy, new[] { "SPASSKY-055" } },
+            { CutsceneId.EndingPriya, new[] { "PRIYA-008", "SPASSKY-056" } },
         };
 
         [MenuItem("Tools/False Positive/Bootstrap/7 - Attach VO Clips")]
@@ -61,11 +75,11 @@ namespace FalsePositive.Editor
                 SerializedProperty beatsProp = recipeProp.FindPropertyRelative("beats");
                 for (int b = 0; b < beatsProp.arraySize && b < clipNames.Length; b++)
                 {
-                    AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".wav")
-                        ?? AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".mp3");
+                    if (string.IsNullOrEmpty(clipNames[b])) continue;
+                    AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".wav");
                     if (clip == null)
                     {
-                        Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO clip {clipNames[b]}.mp3 for {id} beat {b}.");
+                        Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO clip {clipNames[b]}.wav for {id} beat {b}.");
                         continue;
                     }
                     beatsProp.GetArrayElementAtIndex(b).FindPropertyRelative("voClip").objectReferenceValue = clip;
@@ -95,13 +109,7 @@ namespace FalsePositive.Editor
             SerializedObject so = new SerializedObject(director);
             SerializedProperty recipesProp = so.FindProperty("recipes");
 
-            List<CutsceneRecipe> existing = new List<CutsceneRecipe>();
-            for (int i = 0; i < recipesProp.arraySize; i++)
-            {
-                existing.Add(ExtractRecipe(recipesProp.GetArrayElementAtIndex(i)));
-            }
-
-            CutsceneRecipe[] recipes = BuildRecipes(existing);
+            CutsceneRecipe[] recipes = BuildRecipes();
 
             recipesProp.arraySize = recipes.Length;
             for (int i = 0; i < recipes.Length; i++)
@@ -114,25 +122,6 @@ namespace FalsePositive.Editor
             EditorSceneManager.SaveScene(scene, PersistentScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log($"[CutsceneRecipeBuilder] {recipes.Length} cutscene recipes written.");
-        }
-
-        private static CutsceneRecipe ExtractRecipe(SerializedProperty element)
-        {
-            CutsceneRecipe recipe = new CutsceneRecipe
-            {
-                id = (CutsceneId)element.FindPropertyRelative("id").enumValueIndex,
-            };
-            SerializedProperty beatsProp = element.FindPropertyRelative("beats");
-            recipe.beats = new CutsceneBeat[beatsProp.arraySize];
-            for (int i = 0; i < beatsProp.arraySize; i++)
-            {
-                SerializedProperty beatProp = beatsProp.GetArrayElementAtIndex(i);
-                recipe.beats[i] = new CutsceneBeat
-                {
-                    voClip = beatProp.FindPropertyRelative("voClip").objectReferenceValue as AudioClip,
-                };
-            }
-            return recipe;
         }
 
         private static void WriteRecipe(SerializedProperty element, CutsceneRecipe recipe)
@@ -152,11 +141,9 @@ namespace FalsePositive.Editor
                 beatProp.FindPropertyRelative("line").stringValue = beat.line ?? string.Empty;
                 beatProp.FindPropertyRelative("holdSecondsIfNoClip").floatValue = beat.holdSecondsIfNoClip;
                 beatProp.FindPropertyRelative("memoryFlagToSet").stringValue = beat.memoryFlagToSet ?? string.Empty;
-                // voClip intentionally preserved from `existing` by BuildRecipes, not overwritten here.
-                if (beatProp.FindPropertyRelative("voClip").objectReferenceValue == null && beat.voClip != null)
-                {
-                    beatProp.FindPropertyRelative("voClip").objectReferenceValue = beat.voClip;
-                }
+                // Always write the generated result so inserting or reordering
+                // recipes cannot leak a clip from the old serialized array slot.
+                beatProp.FindPropertyRelative("voClip").objectReferenceValue = beat.voClip;
             }
         }
 
@@ -196,15 +183,10 @@ namespace FalsePositive.Editor
         /// still comes from `line`, same as Beat().</summary>
         private static CutsceneBeat VoBeat(string speaker, string line, string voName, float holdIfMissing, string flag = null)
         {
-            // .wav first: the finalized production lines are 24 kHz PCM WAV
-            // (Artifacts/voice_guide/Priya.md §4.3), while the earlier cast was
-            // rendered to MP3. Both live side by side in Art/Audio/VO, so this
-            // resolves either without transcoding anything.
-            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".wav")
-                ?? AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".mp3");
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + voName + ".wav");
             if (clip == null)
             {
-                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO {voName}.mp3 under {VoRoot} — beat will be a silent hold.");
+                Debug.LogWarning($"[CutsceneRecipeBuilder] Missing VO {voName}.wav under {VoRoot} — beat will be a silent hold.");
             }
             return new CutsceneBeat
             {
@@ -239,10 +221,7 @@ namespace FalsePositive.Editor
             beats = beats,
         };
 
-        /// <summary>Carries forward any voClip already assigned to a matching
-        /// (id, beat index) pair from a previous run, so re-running this after
-        /// Step 5/7 attaches VO never discards it.</summary>
-        private static CutsceneRecipe[] BuildRecipes(List<CutsceneRecipe> existing)
+        private static CutsceneRecipe[] BuildRecipes()
         {
             CutsceneRecipe[] recipes =
             {
@@ -258,9 +237,13 @@ namespace FalsePositive.Editor
                 // This is the game's first cutscene.
                 VisibleRecipe(CutsceneId.SpasskyAnswer,
                     Beat("SPASSKY",
-                        "I'm Officer Spassky. You're one of the suspects involved in the death of Nick. " +
-                        "We have just finished interrogating the rest of your friends. So here we are. " +
-                        "Please — try to recall everything that happened last night.", 8f)),
+                        "I'm Officer Spassky. Nick is dead, and right now you're one of the suspects. " +
+                        "I've already spoken to the others. Take your time and tell me everything you " +
+                        "remember from last night.", 8f)),
+
+                VisibleRecipe(CutsceneId.NightArgument,
+                    Beat("DAVID", "You have to tell him, Nick. Say it out loud before Aaron works it out for himself.", 4f),
+                    Beat("NICK", "Not tonight, David. I can't do this with you right now. I need some air.", 4f)),
 
                 // The four "fuzzy" transitions (§10: "the same asset, parameterised")
                 // share one rewind-whoosh SFX, distinguished only by fade timing —
@@ -272,7 +255,7 @@ namespace FalsePositive.Editor
                     SfxBeat("chair_creak", 0.6f)),
 
                 Recipe(CutsceneId.RadioClears, 0.2f, 0.3f,
-                    Beat("RADIO", "…a snow storm. Please stay indoors during these times.", 3f,
+                    Beat("RADIO", "A snowstorm is moving through the area. Please stay indoors until conditions improve.", 3f,
                         MemoryFlagIds.HeardRadioWarning)),
 
                 Recipe(CutsceneId.SomeoneLeft, 0.3f, 0.3f,
@@ -289,7 +272,7 @@ namespace FalsePositive.Editor
                     SfxBeat("fuzzy_whoosh", 0.9f)),
 
                 Recipe(CutsceneId.PriyaScreams, 0.3f, 0.5f,
-                    Beat("PRIYA", "GUYS! GUYS! HELP! WHAT HAPPENED TO NICK? IVY! AARON! DAVID! GUYS, COME HERE PLEASE!", 4f,
+                    Beat("PRIYA", "Guys! Help! Something's happened to Nick! Ivy! Aaron! David! Please, come here!", 4f,
                         MemoryFlagIds.SawBody)),
 
                 Recipe(CutsceneId.TheyComeDown, 0.2f, 0.3f,
@@ -301,22 +284,23 @@ namespace FalsePositive.Editor
                 // actually watches the door open, the walk out, the lift, and
                 // the carry back rather than hearing it narrated over black.
                 VisibleRecipe(CutsceneId.OutIntoTheSnow,
-                    Beat("PRIYA", "What do we do?? What do we do??", 2f),
-                    Beat("IVY", "Oh my god, what happened to him? What do we do now?", 2.5f),
-                    Beat("AARON", "He looks cold. Let's bring him in — to the sofa, near the fireplace.", 3f)),
+                    Beat("PRIYA", "What do we do? What do we do?", 2f),
+                    Beat("IVY", "Oh my God. What happened to him? What do we do now?", 2.5f),
+                    Beat("AARON", "He's freezing. Let's get him inside, onto the sofa by the fire.", 3f)),
 
                 VisibleRecipe(CutsceneId.TheCarry,
                     Beat("PRIYA", "How did this happen?", 2f),
-                    Beat("IVY", "I don't know! I was with Aaron upstairs!!", 2f),
-                    Beat("PRIYA", "…All night?", 1.2f),
-                    Beat("IVY", "…Yes. All night.", 1.5f, MemoryFlagIds.HeardIvyAlibi),
+                    Beat("IVY", "I don't know. I was upstairs with Aaron.", 2f),
+                    Beat("PRIYA", "All night?", 1.2f),
+                    Beat("IVY", "Yes. All night.", 1.5f, MemoryFlagIds.HeardIvyAlibi),
                     Beat("AARON", "Priya. Not now.", 1.2f),
                     Beat("PRIYA", "The door was locked. Who locked it?", 2f),
-                    Beat("AARON", "Lift on three.", 1.5f, MemoryFlagIds.HeardAaronDeflect)),
+                    Beat("AARON", "Lift on three. One, two, three.", 1.5f, MemoryFlagIds.HeardAaronDeflect)),
 
                 VisibleRecipe(CutsceneId.TheSofa,
                     SfxBeat("body_settle_thud", 2f),
-                    VoBeat("PRIYA", "Nick? Nick, can you hear me?", "priya_can_you_hear_me", 2.5f)),
+                    VoBeat("PRIYA", "Nick? Nick, can you hear me?", "PRIYA-006", 2.5f),
+                    VoBeat("PRIYA", "Police? Our friend is hurt. We found him outside in the snow. Please send someone. Please hurry.", "PRIYA-007", 5f)),
 
                 Recipe(CutsceneId.FuzzyToVerdict, 1.2f, 1.2f,
                     SfxBeat("fuzzy_whoosh", 0.9f)),
@@ -329,16 +313,16 @@ namespace FalsePositive.Editor
                 // fading. No CutsceneStage staging: nothing moves in the room,
                 // and CutsceneStage only lives in the memory scenes anyway.
                 VisibleRecipe(CutsceneId.P3Photograph,
-                    VoBeat("SPASSKY", "That's what I don't understand.", "spassky_p3_dont_understand", 2f),
-                    VoBeat("SPASSKY", "Old friends. An anniversary. Drinks. From the way they tell it, things were going well.", "spassky_p3_old_friends", 5f),
-                    VoBeat("SPASSKY", "So when did it all go wrong?", "spassky_p3_when_wrong", 2.4f)),
+                    VoBeat("SPASSKY", "That's what I don't understand.", "SPASSKY-057", 2f),
+                    VoBeat("SPASSKY", "Old friends. An anniversary. Drinks. From the way they tell it, things were going well.", "SPASSKY-058", 5f),
+                    VoBeat("SPASSKY", "So when did it all go wrong?", "SPASSKY-059", 2.4f)),
 
                 VisibleRecipe(CutsceneId.P3AfterGoodYears,
-                    VoBeat("SPASSKY", "And somewhere between that photograph and sunrise, Nick ended up dead.", "spassky_p3_photo_sunrise", 4.4f),
-                    VoBeat("SPASSKY", "If it wasn't you, David — who killed Nick?", "spassky_p3_who_killed_nick", 3f)),
+                    VoBeat("SPASSKY", "And somewhere between that photograph and sunrise, Nick ended up dead.", "SPASSKY-060", 4.4f),
+                    VoBeat("SPASSKY", "If it wasn't you, David — who killed Nick?", "SPASSKY-061", 3f)),
 
                 VisibleRecipe(CutsceneId.P3WhoDavid,
-                    VoBeat("SPASSKY", "Who, David?", "spassky_p3_who_david", 1.6f)),
+                    VoBeat("SPASSKY", "Who, David?", "SPASSKY-062", 1.6f)),
 
                 // The P3 memory pair (docs/STORY_SCRIPT.md §4 P3_VERDICT, §5
                 // CS-16A/CS-16B). VisibleRecipe, not Recipe: the script calls
@@ -355,37 +339,37 @@ namespace FalsePositive.Editor
                 // missing, so the pair is playable now and completes itself
                 // when the clips land under Art/Audio/VO with these names.
                 VisibleRecipe(CutsceneId.GoodYears,
-                    VoBeat("PRIYA", "Fifteen years and you two still act exactly the same.", "priya_fifteen_years", 2.4f),
-                    VoBeat("NICK", "He was worse at seventeen.", "nick_worse_at_seventeen", 1.6f),
-                    VoBeat("PRIYA", "And two years for these two.", "priya_two_years_these_two", 1.8f),
-                    VoBeat("AARON", "Barely survived it.", "aaron_barely_survived", 1.4f),
-                    VoBeat("PRIYA", "To us. Somehow.", "priya_to_us_somehow", 1.4f),
-                    VoBeat("NICK", "Unfortunately.", "nick_unfortunately", 1.2f),
+                    VoBeat("PRIYA", "Fifteen years and you two still act exactly the same.", "PRIYA-014", 2.4f),
+                    VoBeat("NICK", "He was worse at seventeen.", "NICK-002", 1.6f),
+                    VoBeat("PRIYA", "And two years for these two.", "PRIYA-015", 1.8f),
+                    VoBeat("AARON", "Barely survived it.", "AARON-004", 1.4f),
+                    VoBeat("PRIYA", "To us. Somehow.", "PRIYA-016", 1.4f),
+                    VoBeat("NICK", "Unfortunately.", "NICK-003", 1.2f),
                     // The coat swap is now witnessed rather than inferred from
                     // the coat on the chair, which is why §9's clue 3 lists the
                     // good-years memory as a source alongside M1 and M2.
-                    VoBeat("NICK", "Here. You look fucking freezing.", "nick_you_look_freezing", 2f, MemoryFlagIds.SawCoatSwap)),
+                    VoBeat("NICK", "Here. You look fucking freezing.", "NICK-004", 2f, MemoryFlagIds.SawCoatSwap)),
 
                 VisibleRecipe(CutsceneId.WhenItWentWrong,
                     // The radio warning from M1 bleeds under the fragment in
                     // three broken pieces. These are cuts of radio_storm_warning
                     // rather than new lines; until they are cut, each is a
                     // subtitled silent hold.
-                    VoBeat("RADIO", "…snow storm…", "radio_bleed_storm", 1.2f),
-                    VoBeat("NICK", "You've been saying 'after this trip' for two years.", "nick_after_this_trip", 2.6f),
+                    VoBeat("RADIO", "…snow storm…", "RADIO-002", 1.2f),
+                    VoBeat("NICK", "You've been saying \"after this trip\" for two years.", "NICK-005", 2.6f),
                     // Aaron does not shout and does not approach. This one quiet
                     // question is his entire visible reaction, and the moment the
                     // player is being handed motive.
-                    VoBeat("AARON", "…Two years?", "aaron_two_years", 1.6f, MemoryFlagIds.SawAaronLearn),
-                    VoBeat("RADIO", "…please stay indoors…", "radio_bleed_indoors", 1.2f),
+                    VoBeat("AARON", "…Two years?", "AARON-005", 1.6f, MemoryFlagIds.SawAaronLearn),
+                    VoBeat("RADIO", "…please stay indoors…", "RADIO-003", 1.2f),
                     // David is heard only through the player's microphone, so
                     // his half of the argument is subtitle-only by design — a
                     // plain Beat with no VO name, never a missing-clip warning.
                     Beat("DAVID", "You need to tell him.", 1.8f),
-                    VoBeat("NICK", "He already knows.", "nick_he_already_knows", 1.6f),
+                    VoBeat("NICK", "He already knows.", "NICK-006", 1.6f),
                     Beat("DAVID", "Then say it to his face.", 1.8f),
-                    VoBeat("NICK", "I need some air.", "nick_i_need_some_air", 1.6f),
-                    VoBeat("RADIO", "…during these times.", "radio_bleed_these_times", 1.2f),
+                    VoBeat("NICK", "I need some air.", "NICK-007", 1.6f),
+                    VoBeat("RADIO", "…during these times.", "RADIO-004", 1.2f),
                     SfxBeat("door_latch_close", 1.2f)),
 
                 // Accusation flashbacks (docs/STORY_SCRIPT.md §4 P3_VERDICT):
@@ -402,32 +386,15 @@ namespace FalsePositive.Editor
                     SfxBeat("flashback_glass_clink", 5f)),
 
                 Recipe(CutsceneId.EndingDavid, 0.4f, 0.6f,
-                    Beat("SPASSKY", "— you were the only one who couldn't tell me where you were.", 4f)),
+                    Beat("SPASSKY", "You were the only one who couldn't tell me where you were.", 4f)),
                 Recipe(CutsceneId.EndingAaron, 0.4f, 0.6f,
-                    Beat("SPASSKY", "He locked it. You unlocked it. One of those took a decision.", 4f)),
+                    Beat("SPASSKY", "He locked it. You unlocked it. Only one of those was a decision.", 4f)),
                 Recipe(CutsceneId.EndingIvy, 0.4f, 0.6f,
                     Beat("SPASSKY", "She agreed with you. That's not the same as it being true.", 4f)),
                 Recipe(CutsceneId.EndingPriya, 0.4f, 0.6f,
+                    Beat("PRIYA", "What happened? Why won't anyone tell me what happened?", 4f),
                     Beat("SPASSKY", "She's the one who called us. Sit with that.", 4f)),
             };
-
-            foreach (CutsceneRecipe recipe in recipes)
-            {
-                CutsceneRecipe match = existing.Find(r => r.id == recipe.id);
-                if (match == null) continue;
-                for (int i = 0; i < recipe.beats.Length && i < match.beats.Length; i++)
-                {
-                    // Only carry an old clip forward into a beat that doesn't
-                    // already have one of its own — SfxBeat() above sets
-                    // ambient SFX directly, and this loop must not clobber
-                    // that with whatever (likely null) was in the scene from
-                    // before this recipe had any beats at all.
-                    if (recipe.beats[i].voClip == null)
-                    {
-                        recipe.beats[i].voClip = match.beats[i].voClip;
-                    }
-                }
-            }
 
             return recipes;
         }

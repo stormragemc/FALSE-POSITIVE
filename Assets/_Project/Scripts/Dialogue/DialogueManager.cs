@@ -176,6 +176,22 @@ namespace FalsePositive.Dialogue
             if (_vad != null) _vad.SetGated(true);
         }
 
+        /// <summary>Suspend, and also stop the officer talking right now.
+        ///
+        /// Suspend() alone closes the microphone but leaves any reply already
+        /// playing to finish, which is correct almost everywhere — a line
+        /// should land before a memory takes over. The ending is the exception:
+        /// P4 begins the moment P3 hits its turn cap, so a generated reply that
+        /// is still sounding would play underneath the pre-rendered ending line.
+        /// Use this only where the officer is meant to be cut off.</summary>
+        public void SilenceNow()
+        {
+            Suspend();
+            if (copVoice != null) copVoice.StopImmediately();
+            copMouth?.Stop();
+            _subtitles?.Hide();
+        }
+
         public void Resume()
         {
             IsSuspended = false;

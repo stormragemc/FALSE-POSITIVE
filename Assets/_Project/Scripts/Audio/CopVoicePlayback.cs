@@ -54,6 +54,33 @@ namespace FalsePositive.Audio
             _watchRoutine = StartCoroutine(WatchPlayback());
         }
 
+        /// <summary>Cuts the officer off mid-word and settles the state machine.
+        ///
+        /// For the ending. P4 starts as soon as P3 hits its turn cap, which can
+        /// land while a live reply is still playing — and Suspend() only gates
+        /// the microphone, it does not touch this AudioSource. The result was
+        /// the generated voice and the pre-rendered ending line talking over
+        /// each other.
+        ///
+        /// Stopped still fires, because DialogueManager drives its state off
+        /// that event and would otherwise sit in Speaking forever.</summary>
+        public void StopImmediately()
+        {
+            if (_watchRoutine != null)
+            {
+                StopCoroutine(_watchRoutine);
+                _watchRoutine = null;
+            }
+
+            if (_source != null && _source.isPlaying) _source.Stop();
+
+            if (IsSpeaking)
+            {
+                IsSpeaking = false;
+                Stopped?.Invoke();
+            }
+        }
+
         private IEnumerator WatchPlayback()
         {
             yield return new WaitWhile(() => _source.isPlaying);

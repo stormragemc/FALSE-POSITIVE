@@ -27,6 +27,11 @@ namespace FalsePositive.Cutscene
     {
         [SerializeField] private bool isMorning;
 
+        /// <summary>Logs what the staging waits actually did, so a desync can be
+        /// read off the Console instead of guessed at from watching. On by
+        /// default while the memory pair is being tuned.</summary>
+        [SerializeField] private bool logStagingTiming = true;
+
         // Wired by Editor.MemorySceneWiring alongside frontDoor-style fields —
         // "body_lift_effort" SFX for the lift interlude below. Null is fine
         // (LiftPrompt.OnInteract no-ops on a null clip) if that SFX hasn't
@@ -130,9 +135,27 @@ namespace FalsePositive.Cutscene
         /// step whenever the pacing moved.</summary>
         private IEnumerator AtBeat(CutsceneId id, int beatIndex)
         {
-            if (_director == null) yield break;
+            if (_director == null)
+            {
+                Debug.LogWarning($"[Staging] {id} beat {beatIndex}: no CutsceneDirector — " +
+                    "staging will run with no waits at all.");
+                yield break;
+            }
+
             float target = _director.BeatStartTime(id, beatIndex);
+            float entered = _director.Playhead;
+
             while (_director.IsPlaying && _director.Playhead < target) yield return null;
+
+            if (logStagingTiming)
+            {
+                // Prints what actually happened, not what was intended. A target
+                // of 0.00 means the recipe lookup failed; "playing=False" means
+                // the wait was skipped because the cutscene had already ended.
+                Debug.Log($"[Staging] {id} beat {beatIndex}: target {target:0.00}s, " +
+                    $"entered at {entered:0.00}s, resumed at {_director.Playhead:0.00}s, " +
+                    $"playing={_director.IsPlaying}");
+            }
         }
 
         /// <summary>Holds until the cutscene is completely over.
@@ -1103,7 +1126,16 @@ namespace FalsePositive.Cutscene
             Vector3 table = TableCentre();
             Vector3 fire = FireplaceCentre(table);
             Vector3 david = SeatedAtChair(ChairDavid, table);
-            ScreenFader fader = FindAnyObjectByType<ScreenFader>();
+            // FindAnyObjectByType skips inactive objects, so a fader whose root
+            // is disabled while idle resolves to null here — and every blink in
+            // this routine is guarded by `fader != null`, meaning the cast would
+            // pop in and out with no cover at all rather than erroring.
+            ScreenFader fader = FindAnyObjectByType<ScreenFader>(FindObjectsInactive.Include);
+            if (fader == null)
+            {
+                Debug.LogWarning("[Staging] CS-16B found no ScreenFader — the jump forward " +
+                    "will have no blink and the cast swap will be visible.");
+            }
 
             // 0-5s — Aaron learns. Nick and Ivy are on the same side of the
             // table, one chair apart, which is as close as the seating allows.

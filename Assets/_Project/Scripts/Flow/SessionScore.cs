@@ -124,7 +124,27 @@ namespace FalsePositive.Flow
             AccusationSupport = UnityEngine.Mathf.Clamp01(support);
         }
 
-        public void SetCredibility(float value) => Credibility = UnityEngine.Mathf.Clamp01(value);
+        /// <summary>Raised whenever Credibility moves, for the on-screen meter.
+        ///
+        /// The meter shows this value and nothing else. A separate number
+        /// computed for display could drift away from the one EndingSelector
+        /// reads, and the player would watch a bar that did not match the
+        /// ending they got.</summary>
+        public event System.Action<float> CredibilityChanged;
+
+        public void SetCredibility(float value)
+        {
+            float clamped = UnityEngine.Mathf.Clamp01(value);
+            if (UnityEngine.Mathf.Approximately(clamped, Credibility)) return;
+            Credibility = clamped;
+            CredibilityChanged?.Invoke(clamped);
+        }
+
+        /// <summary>Pushes the current value at a listener that subscribed late
+        /// — the meter is built in _Persistent but only becomes visible once the
+        /// interrogation starts, by which point the first turns have scored.
+        /// </summary>
+        public void RaiseCredibility() => CredibilityChanged?.Invoke(Credibility);
 
         public void Reset()
         {

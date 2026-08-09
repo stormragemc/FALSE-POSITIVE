@@ -78,6 +78,10 @@ namespace FalsePositive.Dialogue
         /// were said. Populated from the turns that carried an unsupported
         /// detail, and from the turn that named someone.</summary>
         private readonly List<QuotedLine> _quotableLines = new List<QuotedLine>();
+
+        /// <summary>Latches once P4 has picked an ending, so the phase cannot
+        /// be entered twice and play two.</summary>
+        private bool _endingRequested;
         private bool _p3MemoriesPlayed;
         // True between EnterLiveDialoguePhase and FinishLiveDialoguePhase. This
         // component can be disabled and re-enabled DURING a phase:
@@ -129,6 +133,7 @@ namespace FalsePositive.Dialogue
                     // cleared here rather than on entry to the verdict.
                     _citedClues.Clear();
                     _quotableLines.Clear();
+                    _endingRequested = false;
                     EnterP1();
                     break;
                 case GamePhase.M1_Night:
@@ -496,7 +501,19 @@ namespace FalsePositive.Dialogue
         /// the Day-1 stopgap that picked on the name alone.</summary>
         private void EnterP4()
         {
-            Dialogue?.Suspend();
+            // Exactly one ending, ever. EnterPhase runs from the PhaseChanged
+            // event, and this component is disabled and re-enabled by the scene
+            // swaps around it, so a second P4 notification would request a
+            // second ending cutscene on top of the first — two endings playing
+            // over each other, with the later one deciding the outcome card.
+            if (_endingRequested) return;
+            _endingRequested = true;
+
+            // Cut the officer off rather than merely closing the mic. P4 begins
+            // the instant P3 hits its turn cap, which is often mid-reply, and
+            // Suspend() leaves that reply playing — so the generated voice ran
+            // underneath the pre-rendered ending line.
+            Dialogue?.SilenceNow();
 
             LastEnding = EndingSelector.Select(_flow.Score, _citedClues);
             Debug.Log($"[Ending] {LastEnding.Cutscene} — {LastEnding.Reason} " +
@@ -518,7 +535,46 @@ namespace FalsePositive.Dialogue
             // A11 — the fixed card plus the witness's own lines with turn
             // numbers, per docs/STORY_SCRIPT.md §4 P4_ENDING. The composer is
             // where the "It never says they lied" rule (G6) is enforced.
-            _flow.OutcomeScreen?.Show(OutcomeCardComposer.Compose(_quotableLines));
+            _flow.OutcomeScreen?.Show(
+                OutcomeCardComposer.Compose(_flow.Score.Accusation, QuotableLines()));
+        }
+
+        /// <summary>The lines the card will quote, with a fallback.
+        ///
+        /// Normally these are the turns that carried an unsupported detail and
+        /// the turn that named someone. A witness who names nobody and is never
+        /// caught out produces neither, which left the card as three fixed lines
+        /// and nothing of the player's in it at all — and quoting the player
+        /// back to themselves is the entire point of the screen. In that case
+        /// fall back to their longest statements, which are the ones they
+        /// committed to most.</summary>
+        private List<QuotedLine> QuotableLines()
+        {
+            var lines = new List<QuotedLine>(_quotableLines);
+            if (lines.Count >= OutcomeCardComposer.MaxQuotes || _flow.Score == null) return lines;
+
+            var already = new HashSet<int>();
+            foreach (QuotedLine line in lines) already.Add(line.TurnNumber);
+
+            var candidates = new List<TurnRecord>();
+            foreach (TurnRecord turn in _flow.Score.Turns)
+            {
+                if (already.Contains(turn.TurnNumber)) continue;
+                if (string.IsNullOrWhiteSpace(turn.Transcript)) continue;
+                candidates.Add(turn);
+            }
+
+            candidates.Sort((a, b) => b.Transcript.Trim().Length.CompareTo(a.Transcript.Trim().Length));
+
+            foreach (TurnRecord turn in candidates)
+            {
+                if (lines.Count >= OutcomeCardComposer.MaxQuotes) break;
+                lines.Add(new QuotedLine(turn.TurnNumber, turn.Transcript));
+            }
+
+            // Back into the order they were said — the card reads as a sequence.
+            lines.Sort((a, b) => a.TurnNumber.CompareTo(b.TurnNumber));
+            return lines;
         }
 
         private void SubscribeDialogue()

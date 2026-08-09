@@ -11,6 +11,7 @@ import base64
 from dataclasses import replace
 from functools import partial
 import os
+from pathlib import Path
 import sys
 import threading
 import time
@@ -22,6 +23,7 @@ import uvicorn
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import audio_utils
@@ -130,10 +132,21 @@ app = FastAPI(
     openapi_url=None,
 )
 
+# Browser-playable fallback for the Unity client. It is intentionally served by
+# the same origin as /turn so a deployed fallback needs no permissive CORS
+# policy. The static route is public; paid model routes remain behind the
+# client-key middleware below and the page never ships a key of its own.
+_fallback_web_dir = Path(__file__).resolve().parent / "web"
+app.mount(
+    "/fallback",
+    StaticFiles(directory=str(_fallback_web_dir), html=True),
+    name="fallback-web",
+)
+
 
 @app.middleware("http")
 async def require_client_key(request, call_next):
-    if request.url.path == "/health":
+    if request.url.path == "/health" or request.url.path == "/fallback" or request.url.path.startswith("/fallback/"):
         return await call_next(request)
     provided_key = request.headers.get(auth.CLIENT_KEY_HEADER)
     if not auth.is_authorized(provided_key, config.FP_CLIENT_KEY):

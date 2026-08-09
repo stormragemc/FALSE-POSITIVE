@@ -20,6 +20,21 @@ See [`../docs/HUBERT_ORCHESTRATION_PLAN.md`](../docs/HUBERT_ORCHESTRATION_PLAN.m
 for the primary-source HuBERT research, model limits, reviewed architecture, and
 reliability policy. This file is the practical setup, run, and deploy steps.
 
+## Browser fallback
+
+The service now carries a dependency-free browser version of the complete story at
+`/fallback/`. It preserves the seven canonical phases, accepts microphone answers, and gives
+every cutscene variant a named blank iframe for a hosted gameplay-video URL. **Offline scripted**
+mode can finish the story without model calls; **Live AI** converts the browser recording to the
+same raw 16 kHz PCM contract Unity uses and sends it to `/turn`.
+
+The page is public, but `/turn` and `/session/reset` still require the shared client key. The
+website does not bundle that key: the operator enters it under Setup and it is retained only for
+the current browser tab. Because browser-held bearer keys are inspectable, Live AI is for a
+supervised trusted device; use Offline scripted mode for an untrusted public deployment. Full
+operator notes and the local static-server command are in
+[`web/README.md`](web/README.md).
+
 ---
 
 ## Three ways to run this

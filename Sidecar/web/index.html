@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#020507">
+    <meta
+      name="description"
+      content="FALSE POSITIVE — a voice-driven psychological mystery web fallback."
+    >
+    <title>FALSE POSITIVE — case 00:52</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./speech.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#scene-stage">Skip to the active scene</a>
+
+    <div class="atmosphere" aria-hidden="true">
+      <span class="atmosphere__lamp"></span>
+      <span class="atmosphere__grain"></span>
+    </div>
+
+    <header class="case-header">
+      <div class="case-header__identity">
+        <span class="case-header__stamp" aria-hidden="true"><i></i> REC</span>
+        <div>
+          <p class="eyebrow">Nobody Went Out / case 24-1219</p>
+          <h1>FALSE POSITIVE</h1>
+        </div>
+      </div>
+
+      <div class="case-header__status">
+        <div class="mode-badge" id="mode-badge">Offline · scripted</div>
+        <div class="progress-copy">
+          <span id="progress-label">Intake</span>
+          <strong id="progress-count">01 / 07</strong>
+        </div>
+        <div
+          class="case-progress"
+          role="progressbar"
+          aria-label="Story progress"
+          aria-valuemin="1"
+          aria-valuemax="7"
+          aria-valuenow="1"
+        >
+          <span id="progress-bar"></span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="icon-button" id="settings-button" type="button" aria-haspopup="dialog">
+          <span aria-hidden="true">⚙</span>
+          <span>Setup</span>
+        </button>
+        <button class="icon-button" id="reset-button" type="button">
+          <span aria-hidden="true">↺</span>
+          <span>Reset</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="experience-shell">
+      <nav class="phase-rail" aria-label="Case phases">
+        <div class="phase-rail__heading">
+          <span>Scene sequence</span>
+          <span id="phase-rail-status">1 open</span>
+        </div>
+        <ol id="phase-list"></ol>
+      </nav>
+
+      <main class="scene-stage" id="scene-stage" tabindex="-1">
+        <div id="live-region" class="sr-only" aria-live="polite"></div>
+        <div id="scene-content"></div>
+      </main>
+
+      <aside class="notebook" aria-labelledby="notebook-title">
+        <div class="notebook__heading">
+          <div>
+            <p class="eyebrow">Spassky's notes</p>
+            <h2 id="notebook-title">Case notes</h2>
+          </div>
+          <button
+            class="notebook__toggle"
+            id="notebook-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="notebook-body"
+            aria-label="Open case notes"
+          >
+            Case notes
+          </button>
+        </div>
+        <div id="notebook-body" hidden>
+          <section class="notebook-section" aria-labelledby="evidence-title">
+            <div class="notebook-section__label">
+              <h3 id="evidence-title">Observed evidence</h3>
+              <span id="evidence-count">0 / 10</span>
+            </div>
+            <ul class="evidence-list" id="evidence-list"></ul>
+          </section>
+
+          <section class="notebook-section" aria-labelledby="marks-title">
+            <div class="notebook-section__label">
+              <h3 id="marks-title">Recall marks</h3>
+              <span id="marks-count">0 / 7</span>
+            </div>
+            <ul class="marks-list" id="marks-list"></ul>
+          </section>
+
+          <section class="notebook-section transcript-section" aria-labelledby="transcript-title">
+            <div class="notebook-section__label">
+              <h3 id="transcript-title">Interview log</h3>
+              <span id="turn-count">0 turns</span>
+            </div>
+            <ol class="transcript-list" id="transcript-list"></ol>
+          </section>
+        </div>
+      </aside>
+    </div>
+
+    <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+      <form method="dialog" id="settings-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">operator setup</p>
+            <h2 id="settings-title">Experience settings</h2>
+          </div>
+          <button class="dialog-close" value="cancel" aria-label="Close settings">×</button>
+        </div>
+
+        <fieldset class="mode-choice">
+          <legend>Interrogation mode</legend>
+          <label>
+            <input type="radio" name="experience-mode" value="offline" checked>
+            <span>
+              <strong>Offline scripted</strong>
+              <small>Uses browser transcription and the generated Maksim/Spassky recordings. Your browser may use its own speech service for transcription.</small>
+            </span>
+          </label>
+          <label>
+            <input type="radio" name="experience-mode" value="live">
+            <span>
+              <strong>Live AI</strong>
+              <small>Sends finished P2/P3 interrogation answers to the existing Sidecar.</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <div class="live-settings" id="live-settings">
+          <label for="backend-url">Backend URL</label>
+          <input
+            id="backend-url"
+            name="backend-url"
+            type="url"
+            placeholder="Same origin, or https://your-backend.example"
+            autocomplete="off"
+          >
+          <p class="field-help">Leave blank when this page is served by the Sidecar.</p>
+
+          <label for="backend-key">Client key</label>
+          <input
+            id="backend-key"
+            name="backend-key"
+            type="password"
+            placeholder="X-FP-Client-Key"
+            autocomplete="off"
+          >
+          <p class="field-help">Held for this tab only. Browser credentials are inspectable: enable Live AI only on a supervised, trusted device.</p>
+
+          <button class="secondary-button" id="connection-test" type="button">
+            Test backend health
+          </button>
+          <p class="connection-result" id="connection-result" role="status"></p>
+        </div>
+
+        <label class="check-row" for="captions-toggle">
+          <input id="captions-toggle" type="checkbox" checked>
+          <span>
+            <strong>Show captions</strong>
+            <small>Keep spoken and scripted lines visible.</small>
+          </span>
+        </label>
+
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancel</button>
+          <button class="primary-button" id="save-settings" value="default">Save settings</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="confirm-dialog" id="reset-dialog" aria-labelledby="reset-title">
+      <form method="dialog">
+        <p class="eyebrow">destroy local case notes</p>
+        <h2 id="reset-title">Start the night again?</h2>
+        <p>This clears scene progress, evidence, transcripts, and video-slot URLs on this browser.</p>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Keep progress</button>
+          <button class="danger-button" id="confirm-reset" value="default">Reset case</button>
+        </div>
+      </form>
+    </dialog>
+
+    <noscript>
+      <div class="noscript-card">This fallback needs JavaScript for scene progression and voice input.</div>
+    </noscript>
+  </body>
+</html>

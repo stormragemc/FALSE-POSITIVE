@@ -26,13 +26,11 @@ The service now carries a dependency-free browser version of the complete story 
 `/fallback/`. It preserves the seven canonical phases, accepts microphone answers, and gives
 every cutscene variant a named blank iframe for a hosted gameplay-video URL. **Offline scripted**
 mode can finish the story without model calls; **Live AI** converts the browser recording to the
-same raw 16 kHz PCM contract Unity uses and sends it to `/turn`.
-
-The page is public, but `/turn` and `/session/reset` still require the shared client key. The
-website does not bundle that key: the operator enters it under Setup and it is retained only for
-the current browser tab. Because browser-held bearer keys are inspectable, Live AI is for a
-supervised trusted device; use Offline scripted mode for an untrusted public deployment. Full
-operator notes and the local static-server command are in
+same raw 16 kHz PCM contract Unity uses. On Vercel, same-origin `/api` functions hold the shared
+client key, assign signed HTTP-only sessions, supply the canonical phase prompt, and forward the
+request to `/turn`; public players never receive the key or choose backend session ids. Offline
+scripted mode remains available if the hosted AI is unavailable. Full deployment notes and the
+local static-server command are in
 [`web/README.md`](web/README.md).
 
 ---
@@ -179,10 +177,11 @@ either cap, `/turn` returns `429` with a reason of
 the corresponding message.
 
 These in-memory counters are a best-effort checkpoint guard, **not a durable
-billing ceiling**: a restart resets them, and a downloadable client can mint
-new session IDs. Before public deployment, Task 7 must add a provider-side hard
-quota plus a durable per-device/client limiter. Pinning to one instance is
-still required for conversation and prosody state; see the deploy note below.
+billing ceiling**: a restart resets them, and public users can clear their signed
+browser session and receive another. Keep provider-side spend caps enabled and
+add a Vercel Firewall rate limit before sending the URL to an untrusted audience.
+Pinning the Sidecar to one instance is still required for conversation and
+prosody state; see the deploy note below.
 
 The application abandons a turn after 50 seconds and never commits late state,
 but a timed-out synchronous vendor call may continue in its worker thread. A

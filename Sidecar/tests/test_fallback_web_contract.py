@@ -53,16 +53,47 @@ class FallbackWebContractTests(unittest.TestCase):
         self.assertIn("new MediaRecorder", self.app)
         self.assertIn("const TARGET_SAMPLE_RATE = 16000", self.app)
         self.assertIn('view.setInt16(index * 2', self.app)
-        self.assertIn('form.append("sample_rate", String(TARGET_SAMPLE_RATE))', self.app)
+        self.assertIn('form.append("purpose", turn.purpose)', self.app)
         self.assertIn('form.append("audio"', self.app)
-        self.assertIn('"X-FP-Client-Key": key', self.app)
+        self.assertIn('fetch("/api/turn"', self.app)
+        self.assertNotIn('"X-FP-Client-Key"', self.app)
         self.assertIn("const MAX_RECORDING_MS = 19000", self.app)
         self.assertIn("if (payload.session_ended) return payload", self.app)
 
-    def test_client_key_is_tab_scoped_and_no_secret_is_bundled(self):
-        self.assertIn("sessionStorage.setItem(SESSION_KEY", self.app)
+    def test_live_ai_uses_the_same_origin_gateway_without_browser_secrets(self):
+        self.assertIn('mode: "live"', self.app)
+        self.assertIn('fetch("/api/health"', self.app)
+        self.assertIn('fetch("/api/session/reset"', self.app)
+        self.assertNotIn("web-fallback.client-key", self.app)
+        self.assertNotIn("FP_CLIENT_KEY", self.app)
+        self.assertNotIn("backendUrl", self.app)
+        self.assertNotIn('id="backend-key"', self.index)
+        self.assertNotIn('id="backend-url"', self.index)
+        self.assertRegex(
+            self.index,
+            r'name="experience-mode" value="live" checked',
+        )
         self.assertNotIn("false-positive-backend-", self.app)
-        self.assertNotRegex(self.app, r'FP_CLIENT_KEY\s*=')
+
+    def test_vercel_gateway_routes_and_server_only_configuration_exist(self):
+        expected = {
+            "api/health.js",
+            "api/turn.js",
+            "api/session/reset.js",
+            "server/sidecar-proxy.js",
+            "package.json",
+        }
+        for relative_path in expected:
+            self.assertTrue((WEB_DIR / relative_path).is_file(), relative_path)
+
+        proxy = (WEB_DIR / "server" / "sidecar-proxy.js").read_text(encoding="utf-8")
+        self.assertIn("SIDECAR_BASE_URL", proxy)
+        self.assertIn("SESSION_SIGNING_SECRET", proxy)
+        self.assertIn("FP_CLIENT_KEY", proxy)
+        self.assertIn("timingSafeEqual", proxy)
+        self.assertIn("HttpOnly", proxy)
+        self.assertIn("SameSite=Lax", proxy)
+        self.assertNotIn("Access-Control-Allow-Origin", proxy)
 
     def test_transcripts_are_session_scoped_and_cutscenes_are_sandboxed(self):
         self.assertIn("delete safeState.transcripts", self.app)

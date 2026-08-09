@@ -2,9 +2,8 @@
   "use strict";
 
   const STORAGE_KEY = "false-positive.web-fallback.v1";
-  const SESSION_KEY = "false-positive.web-fallback.client-key";
   const TRANSCRIPT_SESSION_KEY = "false-positive.web-fallback.transcripts";
-  const STATE_VERSION = 1;
+  const STATE_VERSION = 2;
   const TARGET_SAMPLE_RATE = 16000;
   const MIN_RECORDING_MS = 550;
   const MAX_RECORDING_MS = 19000;
@@ -149,30 +148,15 @@
     },
   };
 
-  const SCENE_INSTRUCTIONS = {
-    p2: [
-      "PHASE: P2_RECALL. Ask what David remembers about the night.",
-      "Cover drinking by the fire, the argument, Nick leaving, the door, the lock, the blackout, and the morning.",
-      "Treat emotion as pressure, never proof. Do not say the witness is lying.",
-    ].join("\n"),
-    p3: [
-      "PHASE: P3_VERDICT. David must defend himself and name Aaron, Ivy, or Priya.",
-      "Ask for reasoning grounded in observed clues. Do not reveal the ground truth.",
-      "Treat affect as pressure, never proof of guilt or deception.",
-    ].join("\n"),
-  };
-
   const OFFLINE_REPLIES = window.FalsePositiveSpeech?.offlineRecallLines || [];
 
   const DEFAULT_STATE = {
     version: STATE_VERSION,
     sceneIndex: 0,
     maxUnlocked: 0,
-    mode: "offline",
+    mode: "live",
     micConsent: false,
     captions: true,
-    backendUrl: "",
-    sessionId: "",
     evidence: {},
     marks: {},
     transcripts: [],
@@ -203,8 +187,6 @@
     settingsDialog: document.querySelector("#settings-dialog"),
     settingsForm: document.querySelector("#settings-form"),
     liveSettings: document.querySelector("#live-settings"),
-    backendUrl: document.querySelector("#backend-url"),
-    backendKey: document.querySelector("#backend-key"),
     captionsToggle: document.querySelector("#captions-toggle"),
     connectionTest: document.querySelector("#connection-test"),
     connectionResult: document.querySelector("#connection-result"),
@@ -246,12 +228,12 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
         sessionStorage.removeItem(TRANSCRIPT_SESSION_KEY);
-        return { ...DEFAULT_STATE, sessionId: createSessionId() };
+        return { ...DEFAULT_STATE };
       }
       const parsed = JSON.parse(raw);
       if (parsed.version !== STATE_VERSION) {
         sessionStorage.removeItem(TRANSCRIPT_SESSION_KEY);
-        return { ...DEFAULT_STATE, sessionId: createSessionId() };
+        return { ...DEFAULT_STATE };
       }
       if (Object.hasOwn(parsed, "transcripts")) {
         delete parsed.transcripts;
@@ -265,11 +247,10 @@
         transcripts: loadSessionTranscripts(),
         cutsceneSources: { ...parsed.cutsceneSources },
         phaseFlags: { ...parsed.phaseFlags },
-        sessionId: parsed.sessionId || createSessionId(),
       };
     } catch (_error) {
       sessionStorage.removeItem(TRANSCRIPT_SESSION_KEY);
-      return { ...DEFAULT_STATE, sessionId: createSessionId() };
+      return { ...DEFAULT_STATE };
     }
   }
 
@@ -293,13 +274,6 @@
     } catch (_error) {
       return [];
     }
-  }
-
-  function createSessionId() {
-    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
-      return globalThis.crypto.randomUUID();
-    }
-    return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
   function escapeHtml(value) {
@@ -356,7 +330,7 @@
       : null;
     document.body.dataset.captions = String(state.captions);
     document.body.dataset.scene = activeScene.id;
-    elements.modeBadge.textContent = state.mode === "live" ? "Live · AI sidecar" : "Offline · scripted";
+    elements.modeBadge.textContent = state.mode === "live" ? "Live · AI connected" : "Offline · scripted";
     elements.modeBadge.dataset.mode = state.mode;
     elements.progressLabel.textContent = activeScene.phase;
     elements.progressCount.textContent = `${String(state.sceneIndex + 1).padStart(2, "0")} / ${String(SCENES.length).padStart(2, "0")}`;
@@ -476,7 +450,7 @@
       </section>
       <section class="privacy-card">
         <strong>This game listens; it does not save recordings</strong>
-        <p>Audio stays in memory for the current answer. Offline mode does not send the recording to the FALSE POSITIVE backend, but supported browsers may use their own speech service for the optional transcript. Live AI mode sends the finished answer to the configured Sidecar.</p>
+        <p>Audio stays in memory for the current answer. Offline mode does not send the recording to the FALSE POSITIVE backend, but supported browsers may use their own speech service for the optional transcript. Live AI sends the finished answer through this site's secured gateway.</p>
       </section>
     `;
     elements.sceneContent.innerHTML = sceneShell(scene, "Enable and calibrate your microphone", body);
@@ -1171,7 +1145,6 @@
     updateRecordingUi(false, true);
     const duration = performance.now() - recordingStartedAt;
     const recordingGeneration = experienceGeneration;
-    const recordingSessionId = state.sessionId;
     const recognitionFinished = finishSpeechRecognition();
     return new Promise((resolve) => {
       recorder.addEventListener("stop", async () => {
@@ -1186,7 +1159,7 @@
           const pcm = await recordedBlobToPcm16(blob);
           const repair = document.querySelector("#transcript-repair")?.value?.trim() || "";
           const browserTranscript = repair || recognizedFinal.trim() || recognizedInterim.trim();
-          if (recordingGeneration !== experienceGeneration || recordingSessionId !== state.sessionId) return;
+          if (recordingGeneration !== experienceGeneration) return;
           await processVoiceTurn({ pcm, purpose, browserTranscript, duration, peak: recordingPeak });
         } catch (error) {
           setError(error?.message || "The recording could not be processed. Try the answer again.");
@@ -1317,12 +1290,11 @@
 
   async function processLiveTurn(turn) {
     const turnGeneration = experienceGeneration;
-    const turnSessionId = state.sessionId;
     const controller = new AbortController();
     activeTurnController = controller;
     try {
       const response = await sendSidecarTurn(turn, controller.signal);
-      if (turnGeneration !== experienceGeneration || turnSessionId !== state.sessionId) return;
+      if (turnGeneration !== experienceGeneration) return;
       const transcript = (response.transcript || turn.browserTranscript || "").trim();
       if (response.session_ended) {
         if (transcript) addTranscript("David", transcript, turn.purpose);
@@ -1448,21 +1420,14 @@
   }
 
   async function sendSidecarTurn(turn, signal) {
-    const base = resolveBackendBase();
-    const key = sessionStorage.getItem(SESSION_KEY) || "";
-    if (!key) throw new Error("unauthorized: no client key is configured for this tab");
     const form = new FormData();
-    form.append("session_id", state.sessionId);
-    form.append("sample_rate", String(TARGET_SAMPLE_RATE));
-    form.append("onset_delay_ms", "0");
-    form.append("scene_instruction", SCENE_INSTRUCTIONS[turn.purpose] || "");
+    form.append("purpose", turn.purpose);
     form.append("audio", new Blob([turn.pcm], { type: "application/octet-stream" }), "utterance.pcm");
 
     let response;
     try {
-      response = await fetch(`${base}/turn`, {
+      response = await fetch("/api/turn", {
         method: "POST",
-        headers: { "X-FP-Client-Key": key },
         body: form,
         signal,
       });
@@ -1483,21 +1448,16 @@
     return payload;
   }
 
-  function resolveBackendBase() {
-    const configured = (state.backendUrl || "").trim().replace(/\/$/, "");
-    return configured || window.location.origin;
-  }
-
   function describeBackendError(error) {
     const message = String(error?.message || error || "");
     if (/unauthorized|401/i.test(message)) {
-      return "The backend rejected the client key. Open Setup, enter the current X-FP-Client-Key, and retry the saved recording.";
+      return "The Live AI gateway is not authorized. Retry shortly or use Offline scripted mode to keep the story moving.";
     }
     if (/timed out|timeout|504/i.test(message)) {
       return "The interrogation turn timed out. The saved recording can be retried, or switch to Offline scripted mode to keep the story moving.";
     }
     if (/network|failed to fetch|cors/i.test(message)) {
-      return "The browser could not reach the Sidecar. Check the backend URL and HTTPS/CORS setup, then retry—or switch to Offline scripted mode.";
+      return "The browser could not reach the Live AI gateway. Retry the saved recording or switch to Offline scripted mode.";
     }
     return `The Sidecar could not finish the turn: ${message || "unknown error"}. Retry the saved recording or use Offline scripted mode.`;
   }
@@ -1547,8 +1507,7 @@
   async function testBackendConnection() {
     elements.connectionResult.textContent = "Checking…";
     try {
-      const configured = elements.backendUrl.value.trim().replace(/\/$/, "");
-      const response = await fetch(`${configured || window.location.origin}/health`, { headers: { Accept: "application/json" } });
+      const response = await fetch("/api/health", { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
       elements.connectionResult.textContent = body.models_loaded
@@ -1590,29 +1549,18 @@
   }
 
   async function resetExperience() {
-    const oldSession = state.sessionId;
-    const backendBase = resolveBackendBase();
-    const clientKey = sessionStorage.getItem(SESSION_KEY) || "";
     cancelActiveTurn();
     stopMicrophone();
     localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(TRANSCRIPT_SESSION_KEY);
-    state = { ...DEFAULT_STATE, sessionId: createSessionId(), evidence: {}, marks: {}, transcripts: [], cutsceneSources: {}, phaseFlags: {} };
+    state = { ...DEFAULT_STATE, evidence: {}, marks: {}, transcripts: [], cutsceneSources: {}, phaseFlags: {} };
     pendingTurn = null;
     setError("");
     saveState();
     renderAll({ focusScene: true });
     announce("Local case progress cleared.");
 
-    if (clientKey && oldSession) {
-      const form = new FormData();
-      form.append("session_id", oldSession);
-      fetch(`${backendBase}/session/reset`, {
-        method: "POST",
-        headers: { "X-FP-Client-Key": clientKey },
-        body: form,
-      }).catch(() => {});
-    }
+    fetch("/api/session/reset", { method: "POST" }).catch(() => {});
   }
 
   function stopMicrophone() {
@@ -1664,8 +1612,6 @@
   }
 
   function openSettings() {
-    elements.backendUrl.value = state.backendUrl || "";
-    elements.backendKey.value = sessionStorage.getItem(SESSION_KEY) || "";
     elements.captionsToggle.checked = state.captions;
     const radio = elements.settingsForm.querySelector(`input[name='experience-mode'][value='${state.mode}']`);
     if (radio) radio.checked = true;
@@ -1678,11 +1624,7 @@
     cancelActiveTurn();
     const mode = elements.settingsForm.querySelector("input[name='experience-mode']:checked")?.value;
     state.mode = mode === "live" ? "live" : "offline";
-    state.backendUrl = elements.backendUrl.value.trim().replace(/\/$/, "");
     state.captions = elements.captionsToggle.checked;
-    const key = elements.backendKey.value.trim();
-    if (key) sessionStorage.setItem(SESSION_KEY, key);
-    else sessionStorage.removeItem(SESSION_KEY);
     pendingTurn = null;
     setError("");
     saveState();

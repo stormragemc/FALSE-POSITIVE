@@ -31,7 +31,7 @@
       </div>
 
       <div class="case-header__status">
-        <div class="mode-badge" id="mode-badge">Offline · scripted</div>
+        <div class="mode-badge" id="mode-badge">Live · AI connected</div>
         <div class="progress-copy">
           <span id="progress-label">Intake</span>
           <strong id="progress-count">01 / 07</strong>
@@ -123,7 +123,7 @@
       <form method="dialog" id="settings-form">
         <div class="dialog-heading">
           <div>
-            <p class="eyebrow">operator setup</p>
+            <p class="eyebrow">player setup</p>
             <h2 id="settings-title">Experience settings</h2>
           </div>
           <button class="dialog-close" value="cancel" aria-label="Close settings">×</button>
@@ -132,44 +132,26 @@
         <fieldset class="mode-choice">
           <legend>Interrogation mode</legend>
           <label>
-            <input type="radio" name="experience-mode" value="offline" checked>
+            <input type="radio" name="experience-mode" value="offline">
             <span>
               <strong>Offline scripted</strong>
               <small>Uses browser transcription and the generated Maksim/Spassky recordings. Your browser may use its own speech service for transcription.</small>
             </span>
           </label>
           <label>
-            <input type="radio" name="experience-mode" value="live">
+            <input type="radio" name="experience-mode" value="live" checked>
             <span>
               <strong>Live AI</strong>
-              <small>Sends finished P2/P3 interrogation answers to the existing Sidecar.</small>
+              <small>Sends finished P2/P3 interrogation answers through this site's secured AI gateway.</small>
             </span>
           </label>
         </fieldset>
 
         <div class="live-settings" id="live-settings">
-          <label for="backend-url">Backend URL</label>
-          <input
-            id="backend-url"
-            name="backend-url"
-            type="url"
-            placeholder="Same origin, or https://your-backend.example"
-            autocomplete="off"
-          >
-          <p class="field-help">Leave blank when this page is served by the Sidecar.</p>
-
-          <label for="backend-key">Client key</label>
-          <input
-            id="backend-key"
-            name="backend-key"
-            type="password"
-            placeholder="X-FP-Client-Key"
-            autocomplete="off"
-          >
-          <p class="field-help">Held for this tab only. Browser credentials are inspectable: enable Live AI only on a supervised, trusted device.</p>
+          <p class="field-help">No backend URL or secret is needed. The deployed site owns the connection and keeps its credentials on the server.</p>
 
           <button class="secondary-button" id="connection-test" type="button">
-            Test backend health
+            Test Live AI
           </button>
           <p class="connection-result" id="connection-result" role="status"></p>
         </div>

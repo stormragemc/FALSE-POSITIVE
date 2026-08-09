@@ -14,6 +14,9 @@ try {
 } catch (error) {
   if (error?.code !== "MODULE_NOT_FOUND") throw error;
 }
+if (typeof speechModule.createOfficerSpeech !== "function" && globalThis.FalsePositiveSpeech) {
+  speechModule = globalThis.FalsePositiveSpeech;
+}
 
 test("an officer reply is sent to browser speech without overlapping the previous reply", () => {
   assert.equal(

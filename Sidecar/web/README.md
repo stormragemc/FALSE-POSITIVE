@@ -6,11 +6,9 @@ Dependency-free browser version of the game. The Sidecar serves it at:
 http://127.0.0.1:8765/fallback/
 ```
 
-Use the configured host/port when they differ. Serving the page from the Sidecar keeps Live AI
-requests same-origin and does not expose `/turn`: the API still requires `X-FP-Client-Key`, which
-the operator enters under **Setup** and the page holds in `sessionStorage` for that tab only. A
-browser cannot keep a bearer key secret from someone with DevTools access, so enable Live AI only
-on a supervised, trusted device. Use Offline scripted mode for an untrusted public deployment.
+Use the configured host/port when they differ. The Vercel deployment keeps Live AI same-origin
+through `/api/turn`; the function owns the backend key and a signed, HTTP-only session cookie, so
+players never receive `FP_CLIENT_KEY`, choose backend session ids, or submit AI scene instructions.
 
 For an offline-only preview without the Python service:
 
@@ -18,9 +16,23 @@ For an offline-only preview without the Python service:
 python3 -m http.server 4173 --directory Sidecar/web
 ```
 
-Then open `http://127.0.0.1:4173`. Microphone access requires HTTPS or localhost. A separately
-served page will normally need an explicit backend CORS policy for Live AI; prefer the Sidecar's
-`/fallback/` route for live play.
+Then open `http://127.0.0.1:4173`. This static preview supports Offline scripted mode only because
+it does not run the `/api` functions. Microphone access requires HTTPS or localhost.
+
+## Deploy Live AI on Vercel
+
+Set the Vercel project root to `Sidecar/web` and configure these server-only variables for
+Production and Preview:
+
+```text
+SIDECAR_BASE_URL=https://your-sidecar.example
+FP_CLIENT_KEY=the-key-accepted-by-your-sidecar
+SESSION_SIGNING_SECRET=a-random-secret-with-at-least-32-characters
+```
+
+Generate `SESSION_SIGNING_SECRET` with `openssl rand -hex 32`. Never prefix any of these variables
+with `NEXT_PUBLIC_` or place their values in browser code. New players start in Live AI mode; the
+Offline scripted mode remains a recoverable fallback if the hosted backend is unavailable.
 
 ## Add gameplay videos
 
@@ -46,8 +58,9 @@ same controls rather than adding a secret or environment-specific URL to the rep
   The recording is not sent to the FALSE POSITIVE backend, but browser speech recognition may
   use the browser provider's own service; the interface says so at consent and beside each turn.
 - **Live AI** converts the browser recording to raw little-endian PCM16 mono at 16 kHz and posts it
-  to the existing `/turn` contract. The response transcript, affect-aware reply, timing, and PCM
-  audio are handled without changing the backend schema.
+  to the same-origin Vercel gateway. The gateway validates the phase and audio, creates a signed
+  session, supplies the canonical scene instruction and server-side key, and forwards the existing
+  `/turn` response without changing its schema.
 
 Player recordings remain in memory for the current turn and are never stored by this website.
 Speech transcripts are kept in `sessionStorage` so they survive reloads in the current tab but are

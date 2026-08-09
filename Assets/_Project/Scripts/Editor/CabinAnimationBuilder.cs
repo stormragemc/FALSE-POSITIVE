@@ -62,6 +62,7 @@ namespace FalsePositive.Editor
         public const string StatePoseSeated = "Pose_Seated";
         public const string StatePoseSeatedBack = "Pose_SeatedBack";
         public const string StatePoseSeatedForward = "Pose_SeatedForward";
+        public const string StatePoseHoldingCup = "Pose_HoldingCup";
         public const string StateWalk = "Walk";
         public const string StateWalkCarry = "Walk_Carry";
         public const string StateLiftCrouch = "Lift_Crouch";
@@ -138,6 +139,22 @@ namespace FalsePositive.Editor
                 new[] { Spine(spineBreath * 1.1f, 0.4f), Twist(spineTwist * 0.9f, 2.4f) });
             AnimationClip poseSeatedForward = CycleClip(StatePoseSeatedForward, CabinIdleProfile.SeatedForward, 4.6f,
                 new[] { Spine(spineBreath * 0.6f, 2.1f), Twist(spineTwist * 0.5f, 0.8f) });
+            // A CycleClip, not a HoldClip -- a HoldClip (AnimationCurve.Constant,
+            // two identical keyframes) produces a genuinely frozen pose, which
+            // reads as broken the moment the arm holding it is actually on
+            // screen (Cutscene/CutsceneStage.AnimateHeldCup, StandFromChair).
+            // Small, slow arm sway plus the usual spine breath -- oscillator
+            // amplitudes deliberately smaller than Idle_Controlled's (0.015/0.012
+            // there) so the mug doesn't visibly slosh; this is someone barely
+            // holding themselves together, not a healthy idle. Both amplitudes
+            // are added on top of CabinPoseLibrary's own authored HoldingCup base
+            // (BaseOverride left null), not overriding it.
+            AnimationClip poseHoldingCup = CycleClip(StatePoseHoldingCup, CabinIdleProfile.HoldingCup, 5.4f, new[]
+            {
+                Spine(spineBreath * 0.7f, 0.5f),
+                new Oscillator("Right Forearm Stretch", 0.02f, 1.0f),
+                new Oscillator("Right Arm Down-Up", 0.015f, 2.3f),
+            });
 
             // Walk/Walk_Carry oscillator amplitudes and centres port
             // ScriptedActor.MoveTo's old per-frame swing math verbatim (see
@@ -182,7 +199,7 @@ namespace FalsePositive.Editor
 
             BuildController(
                 idleConfrontational, idleControlled, idleGuarded, idlePanicked, idleSleeping, idleWalking,
-                poseCarrying, poseKneeling, poseSeated, poseSeatedBack, poseSeatedForward,
+                poseCarrying, poseKneeling, poseSeated, poseSeatedBack, poseSeatedForward, poseHoldingCup,
                 walk, walkCarry, liftCrouch, reachDoorKnob);
 
             AssetDatabase.SaveAssets();

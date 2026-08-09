@@ -121,6 +121,47 @@ namespace FalsePositive.Cutscene
         private static readonly Vector3 DoorwayOutside = new Vector3(-4.6f, 0f, -4.6f);
         private static readonly Vector3 ChamferCorner = new Vector3(-2.0f, 0f, -5.8f);
 
+        // Continues DoorwayOutside's diagonal further out — used only by
+        // SomeoneLeft, to give Nick somewhere to recede TO rather than
+        // stopping just past the threshold. Purely a receding-into-the-dark
+        // distance, not a routed waypoint like the three above.
+        //
+        // Measured live (Unity_RunCommand raycast sweep with Physics.
+        // SyncTransforms — the doorway sightline itself is genuinely clear
+        // at every height once the door's collider is synced, so an earlier
+        // reading of "the open door blocks the view" was a stale-transform
+        // testing artifact, not real geometry). The actual constraint is
+        // the exterior's own night/storm lighting: at the original -6.2,-6.2
+        // Nick received into it enough that he stopped reading as a visible
+        // figure at all in game-view screenshots, not just an unidentifiable
+        // one. Pulled in to keep him within the doorway's own light spill a
+        // little longer before he's fully swallowed by the dark outside.
+        private static readonly Vector3 DoorwayFarOutside = new Vector3(-5.3f, 0f, -5.3f);
+
+        // The authored M1_Night spawn (CabinNightCharacterBuilder.cs:68-70) — named
+        // here because StandFromChair has to snap the root BACK to it after the
+        // CharacterController has already shoved the player up onto the stool.
+        private static readonly Vector3 ChairSeatOrigin = new Vector3(-3.0f, 0f, 0.85f);
+
+        // Where the player ends up once they're off the stool. Prop_Chair_05's box
+        // spans x [-3.22, -2.78] and the CharacterController's radius is 0.28, so
+        // anything right of x = -2.50 is clear floor; -2.35 leaves ~15cm of margin
+        // and is still well clear of Prop_Chair_01 at (-1.85, 1.60). Z is unchanged
+        // — this is a step sideways out of the seat, not a walk. Spawn yaw is 0, so
+        // +X is literally the player's right.
+        private static readonly Vector3 StandClearOfChair = new Vector3(-2.35f, 0f, 0.85f);
+
+        // Shared between RiseCameraRoutine and AnimateHeldCup, both started
+        // by StandFromChair's RunTogether on the same frame with no lead-in
+        // wait on either side. RiseCameraRoutine holds pitch/height frozen
+        // for exactly this long before starting the rise -- it has to equal
+        // AnimateHeldCup's own total duration (3s held + 1.5s set-down lerp +
+        // 0.5s settle = 5.0s) or one of the two finishes its business while
+        // the other is still mid-motion. See RiseCameraRoutine's comment for
+        // why this coupling exists at all -- it's the actual fix for the
+        // held arm disappearing mid-beat, not a cosmetic sync.
+        private const float StandFromChairStillHoldSeconds = 5.0f;
+
         private Coroutine _bodyFollowRoutine;
         private Coroutine _aaronFollowRoutine;
 
@@ -274,34 +315,245 @@ namespace FalsePositive.Cutscene
 
         private IEnumerator StandFromChair()
         {
+            // The CharacterController is disabled for the WHOLE beat, not just the
+            // step. The player spawns at Prop_Chair_05's dead centre and the
+            // controller de-penetrates upward on its first SimpleMove, standing them
+            // on top of the 0.45m stool (same failure as CabinV2Builder.cs:604-606).
+            // Disabling it lets the seated pose actually be seated, and lets the
+            // sideways step be a straight transform write; it goes back on at the end
+            // over clear floor, where gravity settles the last few millimetres.
+            GameObject player = GameObject.Find("Player (Male - First Person)");
+            CharacterController controller = player != null ? player.GetComponent<CharacterController>() : null;
+            bool controllerWasEnabled = controller != null && controller.enabled;
+            if (controller != null) controller.enabled = false;
+            if (player != null) player.transform.position = ChairSeatOrigin; // undo any shove already applied
+
+            // Look is gated for the whole beat: FreeLookCameraRig.Update rewrites
+            // playerCamera.localRotation from _pitch every frame, so an ungated
+            // mouse fights SeedPitch step for step. Look only, never movement --
+            // and movement is inert anyway with the controller off.
+            PlayerInputRouter input = FindPlayerInput();
+            input?.SetLookGated(true);
+
+            yield return RunTogether(RiseCameraRoutine(player), AnimateHeldCup());
+
+            input?.SetLookGated(false);
+            if (controller != null) controller.enabled = controllerWasEnabled;
+        }
+
+        /// <summary>The camera-height half of StandFromChair -- extracted so it can
+        /// run alongside AnimateHeldCup (RunTogether) instead of being the whole
+        /// coroutine's body.</summary>
+        private IEnumerator RiseCameraRoutine(GameObject player)
+        {
             Transform view = FindPlayerView();
+            FreeLookCameraRig rig = FindPlayerRig();
             if (view == null) yield break;
 
             Vector3 seated = new Vector3(view.localPosition.x, 1.0f, view.localPosition.z);
             Vector3 standing = new Vector3(view.localPosition.x, 1.64f, view.localPosition.z);
             view.localPosition = seated;
 
-            // A slow, heavy stand -- stretched from the original 0.5s to sell the
-            // same disorientation Wake gets from its drunk post-process/fade/sway
-            // (Rendering/DrunkEffectController.cs, Player/DrunkCameraSway.cs, both
-            // now also driven off CutsceneId.StandFromChair via a second
-            // Cutscene/DrunkCutsceneBinder instance in _Persistent). The recipe's
-            // chair_creak SFX beat alone is far shorter than this -- CutsceneRecipeBuilder
-            // pads it with a HoldBeat so the total beat time covers the rise;
-            // shortening this constant without shortening that pad (or vice versa)
-            // will make Finished fire while the camera is still mid-rise, or leave
-            // the beat holding on an empty room after the player is already standing.
+            // Eyes open on the held mug/lap, not on the room. Positive X euler is
+            // nose-DOWN; the rig clamps to +-config.standingPitchClampDegrees (85),
+            // so 52 is comfortably inside. Pitched further down than the original 45
+            // -- measured live (Unity_RunCommand, HumanPoseHandler + view.
+            // InverseTransformPoint against the RightHand bone): at 45 the held
+            // hand sits right at the bottom edge of frame (view-local y=-0.43
+            // against a -0.415 vertical half-extent at that depth) -- visible, but
+            // with essentially no margin before DrunkCameraSway's +-2 degree pitch
+            // wobble pushes it out. 52 measured with the hand centred-to-just-below
+            // centre, matching the 55/60 points on the same sweep. Never SeedYaw
+            // here -- it zeroes pitch as a side effect (FreeLookCameraRig.cs:37)
+            // and the spawn yaw is already correct.
+            const float startPitch = 52f;
+            rig?.SeedPitch(startPitch);
+
+            // Held perfectly still -- no pitch or height change at all -- for
+            // exactly as long as AnimateHeldCup takes to hold the mug and set it
+            // back down. This IS the fix for the held arm going invisible
+            // mid-beat, not just a "look down and hold" flourish: the previous
+            // version eased pitch back to level on its own independent 2.5s clock
+            // starting right after a 1s hold, completely decoupled from how long
+            // the mug was actually being held. Live measurement showed the hand
+            // sink below the bottom of frame by about pitch 30 degrees -- roughly
+            // 1s into that ease -- while AnimateHeldCup was still holding the mug
+            // for another two full seconds. Freezing the camera for the mug's
+            // whole visible lifetime means the hand is on screen for as long as
+            // it's doing something, and only leaves frame afterward, by design,
+            // as the player looks up to stand.
+            yield return new WaitForSeconds(StandFromChairStillHoldSeconds);
+
+            // The stand itself: body height and pitch ease together now (no
+            // separate "aim leads the body" split -- that existed to get the head
+            // level before the arm/mug left frame, which no longer applies since
+            // the mug is already back on the table before this starts). Stretched
+            // from the original 0.5s to sell the same disorientation Wake gets
+            // from its drunk post-process/fade/sway (Rendering/DrunkEffectController.cs,
+            // Player/DrunkCameraSway.cs, both also driven off CutsceneId.StandFromChair
+            // via a second Cutscene/DrunkCutsceneBinder instance in _Persistent).
+            // Total beat length is StandFromChairStillHoldSeconds + duration below;
+            // CutsceneRecipeBuilder's StandFromChair HoldBeat pads to match it --
+            // changing either constant without updating that pad will make
+            // Finished fire while the camera is still mid-rise, or leave the beat
+            // holding on an empty room after the player is already standing.
             float t = 0f;
-            const float duration = 5f;
+            const float duration = 3f;
+            Vector3 stepFrom = player != null ? player.transform.position : Vector3.zero;
             while (t < duration)
             {
                 t += Time.deltaTime;
-                view.localPosition = Vector3.Lerp(seated, standing, t / duration);
+                float u = Mathf.Clamp01(t / duration);
+                float eased = Mathf.SmoothStep(0f, 1f, u);
+                view.localPosition = Vector3.Lerp(seated, standing, u);
+                if (player != null)
+                {
+                    player.transform.position = Vector3.Lerp(stepFrom, StandClearOfChair, eased);
+                }
+                rig?.SeedPitch(Mathf.Lerp(startPitch, 0f, eased));
                 yield return null;
             }
             view.localPosition = standing;
+            if (player != null) player.transform.position = StandClearOfChair;
+            rig?.SeedPitch(0f);
         }
 
+        /// <summary>Runs alongside RiseCameraRoutine (RunTogether), frozen-camera
+        /// side. The player reaches StandFromChair still holding SM_BeerMug --
+        /// the standalone cup near their chair, apart from Prop_FiveCups's
+        /// cluster further down the table -- then sets it down before the stand.
+        ///
+        /// Reveals the player's whole rig for the duration: it's ShadowCastingMode.
+        /// ShadowsOnly project-wide (CabinNightCharacterBuilder.ConfigurePlayer,
+        /// since the player is otherwise invisible), and there is no per-limb
+        /// split to reveal just the arm -- Body is a single SkinnedMeshRenderer
+        /// (two submeshes: face, everything else). Live measurement (hips/knees
+        /// against view.InverseTransformPoint at every pitch RiseCameraRoutine
+        /// uses) confirmed the rest of the body stays either behind the near
+        /// clip plane or below the bottom of frame throughout -- it does not
+        /// intrude, matching the framing this comment used to only assume.
+        ///
+        /// The cup IS parented to the RightHand bone now, not the camera. The
+        /// previous version avoided this, reasoning that HoldingCup's muscle
+        /// values barely moved the bone (true, measured) so a hand-parented cup
+        /// risked reading as floating off the hand. It does move enough to look
+        /// held: parented at the SAME point the camera-relative version placed
+        /// it -- (0.14, -0.20, 0.28) in view-local space, already live-verified
+        /// as good framing -- computed to a world pose and reparented with
+        /// worldPositionStays so it starts in that exact known-good spot, then
+        /// moves naturally with the hand (and the arm's own subtle idle sway,
+        /// Editor.CabinAnimationBuilder's Pose_HoldingCup) from then on, instead
+        /// of staying screen-locked regardless of what the arm is doing.
+        ///
+        /// No lead-in wait: this starts on the same frame as RiseCameraRoutine,
+        /// both under full black, and its total length (held 3s + set-down 1.5s
+        /// + settle 0.5s = 5.0s) must equal StandFromChairStillHoldSeconds --
+        /// RiseCameraRoutine holds the camera frozen for exactly that long so the
+        /// arm/mug are never fighting an easing pitch while still visible.</summary>
+        private IEnumerator AnimateHeldCup()
+        {
+            GameObject player = GameObject.Find("Player (Male - First Person)");
+            GameObject cup = GameObject.Find("SM_BeerMug");
+            Transform view = FindPlayerView();
+            if (player == null || cup == null || view == null) yield break;
+
+            CabinAnimatorDriver driver = player.GetComponent<CabinAnimatorDriver>();
+            if (driver == null) yield break;
+
+            Animator animator = player.GetComponentInChildren<Animator>();
+            Transform rightHand = animator != null && animator.isHuman
+                ? animator.GetBoneTransform(HumanBodyBones.RightHand) : null;
+
+            Renderer[] renderers = player.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer r in renderers) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+
+            Transform cupParent = cup.transform.parent;
+            Vector3 restLocalPos = cup.transform.localPosition;
+            Quaternion restLocalRot = cup.transform.localRotation;
+
+            driver.PlayProfile(CabinIdleProfile.HoldingCup);
+
+            if (rightHand != null)
+            {
+                // A small offset from the hand's own pivot, NOT the old fixed
+                // camera-relative screen point (0.14, -0.20, 0.28) that version
+                // used. Measured live: placing the cup at that point and then
+                // parenting to the hand left them ~0.4m apart on screen, because
+                // HoldingCup's pose doesn't actually put the hand there -- the
+                // two were never in the same place to begin with, so "following
+                // the hand" just meant "trailing 0.4m behind it." World-space
+                // offset (not the hand bone's own local axes) so this doesn't
+                // depend on guessing this rig's hand-bone orientation convention;
+                // kept upright via the camera's own rotation rather than the
+                // hand's (which may be tilted) so the mug doesn't read as held
+                // at a strange angle.
+                cup.transform.position = rightHand.position + Vector3.up * 0.04f + view.forward * 0.03f;
+                cup.transform.rotation = view.rotation;
+                cup.transform.SetParent(rightHand, worldPositionStays: true);
+            }
+            else
+            {
+                // Fallback if the avatar somehow isn't humanoid -- keeps the old
+                // camera-relative behaviour rather than failing to place the cup
+                // at all.
+                cup.transform.SetParent(view, worldPositionStays: false);
+                cup.transform.localPosition = new Vector3(0.14f, -0.20f, 0.28f);
+                cup.transform.localRotation = Quaternion.identity;
+            }
+
+            yield return new WaitForSeconds(3.0f); // held, arm+cup visible, camera frozen on it
+
+            // Let go: unparent at the current (held) world pose, lerp to the
+            // cup's original authored table position/rotation while the arm
+            // relaxes back toward neutral.
+            Vector3 releaseWorldPos = cup.transform.position;
+            Quaternion releaseWorldRot = cup.transform.rotation;
+            cup.transform.SetParent(cupParent, worldPositionStays: true);
+            Vector3 restWorldPos = cupParent != null
+                ? cupParent.TransformPoint(restLocalPos) : restLocalPos;
+            Quaternion restWorldRot = cupParent != null
+                ? cupParent.rotation * restLocalRot : restLocalRot;
+
+            driver.PlayProfile(CabinIdleProfile.Controlled);
+
+            float t = 0f;
+            const float lowerDuration = 1.5f;
+            while (t < lowerDuration)
+            {
+                t += Time.deltaTime;
+                float u = t / lowerDuration;
+                cup.transform.position = Vector3.Lerp(releaseWorldPos, restWorldPos, u);
+                cup.transform.rotation = Quaternion.Slerp(releaseWorldRot, restWorldRot, u);
+                yield return null;
+            }
+
+            // Snap to the EXACT original local transform, not the lerp's
+            // endpoint -- float drift across a reparent + world-space lerp must
+            // not leave the cup a millimetre off its originally authored rest
+            // pose.
+            cup.transform.localPosition = restLocalPos;
+            cup.transform.localRotation = restLocalRot;
+
+            yield return new WaitForSeconds(0.5f); // settle before the beat ends
+
+            foreach (Renderer r in renderers) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        }
+
+        /// <summary>CS-door: the player looks over to find the front door
+        /// swinging shut, someone already gone through it. Screen-lit
+        /// (VisibleRecipe), so every part of this is watched, not covered.
+        ///
+        /// Three requirements, each shaping one piece below: the turn must
+        /// be a smooth head-turn, not SeedYaw's old one-frame snap; the door
+        /// must close slower, so it reads rather than blinks past; and
+        /// someone must visibly leave through it. That third one collides
+        /// with STORY_SCRIPT.md §7's "who went through the door?" trap —
+        /// FindCastMember's comment and MemoryFlagIds.SawDoorClose's own text
+        /// ("...never saw who went through it") both depend on Nick staying
+        /// unidentified here. So he is staged visible-but-unidentifiable:
+        /// already in the doorway when the view arrives, seen only from
+        /// behind, receding into the dark, borrowed and returned exactly as
+        /// every other flashback in this file borrows the cast.</summary>
         private IEnumerator SomeoneLeft()
         {
             GameObject door = GameObject.Find("Prop_FrontDoor_Locked");
@@ -309,31 +561,112 @@ namespace FalsePositive.Cutscene
             if (rig == null) yield break;
 
             Vector3 doorPos = door != null ? door.transform.position : rig.transform.position + rig.transform.forward;
-            Vector3 toDoor = doorPos - rig.transform.position;
-            float yaw = Quaternion.LookRotation(new Vector3(toDoor.x, 0f, toDoor.z).normalized, Vector3.up).eulerAngles.y;
-            rig.SeedYaw(yaw);
-            rig.SeedPitch(5f);
+            float yaw = YawToward(rig.transform.position, doorPos);
 
-            if (door != null)
+            // The storm has already blown the door open before the player
+            // looks over — it is open on frame one and only ever closes
+            // from here. Snapping it open is not a visible pop: nothing is
+            // pointed at it yet (the view only starts turning below).
+            Quaternion open = Quaternion.Euler(0f, DoorOpenYawDegrees, 0f) * DoorClosedRotation;
+            if (door != null) door.transform.rotation = open;
+
+            GameObject nick = Borrow("Nick Vlahos (Male)", DoorwayCentre,
+                YawToward(DoorwayCentre, DoorwayFarOutside), CabinIdleProfile.Walking);
+
+            // Gated for the WHOLE beat (~6s), not just the 1.4s turn — the
+            // staged content is Nick's exit and the door closing, and an
+            // ungated camera would let the player whip away mid-beat and
+            // miss the one thing it exists to show. Look only, never
+            // SetMovementGated: walking stays free, matching every other
+            // visible beat in this file. Released after RunTogether below
+            // so there is exactly one release point on every exit path.
+            PlayerInputRouter input = FindPlayerInput();
+            input?.SetLookGated(true);
+
+            yield return PoseBorrowed();
+            yield return RunTogether(
+                TurnPlayerViewTo(rig, yaw, 5f, 1.4f),
+                NickLeavesRoutine(nick),
+                CloseDoorRoutine(door));
+
+            input?.SetLookGated(false);
+            ReturnBorrowed();
+        }
+
+        private IEnumerator NickLeavesRoutine(GameObject nick)
+        {
+            if (nick == null) yield break;
+            // Starts before the turn lands, so the player's view arrives to
+            // find him already going rather than watching him stand and
+            // then start walking.
+            yield return new WaitForSeconds(0.35f);
+            yield return MoveActorAlong(nick, new[] { DoorwayOutside, DoorwayFarOutside }, 1.25f);
+        }
+
+        private IEnumerator CloseDoorRoutine(GameObject door)
+        {
+            if (door == null) yield break;
+            Quaternion open = Quaternion.Euler(0f, DoorOpenYawDegrees, 0f) * DoorClosedRotation;
+
+            // Waits for Nick to clear the doorway — the door must not swing
+            // shut through him.
+            yield return new WaitForSeconds(3.2f);
+
+            // 2.5s (was 1.4s) — the actual "slower" ask. Eased OUT
+            // (1-(1-u)^2) so it decelerates into the latch rather than
+            // arriving at full speed; a linear swing at 2.5s just reads as
+            // sluggish, not deliberate.
+            //
+            // Deliberately NOT SwingFrontDoor(open: false, ...): that helper
+            // records the door's rotation into _borrowed on first use, and
+            // here the door was snapped OPEN first — ReturnBorrowed() would
+            // then restore it to open and leave the front door hanging open
+            // for the rest of M1_Night, right as the player is sent to walk
+            // to it. This inline close keeps _borrowed holding only Nick.
+            float t = 0f;
+            const float duration = 2.5f;
+            while (t < duration)
             {
-                // CutsceneRecipeBuilder gives SomeoneLeft one 1.5s SFX beat
-                // (door_latch_close) — the door is already open (blown by
-                // the storm) the instant the screen goes black, and swings
-                // fully shut across that whole 1.5s so the latch sound lands
-                // right as it closes, all before the fade back in.
-                Quaternion open = Quaternion.Euler(0f, DoorOpenYawDegrees, 0f) * DoorClosedRotation;
-                door.transform.rotation = open;
-
-                float t = 0f;
-                const float duration = 1.4f;
-                while (t < duration)
-                {
-                    t += Time.deltaTime;
-                    door.transform.rotation = Quaternion.Slerp(open, DoorClosedRotation, t / duration);
-                    yield return null;
-                }
-                door.transform.rotation = DoorClosedRotation;
+                t += Time.deltaTime;
+                float u = Mathf.Clamp01(t / duration);
+                float eased = 1f - (1f - u) * (1f - u);
+                door.transform.rotation = Quaternion.Slerp(open, DoorClosedRotation, eased);
+                yield return null;
             }
+            door.transform.rotation = DoorClosedRotation;
+        }
+
+        /// <summary>Eases the player's view round to a world yaw/pitch
+        /// instead of SeedYaw's one-frame snap. FreeLookCameraRig exposes no
+        /// incremental setter, so this drives SeedYaw per frame with a
+        /// smoothstepped angle — and re-applies SeedPitch after every
+        /// SeedYaw, because SeedYaw zeroes pitch by design
+        /// (FreeLookCameraRig.SeedYaw). Mathf.LerpAngle so a turn past 180
+        /// degrees goes the short way round rather than spinning back
+        /// through the room.
+        ///
+        /// The caller MUST gate look input for the duration: the rig's
+        /// Update() adds that frame's mouse delta to its own yaw and
+        /// rewrites transform.rotation every frame, so an ungated turn gets
+        /// fought step for step and reads as a stutter, not a pan.</summary>
+        private IEnumerator TurnPlayerViewTo(FreeLookCameraRig rig, float targetYaw, float targetPitch, float duration)
+        {
+            if (rig == null) yield break;
+            float startYaw = rig.transform.eulerAngles.y;
+            // SeedYaw zeroes pitch, so the turn necessarily starts level
+            // regardless of where the player was looking — pitch only ever
+            // eases 0 -> target, never target -> target.
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float u = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / duration));
+                rig.SeedYaw(Mathf.LerpAngle(startYaw, targetYaw, u));
+                rig.SeedPitch(targetPitch * u);
+                yield return null;
+            }
+            rig.SeedYaw(targetYaw);
+            rig.SeedPitch(targetPitch);
         }
 
         /// <summary>Radio-tuning beat (RadioClears): steady the radio, reach

@@ -178,7 +178,13 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4008574796012687167, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 24234554}
+    - targetCorrespondingSourceObject: {fileID: -134524964333936320, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 24234553}
   m_SourcePrefab: {fileID: 100100000, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
 --- !u!137 &24234543 stripped
 SkinnedMeshRenderer:
@@ -188,6 +194,11 @@ SkinnedMeshRenderer:
 --- !u!4 &24234544 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
+  m_PrefabInstance: {fileID: 24234542}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &24234545 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 2853240716290050437, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
   m_PrefabInstance: {fileID: 24234542}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &24234546 stripped
@@ -210,6 +221,103 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -9162484748627739507, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
   m_PrefabInstance: {fileID: 24234542}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &24234550 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4008574796012687167, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
+  m_PrefabInstance: {fileID: 24234542}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &24234551 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -3374615691573484913, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
+  m_PrefabInstance: {fileID: 24234542}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &24234552 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -134524964333936320, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
+  m_PrefabInstance: {fileID: 24234542}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &24234553
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 24234552}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2163de355e8fd8e4b83b631e07455323, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: uLipSync.Runtime::uLipSync.uLipSyncBlendShape
+  updateMethod: 0
+  skinnedMeshRenderer: {fileID: 24234545}
+  blendShapes:
+  - phoneme: A
+    index: 11
+    maxWeight: 1
+  - phoneme: I
+    index: 13
+    maxWeight: 1
+  - phoneme: U
+    index: 15
+    maxWeight: 1
+  - phoneme: E
+    index: 12
+    maxWeight: 1
+  - phoneme: O
+    index: 14
+    maxWeight: 1
+  - phoneme: '-'
+    index: 1
+    maxWeight: 1
+  - phoneme: S
+    index: 8
+    maxWeight: 1
+  maxBlendShapeValue: 100
+  minVolume: -2.5
+  maxVolume: -1.5
+  smoothness: 0.05
+  usePhonemeBlend: 0
+--- !u!114 &24234554
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 24234550}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2163de355e8fd8e4b83b631e07455323, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: uLipSync.Runtime::uLipSync.uLipSyncBlendShape
+  updateMethod: 0
+  skinnedMeshRenderer: {fileID: 24234551}
+  blendShapes:
+  - phoneme: A
+    index: 11
+    maxWeight: 1
+  - phoneme: I
+    index: 13
+    maxWeight: 1
+  - phoneme: U
+    index: 15
+    maxWeight: 1
+  - phoneme: E
+    index: 12
+    maxWeight: 1
+  - phoneme: O
+    index: 14
+    maxWeight: 1
+  - phoneme: '-'
+    index: 1
+    maxWeight: 1
+  - phoneme: S
+    index: 8
+    maxWeight: 1
+  maxBlendShapeValue: 100
+  minVolume: -2.5
+  maxVolume: -1.5
+  smoothness: 0.05
+  usePhonemeBlend: 0
 --- !u!1001 &26957301
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1493,6 +1601,30 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+      - m_Target: {fileID: 24234554}
+        m_TargetAssemblyTypeName: uLipSync.uLipSyncBlendShape, uLipSync.Runtime
+        m_MethodName: OnLipSyncUpdate
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 24234553}
+        m_TargetAssemblyTypeName: uLipSync.uLipSyncBlendShape, uLipSync.Runtime
+        m_MethodName: OnLipSyncUpdate
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   outputSoundGain: 1
   audioSourceProxy: {fileID: 0}
 --- !u!114 &485316766
@@ -1509,6 +1641,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cop.BlendShapeCopMouth
   lipSync: {fileID: 485316765}
   blendShape: {fileID: 485316764}
+  jawRenderers:
+  - {fileID: 24234543}
+  - {fileID: 24234551}
+  - {fileID: 24234545}
+  jawBlendShapeIndices: 310000001000000010000000
+  jawAttackPerSecond: 15
+  jawReleasePerSecond: 6
+  maxJawBlendShapeValue: 60
 --- !u!114 &485316767
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2685,7 +2825,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d347bb13544b39b42a464ec1981dbcb3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.CutsceneAnimationDirector
-  cutsceneId: 2
   lipSync: {fileID: 485316765}
 --- !u!4 &1275349657
 Transform:

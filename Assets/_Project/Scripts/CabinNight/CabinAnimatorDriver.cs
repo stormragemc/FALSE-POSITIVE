@@ -38,10 +38,30 @@ namespace FalsePositive.CabinNight
         /// same reason, as Cutscene.CutsceneStage.PoseBorrowed.</summary>
         private const float PoseSettleSeconds = 0.3f;
 
+        // Matches PlayState's own 0.25f crossfade duration -- the whole point of
+        // easing this is to stay in step with the muscle blend, not run longer
+        // or shorter than it. Also short enough to be fully settled before
+        // Cutscene.CutsceneStage.PlantFeet measures foot height 0.3s after a
+        // pose starts (PoseBorrowed) -- an ease still running at that mark would
+        // bake a wrong one-time foot correction that nothing re-runs.
+        private const float BodyYOffsetEaseSeconds = 0.25f;
+
         private Animator _animator;
         private Vector3 _bodyRestLocalPosition;
         private Coroutine _plant;
         private bool _plantsFeet;
+
+        // Timed lerp state for the body-Y offset ease -- not a coroutine. A
+        // coroutine started here would be silently orphaned if this component's
+        // GameObject is deactivated mid-ease (Cutscene.CutsceneStage.Borrow /
+        // ReturnBorrowed toggle borrowed cast members' SetActive), stranding a
+        // partial offset that would then persist into the actor's NEXT Borrow.
+        // Driving the ease from Update means it simply stops advancing when
+        // disabled, and OnDisable below snaps to the final target so nothing
+        // partial survives regardless.
+        private float _offsetFrom;
+        private float _offsetTo;
+        private float _offsetT = 1f; // 1 = fully arrived at _offsetTo
 
         public void Configure(CabinIdleProfile profile) => defaultProfile = profile;
 
@@ -56,14 +76,39 @@ namespace FalsePositive.CabinNight
             _plantsFeet = GetComponent<CharacterController>() == null;
         }
 
-        private void Start() => PlayProfile(defaultProfile);
+        // Spawn pose is instant -- characters should not visibly slide into
+        // place the moment a scene loads. Every PlayProfile call AFTER this one
+        // eases (see the public overload below).
+        private void Start() => PlayProfile(defaultProfile, instant: true);
+
+        private void Update()
+        {
+            if (_animator == null || _offsetT >= 1f) return;
+            _offsetT = Mathf.Clamp01(_offsetT + Time.deltaTime / BodyYOffsetEaseSeconds);
+            WriteBodyYOffset(Mathf.Lerp(_offsetFrom, _offsetTo, _offsetT));
+        }
+
+        private void OnDisable()
+        {
+            _plant = null;
+
+            // Never leave a mid-ease offset for the next activation to inherit.
+            _offsetFrom = _offsetTo;
+            _offsetT = 1f;
+            if (_animator != null) WriteBodyYOffset(_offsetTo);
+        }
 
         /// <summary>Cross-fades to the idle/pose state for a CabinIdleProfile and
-        /// applies (or clears) the Kneeling/Sleeping body-height offset.</summary>
-        public void PlayProfile(CabinIdleProfile profile)
+        /// eases the Kneeling/Sleeping/Seated* body-height offset in over
+        /// BodyYOffsetEaseSeconds, matching the muscle crossfade instead of
+        /// popping the whole body up to 0.31m in one frame while the pose is
+        /// still mid-blend.</summary>
+        public void PlayProfile(CabinIdleProfile profile) => PlayProfile(profile, instant: false);
+
+        private void PlayProfile(CabinIdleProfile profile, bool instant)
         {
             PlayState(StateName(profile), 0.25f);
-            ApplyBodyYOffset(profile);
+            ApplyBodyYOffset(profile, instant);
             SchedulePlant(profile);
         }
 
@@ -109,12 +154,25 @@ namespace FalsePositive.CabinNight
             CabinFootPlanter.PlantAndFit(gameObject, profile);
         }
 
-        private void OnDisable() => _plant = null;
-
-        private void ApplyBodyYOffset(CabinIdleProfile profile)
+        private void ApplyBodyYOffset(CabinIdleProfile profile, bool instant)
         {
             if (_animator == null) return;
-            float offset = Editor_BodyYOffsetFor(profile);
+            float target = Editor_BodyYOffsetFor(profile);
+            if (instant)
+            {
+                _offsetFrom = target;
+                _offsetTo = target;
+                _offsetT = 1f;
+                WriteBodyYOffset(target);
+                return;
+            }
+            _offsetFrom = Mathf.Lerp(_offsetFrom, _offsetTo, _offsetT); // current, mid-ease-safe
+            _offsetTo = target;
+            _offsetT = 0f;
+        }
+
+        private void WriteBodyYOffset(float offset)
+        {
             Vector3 position = _bodyRestLocalPosition;
             position.y += offset;
             _animator.transform.localPosition = position;
@@ -156,6 +214,7 @@ namespace FalsePositive.CabinNight
                 case CabinIdleProfile.Seated: return "Pose_Seated";
                 case CabinIdleProfile.SeatedBack: return "Pose_SeatedBack";
                 case CabinIdleProfile.SeatedForward: return "Pose_SeatedForward";
+                case CabinIdleProfile.HoldingCup: return "Pose_HoldingCup";
                 default: return "Idle_Controlled";
             }
         }

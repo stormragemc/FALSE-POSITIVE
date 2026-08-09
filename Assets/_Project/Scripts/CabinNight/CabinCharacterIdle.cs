@@ -16,7 +16,8 @@ namespace FalsePositive.CabinNight
         Kneeling,
         Seated,
         SeatedBack,
-        SeatedForward
+        SeatedForward,
+        HoldingCup
     }
 
     /// <summary>

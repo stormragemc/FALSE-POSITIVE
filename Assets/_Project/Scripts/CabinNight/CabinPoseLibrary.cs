@@ -122,6 +122,14 @@ namespace FalsePositive.CabinNight
                 case CabinIdleProfile.SeatedForward:
                     ApplySeated(ref pose, profile);
                     break;
+                case CabinIdleProfile.HoldingCup:
+                    // Right arm raised to chest height, mug held near the mouth;
+                    // left arm and legs stay at the shared base pose above.
+                    SetMuscle(ref pose, "Head Nod Down-Up", 0.1f);
+                    SetMuscle(ref pose, "Right Arm Down-Up", 0.5f);
+                    SetMuscle(ref pose, "Right Arm Front-Back", -0.3f);
+                    SetMuscle(ref pose, "Right Forearm Stretch", 0.4f);
+                    break;
             }
         }
 

@@ -144,6 +144,13 @@ namespace FalsePositive.Cutscene
         public bool IsPlaying { get; private set; }
         public event Action<CutsceneId> Finished;
 
+        /// <summary>Fires right before each beat starts playing, carrying
+        /// that beat's own data — Cutscene.CutsceneAnimationDirector uses
+        /// beat.speaker to redirect the Cop's uLipSync proxy only while a
+        /// Spassky-voiced beat is actually playing, since a single cutscene
+        /// can mix speakers (e.g. EndingPriya: her line, then his).</summary>
+        public event Action<CutsceneBeat> BeatStarted;
+
         /// <summary>Lets Cutscene.CutsceneAnimationDirector point the Cop's
         /// uLipSync at this beat's actual VO — see that class for why:
         /// uLipSync only analyzes an AudioSource living on its own
@@ -267,7 +274,8 @@ namespace FalsePositive.Cutscene
                             $"\"{recipe.beats[i].line}\"");
                     }
 
-                    yield return PlayBeat(recipe.beats[i], timeline != null);
+                    BeatStarted?.Invoke(recipe.beats[i]);
+                    yield return PlayBeat(recipe.beats[i]);
 
                     // Between beats only. The pause after the *last* beat is
                     // owned by whoever is cutting away next — see
@@ -296,7 +304,7 @@ namespace FalsePositive.Cutscene
             Finished?.Invoke(id);
         }
 
-        private IEnumerator PlayBeat(CutsceneBeat beat, bool timelineOwnsAudio)
+        private IEnumerator PlayBeat(CutsceneBeat beat)
         {
             if (!string.IsNullOrEmpty(beat.memoryFlagToSet))
             {
@@ -321,24 +329,26 @@ namespace FalsePositive.Cutscene
 
             bool spoken = beat.voClip != null;
 
-            // AudioClip.length is fixed regardless of AudioSource.pitch -- at a
+            // This director always owns VO playback now — never Timeline's own
+            // AudioTrack (see class doc: Timeline-driven AudioClipPlayable
+            // playback never produces real data through the AudioSource's
+            // OnAudioFilterRead/GetOutputData pipeline, confirmed live across
+            // three independent measurements, so uLipSync's audio-proxy
+            // redirect saw permanent silence no matter how correctly it was
+            // wired). Timeline still exists per cutscene for any non-Cop
+            // AnimationTrack work; it simply never drives audio or the Cop's
+            // Animator (see BindAnimationTracks).
+            //
+            // AudioClip.length is fixed regardless of AudioSource.pitch — at a
             // lowered pitch (Cutscene/DrunkCutsceneBinder slows CutsceneId.Wake's
             // VO for a slow-motion/drunk feel) actual playback takes
             // length/pitch seconds, longer than length. Dividing by pitch here
             // keeps the beat's hold (and therefore the subtitle) in sync with
             // what's actually still playing, instead of cutting the slowed clip
-            // off mid-word. Only meaningful when this director owns the audio --
-            // when Timeline owns it, the clip plays to Timeline's own baked
-            // schedule and dividing here would hold the subtitle off it. No-op
-            // at the default pitch of 1 for every other cutscene.
-            float pitch = !timelineOwnsAudio && voSource != null ? Mathf.Max(0.01f, voSource.pitch) : 1f;
-
-            // When Timeline owns the audio the hold must be the clip's exact
-            // length: Timeline is playing to its own baked schedule, and any
-            // padding here would slide the subtitle off the voice, cumulatively,
-            // for the rest of the cutscene.
+            // off mid-word. No-op at the default pitch of 1.
+            float pitch = voSource != null ? Mathf.Max(0.01f, voSource.pitch) : 1f;
             float hold = spoken
-                ? beat.voClip.length / pitch + (timelineOwnsAudio ? 0f : audioTailSeconds)
+                ? beat.voClip.length / pitch + audioTailSeconds
                 : beat.holdSecondsIfNoClip;
 
             if (!string.IsNullOrEmpty(beat.line))
@@ -347,7 +357,7 @@ namespace FalsePositive.Cutscene
             }
 
             AudioSource playing = null;
-            if (!timelineOwnsAudio && spoken)
+            if (spoken)
             {
                 AudioSource source = string.IsNullOrEmpty(beat.speaker) && sfxSource != null
                     ? sfxSource
@@ -382,11 +392,42 @@ namespace FalsePositive.Cutscene
 
             foreach (TrackAsset track in timeline.GetOutputTracks())
             {
+                // Every AudioTrack (VoTimelineBuilder always names it "VO" or "SFX")
+                // is bound to voSource/sfxSource at authoring time and stays bound
+                // across plays unless cleared here. PlayBeat is now the sole owner
+                // of VO/SFX playback (see its class doc) — Timeline's own
+                // AudioClipPlayable never produced real data through the
+                // AudioSource's OnAudioFilterRead/GetOutputData pipeline, so
+                // leaving it bound would both fight PlayBeat's manual .Play() call
+                // on the same AudioSource and still not feed uLipSync anything.
+                if (track is AudioTrack)
+                {
+                    director.ClearGenericBinding(track);
+                    continue;
+                }
+
                 if (track is not AnimationTrack || !track.name.StartsWith("ANIM_")) continue;
+
+                // ANIM_SPASSKY deliberately never binds. VoTimelineBuilder still bakes this
+                // track (Cop_Talk.anim, a humanoid-muscle clip) into every cutscene where
+                // Spassky speaks, but the Cop's body is owned by CopIdleAnimator/
+                // CopTalkGestureAnimator, which write bone Transform.localRotation directly
+                // every frame (see CopTalkGestureAnimator's class doc for why the Timeline
+                // path was meant to be retired). Binding this track anyway drove the Cop's
+                // Animator through Timeline's own PlayableGraph regardless of
+                // runtimeAnimatorController being unassigned — confirmed live: the Animator
+                // evaluated Cop_Talk's Spine/Neck/Head muscle curves throughout every
+                // Spassky-voiced beat, fighting the procedural animators for the exact
+                // duration lip sync needs to read clearly. Left unbound (not deleted) so a
+                // future revival of the Timeline body pass doesn't have to rebuild the track.
+                if (track.name == "ANIM_SPASSKY")
+                {
+                    director.ClearGenericBinding(track);
+                    continue;
+                }
 
                 string actorName = track.name.Substring("ANIM_".Length) switch
                 {
-                    "SPASSKY" => "Cop",
                     "PRIYA" => "Priya Raman (Female)",
                     "IVY" => "Ivy Teague (Female)",
                     "AARON" => "Aaron Teague (Male)",

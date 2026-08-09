@@ -4,6 +4,7 @@
     "references": [
         "FalsePositive.Runtime",
         "FalsePositive.Editor",
+        "uLipSync.Runtime",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

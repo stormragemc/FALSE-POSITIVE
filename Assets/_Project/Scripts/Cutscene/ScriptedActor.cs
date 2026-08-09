@@ -36,13 +36,30 @@ namespace FalsePositive.Cutscene
         /// <summary>Applies a static profile pose immediately (no walk cycle).</summary>
         public void PlayPose(CabinIdleProfile profile) => _driver?.PlayProfile(profile);
 
-        /// <summary>Instant yaw snap to face a point (e.g. the door, on a forced head-turn beat).</summary>
+        // Degrees/second TurnTo eases toward its target at -- called every frame
+        // from MoveTo/MoveAlong's walk loops, so this is what turns the old
+        // per-waypoint-corner snap into a turn. Fast enough that a straight walk
+        // still reads as instantly facing forward (a typical stride corrects a
+        // few degrees per frame at 60fps well under this rate), slow enough that
+        // an actual corner -- tens of degrees at once -- visibly rotates instead
+        // of popping.
+        private const float TurnRateDegreesPerSecond = 360f;
+
+        /// <summary>Eases yaw toward facing a point, at TurnRateDegreesPerSecond,
+        /// rather than snapping (the old behavior). Called every frame from the
+        /// walk loops below, so a straight walk still reads as always facing
+        /// forward; only an actual waypoint corner is visibly a turn now instead
+        /// of a snap. Cutscene.CutsceneStage.Borrow's placement snap is a direct
+        /// SetPositionAndRotation, not this method, so staging that legitimately
+        /// wants an instant turn under black is unaffected.</summary>
         public void TurnTo(Vector3 worldPoint)
         {
             Vector3 flat = worldPoint - transform.position;
             flat.y = 0f;
             if (flat.sqrMagnitude < 0.0001f) return;
-            transform.rotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
+            Quaternion target = Quaternion.LookRotation(flat.normalized, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, target,
+                TurnRateDegreesPerSecond * Time.deltaTime);
         }
 
         /// <summary>

@@ -261,7 +261,7 @@ Rows marked **⚠** still need their licence confirmed by the owner of that area
 | ffmpeg | Binary | MP3 decode fallback | ⚠ LGPL-2.1+ or GPL depending on build |
 | python-dotenv | Python lib | Config loading | BSD-3-Clause |
 | psutil | Python lib | Sidecar process management | BSD-3-Clause |
-| uLipSync | Unity package | Lip sync (installed, currently inert) | MIT |
+| uLipSync | Unity package | Real-time audio-driven lip sync (officer's mouth, teeth, tongue and jaw during interrogation) | MIT |
 | Unity URP, Input System, AI Navigation, Burst, Mathematics, Timeline, uGUI, Visual Scripting | Unity packages | Engine features | Unity Companion License ⚠ |
 | Avaturn | Service | Source of the cop avatar (`cop.glb`, T1 export) | ⚠ Avaturn terms — confirm redistribution rights for a public repo |
 | Blender | Tool | Headless rigging of the cop model | GPL-3.0 (build-time tool, not distributed) |

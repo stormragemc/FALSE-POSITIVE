@@ -334,15 +334,18 @@ namespace FalsePositive.Editor
                 // Slow/echoed VO, the drunk post-process and DrunkCameraSway all
                 // ramp across this one too (a second Cutscene/DrunkCutsceneBinder
                 // instance in _Persistent keyed to this id) -- HoldBeat pads the
-                // total beat time to match CutsceneStage.StandFromChair()'s 5s
-                // rise. chair_creak.mp3 is 1.54s, played at the binder's 0.75x
-                // slow pitch during this beat (CutsceneDirector.PlayBeat divides
-                // hold by voSource.pitch) -> ~2.06s, so the pad is ~2.95s rather
-                // than 5 minus the raw 1.54s. Re-measure both if either the
-                // pitch or the SFX asset ever changes.
+                // total beat time to match CutsceneStage.StandFromChair()'s total:
+                // StandFromChairStillHoldSeconds (5.0s, camera frozen while the
+                // mug is held and set down) + a 3.0s rise = 8.0s. chair_creak.mp3
+                // is 1.54s, played at the binder's 0.75x slow pitch during this
+                // beat (CutsceneDirector.PlayBeat divides hold by voSource.pitch)
+                // -> ~2.055s, so the pad is ~5.945s (8.0 - 2.055) rather than 8.0
+                // minus the raw 1.54s. Was 3.95 when the stage was 6.0s flat
+                // (1s hold + 5s rise). Re-measure both if either the pitch, the
+                // SFX asset, or the stage durations change.
                 VisibleRecipe(CutsceneId.StandFromChair,
                     SfxBeat("chair_creak", 0.6f),
-                    HoldBeat(2.95f)),
+                    HoldBeat(5.945f)),
 
                 // Kept lit for the RadioTuneTimelineBuilder Timeline beat
                 // (CutsceneStage.RadioTune) — a silent lead-in bracketing the
@@ -355,10 +358,19 @@ namespace FalsePositive.Editor
                         MemoryFlagIds.HeardRadioWarning),
                     Beat(null, null, 0.3f)),
 
-                // Screen-lit -- CutsceneStage stages this one (door swing) while
-                // the fade covered it before; that staging is now visible.
+                // Screen-lit -- CutsceneStage stages this one (view turn +
+                // Nick's exit + door swing) while the fade covered it before;
+                // that staging is now visible. HoldBeat pads to the moment
+                // the door actually finishes closing so door_latch_close
+                // lands on the latch: CutsceneStage.SomeoneLeft's own
+                // sub-routines total ~6.0s from Started (view turn 1.4s,
+                // Nick's walk-out starting at 0.35s, the door starting to
+                // close at 3.2s over a 2.5s ease, plus PoseBorrowed's
+                // internal ~0.31s blend wait ahead of all of it) -- re-
+                // measure live and adjust this pad if any of those change.
                 VisibleRecipe(CutsceneId.SomeoneLeft,
-                    SfxBeat("door_latch_close", 1.5f, MemoryFlagIds.SawDoorClose)),
+                    HoldBeat(6.0f),
+                    SfxBeat("door_latch_close", 1.0f, MemoryFlagIds.SawDoorClose)),
 
                 // Never actually raised by M1NightController.cs (the call-for-Nick
                 // beat is a RequestSpokenPrompt, not a cutscene) — filled anyway so

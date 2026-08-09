@@ -2055,9 +2055,9 @@ namespace FalsePositive.Editor
             if (blendMouth == null) blendMouth = cop.AddComponent<BlendShapeCopMouth>();
 
             ULS.uLipSync lipSync = cop.GetComponent<ULS.uLipSync>();
-            ULS.uLipSyncBlendShape blendShape = cop.GetComponent<ULS.uLipSyncBlendShape>();
+            ULS.uLipSyncBlendShape headBlendShape = cop.GetComponent<ULS.uLipSyncBlendShape>();
             SetField(blendMouth, "lipSync", lipSync);
-            SetField(blendMouth, "blendShape", blendShape);
+            SetField(blendMouth, "blendShape", headBlendShape);
 
             CopMouthController mouthController = cop.GetComponent<CopMouthController>();
             if (mouthController != null)
@@ -2065,28 +2065,88 @@ namespace FalsePositive.Editor
                 SetField(mouthController, "mouthImplementation", blendMouth);
             }
 
-            SkinnedMeshRenderer headRenderer = null;
-            foreach (SkinnedMeshRenderer smr in newModel.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            SkinnedMeshRenderer FindRenderer(string meshName)
             {
-                if (smr.gameObject.name == "Head_Mesh") { headRenderer = smr; break; }
+                foreach (SkinnedMeshRenderer smr in newModel.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    if (smr.gameObject.name == meshName) return smr;
+                }
+                return null;
             }
-            if (blendShape != null && headRenderer != null)
+
+            SkinnedMeshRenderer headRenderer = FindRenderer("Head_Mesh");
+
+            // uLipSync-Profile-Sample-Male's own phoneme set (A, I, U, E, O,
+            // '-', S — read directly off the .asset, not guessed) mapped to
+            // the closest Oculus-viseme shapes this T2 model ships.
+            // AddBlendShape looks up the blend shape index itself.
+            void FillPhonemeTable(ULS.uLipSyncBlendShape table)
             {
-                blendShape.skinnedMeshRenderer = headRenderer;
-                blendShape.blendShapes.Clear();
-                // uLipSync-Profile-Sample-Male's own phoneme set (A, I, U, E,
-                // O, '-', S — read directly off the .asset, not guessed)
-                // mapped to the closest Oculus-viseme shapes this T2 model
-                // ships. AddBlendShape looks up the blend shape index itself.
-                blendShape.AddBlendShape("A", "viseme_aa");
-                blendShape.AddBlendShape("I", "viseme_I");
-                blendShape.AddBlendShape("U", "viseme_U");
-                blendShape.AddBlendShape("E", "viseme_E");
-                blendShape.AddBlendShape("O", "viseme_O");
-                blendShape.AddBlendShape("-", "viseme_sil");
-                blendShape.AddBlendShape("S", "viseme_SS");
-                EditorUtility.SetDirty(blendShape);
+                table.blendShapes.Clear();
+                table.AddBlendShape("A", "viseme_aa");
+                table.AddBlendShape("I", "viseme_I");
+                table.AddBlendShape("U", "viseme_U");
+                table.AddBlendShape("E", "viseme_E");
+                table.AddBlendShape("O", "viseme_O");
+                table.AddBlendShape("-", "viseme_sil");
+                table.AddBlendShape("S", "viseme_SS");
             }
+
+            if (headBlendShape != null && headRenderer != null)
+            {
+                headBlendShape.skinnedMeshRenderer = headRenderer;
+                FillPhonemeTable(headBlendShape);
+                EditorUtility.SetDirty(headBlendShape);
+            }
+
+            // Teeth_Mesh and Tongue_Mesh carry the same full viseme set as
+            // Head_Mesh (see Assets/_Project/ASSETS_TODO.md §1) but nothing
+            // drove them before this — the mouth moved, the teeth and tongue
+            // behind it stayed frozen. Same phoneme table, one
+            // uLipSyncBlendShape component per mesh, all three fed by the
+            // same uLipSync.onLipSyncUpdate below.
+            ULS.uLipSyncBlendShape EnsureBlendShapeComponent(string meshName)
+            {
+                SkinnedMeshRenderer renderer = FindRenderer(meshName);
+                if (renderer == null) return null;
+
+                GameObject holder = renderer.gameObject;
+                ULS.uLipSyncBlendShape table = holder.GetComponent<ULS.uLipSyncBlendShape>();
+                if (table == null) table = holder.AddComponent<ULS.uLipSyncBlendShape>();
+                table.skinnedMeshRenderer = renderer;
+                FillPhonemeTable(table);
+                EditorUtility.SetDirty(table);
+                return table;
+            }
+
+            ULS.uLipSyncBlendShape teethBlendShape = EnsureBlendShapeComponent("Teeth_Mesh");
+            ULS.uLipSyncBlendShape tongueBlendShape = EnsureBlendShapeComponent("Tongue_Mesh");
+
+            // Jaw: only the 7-phoneme lip shapes are covered above, so
+            // jawOpen never moves on its own — BlendShapeCopMouth drives it
+            // directly off lipSync.result.volume (see that class's doc).
+            // Resolve each mesh's own jawOpen index via the same lookup
+            // uLipSyncBlendShape.AddBlendShape uses internally, rather than
+            // assuming a shared index across meshes with different shape
+            // key ordering.
+            SkinnedMeshRenderer teethRenderer = FindRenderer("Teeth_Mesh");
+            SkinnedMeshRenderer tongueRenderer = FindRenderer("Tongue_Mesh");
+            var jawRenderers = new System.Collections.Generic.List<SkinnedMeshRenderer>();
+            var jawIndices = new System.Collections.Generic.List<int>();
+            void AddJawTarget(SkinnedMeshRenderer smr)
+            {
+                if (smr == null) return;
+                int index = ULS.Util.GetBlendShapeIndex(smr, "jawOpen");
+                if (index < 0) return;
+                jawRenderers.Add(smr);
+                jawIndices.Add(index);
+            }
+            AddJawTarget(headRenderer);
+            AddJawTarget(teethRenderer);
+            AddJawTarget(tongueRenderer);
+            SetField(blendMouth, "jawRenderers", jawRenderers.ToArray());
+            SetField(blendMouth, "jawBlendShapeIndices", jawIndices.ToArray());
+            EditorUtility.SetDirty(blendMouth);
 
             // Profile: copied into the project rather than referenced
             // straight out of PackageCache, which can be regenerated/moved.
@@ -2115,27 +2175,41 @@ namespace FalsePositive.Editor
             // accumulate a duplicate listener (same delegate called N times)
             // on every bootstrap run. Clear to zero first for idempotency,
             // matching every other builder in this file/CopAnimationBuilder's
-            // own clear-then-rewrite convention.
-            if (lipSync != null && blendShape != null)
+            // own clear-then-rewrite convention. All three meshes' tables
+            // are driven off the same uLipSync.onLipSyncUpdate event.
+            if (lipSync != null)
             {
                 while (lipSync.onLipSyncUpdate.GetPersistentEventCount() > 0)
                 {
                     UnityEventTools.RemovePersistentListener(lipSync.onLipSyncUpdate, 0);
                 }
-                UnityEventTools.AddPersistentListener(lipSync.onLipSyncUpdate, blendShape.OnLipSyncUpdate);
+                if (headBlendShape != null)
+                {
+                    UnityEventTools.AddPersistentListener(lipSync.onLipSyncUpdate, headBlendShape.OnLipSyncUpdate);
+                }
+                if (teethBlendShape != null)
+                {
+                    UnityEventTools.AddPersistentListener(lipSync.onLipSyncUpdate, teethBlendShape.OnLipSyncUpdate);
+                }
+                if (tongueBlendShape != null)
+                {
+                    UnityEventTools.AddPersistentListener(lipSync.onLipSyncUpdate, tongueBlendShape.OnLipSyncUpdate);
+                }
                 EditorUtility.SetDirty(lipSync);
             }
         }
 
         /// <summary>Creates/refreshes the AnimationDirector GameObject —
         /// now scoped to only what CutsceneAnimationDirector still does:
-        /// redirect uLipSync's audio analysis to CutsceneId.SpasskyAnswer's
-        /// own VO for that cutscene's duration (see that class's doc for
-        /// why a cross-scene proxy redirect is still needed). It no longer
-        /// plays a Timeline clip — see class doc for why (the body is now
-        /// driven by CopTalkGestureAnimator, wired in WireCopModel, off
-        /// uLipSync's own volume, uniformly for live dialogue and cutscenes
-        /// alike, not just this one cutscene). CopAnimationBuilder's Cop_Talk
+        /// redirect uLipSync's audio analysis to whichever cutscene's own VO
+        /// is playing, exactly while a Spassky-voiced beat of it is on (see
+        /// that class's doc for why a cross-scene proxy redirect is still
+        /// needed, and why it's keyed off the beat's speaker rather than a
+        /// fixed cutscene id). It no longer plays a Timeline clip — see
+        /// class doc for why (the body is now driven by
+        /// CopTalkGestureAnimator, wired in WireCopModel, off uLipSync's own
+        /// volume, uniformly for live dialogue and every cutscene alike).
+        /// CopAnimationBuilder's Cop_Talk
         /// clip and Cutscene_SpasskyAnswer.playable are left on disk,
         /// unreferenced — matching this project's convention for superseded
         /// assets (see the T1 cop model) — so this method deliberately does
@@ -2191,8 +2265,103 @@ namespace FalsePositive.Editor
 
             CutsceneAnimationDirector animDir = animGo.GetComponent<CutsceneAnimationDirector>();
             if (animDir == null) animDir = animGo.AddComponent<CutsceneAnimationDirector>();
-            SetField(animDir, "cutsceneId", CutsceneId.SpasskyAnswer);
             SetField(animDir, "lipSync", cop.GetComponent<ULS.uLipSync>());
+        }
+
+        // ------------------------------------------------------------------
+        // 11. Verify Cutscene Director Coverage
+        // ------------------------------------------------------------------
+
+        /// <summary>Read-only audit of every project scene's cutscene staging
+        /// component — never marks a scene dirty, never saves, so running
+        /// this leaves no git diff. Two components matter here, and they are
+        /// NOT interchangeable: CutsceneAnimationDirector redirects the Cop's
+        /// uLipSync audio proxy for whichever cutscene beat he's the speaker
+        /// on (needs a Cop GameObject with a uLipSync — see
+        /// WireAnimationDirector above), while CutsceneStage is the general
+        /// beat-staging component the two
+        /// memory scenes use (added by MemorySceneBuilderV2.BuildScene,
+        /// unconditionally, so it survives a T04 rebuild). A copy of either
+        /// in a scene that doesn't need it would be inert, not helpful — so
+        /// this only checks for what each scene is actually supposed to
+        /// have, it does not push either component into every scene.</summary>
+        [MenuItem("Tools/False Positive/Bootstrap/11 - Verify Cutscene Director Coverage")]
+        public static void VerifyCutsceneDirectorCoverage()
+        {
+            string startingScenePath = SceneManager.GetActiveScene().path;
+
+            LogCutsceneStagingCoverage(PersistentScenePath, expectAnimDir: false, expectStage: null);
+            LogCutsceneStagingCoverage(MainMenuScenePath, expectAnimDir: false, expectStage: null);
+            LogCutsceneStagingCoverage(InterrogationScenePath, expectAnimDir: true, expectStage: null);
+            LogCutsceneStagingCoverage(NightScenePath, expectAnimDir: false, expectStage: false);
+            LogCutsceneStagingCoverage(MorningScenePath, expectAnimDir: false, expectStage: true);
+
+            // Restore whatever was open before this ran — this method is a
+            // read-only audit and must not change the editor's open scene
+            // as a side effect of running it.
+            if (!string.IsNullOrEmpty(startingScenePath))
+            {
+                EditorSceneManager.OpenScene(startingScenePath, OpenSceneMode.Single);
+            }
+
+            Debug.Log("[ProjectBootstrapBuilder] Cutscene director coverage check complete.");
+        }
+
+        /// <param name="expectStage">null = CutsceneStage is not expected in
+        /// this scene at all (Persistent/MainMenu/Interrogation); true/false
+        /// = expected, with that isMorning value (the two memory scenes).</param>
+        private static void LogCutsceneStagingCoverage(string scenePath, bool expectAnimDir, bool? expectStage)
+        {
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) == null)
+            {
+                Debug.LogWarning($"[ProjectBootstrapBuilder] {scenePath} not found — skipping.");
+                return;
+            }
+
+            EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+
+            CutsceneAnimationDirector animDir = UnityEngine.Object.FindAnyObjectByType<CutsceneAnimationDirector>();
+            bool hasAnimDir = animDir != null;
+            if (hasAnimDir != expectAnimDir)
+            {
+                Debug.LogWarning($"[ProjectBootstrapBuilder] {scenePath}: CutsceneAnimationDirector " +
+                    $"present={hasAnimDir}, expected={expectAnimDir}.");
+            }
+            else if (expectAnimDir)
+            {
+                Debug.Log($"[ProjectBootstrapBuilder] {scenePath}: CutsceneAnimationDirector OK.");
+            }
+
+            if (expectStage.HasValue)
+            {
+                CutsceneStage stage = UnityEngine.Object.FindAnyObjectByType<CutsceneStage>();
+                if (stage == null)
+                {
+                    Debug.LogWarning($"[ProjectBootstrapBuilder] {scenePath}: expected a CutsceneStage " +
+                        "(isMorning=" + expectStage.Value + ") but found none.");
+                }
+                else
+                {
+                    bool isMorning = (bool)GetField(stage, "isMorning");
+                    if (isMorning != expectStage.Value)
+                    {
+                        Debug.LogWarning($"[ProjectBootstrapBuilder] {scenePath}: CutsceneStage.isMorning=" +
+                            $"{isMorning}, expected={expectStage.Value}.");
+                    }
+                    else
+                    {
+                        Debug.Log($"[ProjectBootstrapBuilder] {scenePath}: CutsceneStage OK (isMorning={isMorning}).");
+                    }
+                }
+            }
+            else
+            {
+                CutsceneStage stray = UnityEngine.Object.FindAnyObjectByType<CutsceneStage>();
+                if (stray != null)
+                {
+                    Debug.LogWarning($"[ProjectBootstrapBuilder] {scenePath}: unexpected CutsceneStage present.");
+                }
+            }
         }
 
         // ------------------------------------------------------------------
@@ -2296,6 +2465,21 @@ namespace FalsePositive.Editor
                     "the script and this builder have drifted.");
             }
             field.SetValue(target, value);
+        }
+
+        /// <summary>Reflection getter counterpart to SetField, used by
+        /// VerifyCutsceneDirectorCoverage to read CutsceneStage.isMorning
+        /// without a public accessor. Same fail-loudly convention.</summary>
+        private static object GetField(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field == null)
+            {
+                throw new InvalidOperationException(
+                    $"[ProjectBootstrapBuilder] {target.GetType().Name} has no field '{fieldName}' — " +
+                    "the script and this builder have drifted.");
+            }
+            return field.GetValue(target);
         }
 
         private static void ApplyLabelMaterial(GameObject go, Color color)

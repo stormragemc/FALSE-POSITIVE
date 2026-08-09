@@ -36,7 +36,11 @@ namespace FalsePositive.UI
         private void Awake()
         {
             if (canvasGroup == null) return;
-            canvasGroup.alpha = 0f;
+            // Black on frame one. GameFlowDirector.Start's Boot -> Menu transition
+            // fades in from here, so the menu arrives out of black like every other
+            // scene instead of popping. Do not "restore" this to 0 — a 0 start is a
+            // one-frame lit flash of whichever scene happens to be open.
+            canvasGroup.alpha = 1f;
             canvasGroup.blocksRaycasts = false;
         }
 

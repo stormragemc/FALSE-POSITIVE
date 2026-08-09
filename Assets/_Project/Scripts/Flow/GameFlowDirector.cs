@@ -610,6 +610,23 @@ namespace FalsePositive.Flow
             if (!cutsceneClaimedReveal && fader != null) yield return fader.FadeFromBlack(fadeDuration);
 
             _transitioning = false;
+            // Safety net: IsPlaying being true here only proves a cutscene
+            // STARTED, not that it will actually reveal the scene -- a
+            // recipe with zero beats, or one missing from CutsceneDirector
+            // entirely, would leave the player stranded on black forever.
+            // Deliberately generous: DrunkCutsceneBinder/PlayRoutine's own
+            // reveal starts the same frame Started fires, so by this
+            // deadline a real cutscene is already well past alpha 1 and this
+            // no-ops.
+            if (cutsceneClaimedReveal) StartCoroutine(BlackOpeningWatchdog(fadeDuration));
+        }
+
+        /// <summary>Safety net for TransitionRoutine's cutsceneClaimedReveal skip
+        /// — see its call site.</summary>
+        private IEnumerator BlackOpeningWatchdog(float fadeDuration)
+        {
+            yield return new WaitForSeconds(2f);
+            if (fader != null && fader.Alpha >= 0.99f) yield return fader.FadeFromBlack(fadeDuration);
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

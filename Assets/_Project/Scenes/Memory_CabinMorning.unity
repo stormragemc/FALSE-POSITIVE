@@ -17465,7 +17465,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.CutsceneStage
   isMorning: 1
   liftEffortClip: {fileID: 8300000, guid: 66d47ee89239d97429d99b73d91cb55e, type: 3}
-  ivyLiftLineClip: {fileID: 8300000, guid: 88af7c1b3f7e7374a8109917e872a8d1, type: 3}
+  ivyLiftLineClip: {fileID: 8300000, guid: 0e2e0b0852223ac4296f4dcaa624a6e2, type: 3}
 --- !u!4 &1262326104
 Transform:
   m_ObjectHideFlags: 0

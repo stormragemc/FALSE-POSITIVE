@@ -19,7 +19,7 @@ namespace FalsePositive.Editor
     public static class OfflineScriptBuilder
     {
         private const string ConfigPath = "Assets/_Project/Config/OfflineDialogueScript.asset";
-        private const string VoRoot = "Assets/_Project/Art/Audio/VO/";
+        private const string VoRoot = "Assets/_Project/Art/Audio/VO/Production/";
 
         [MenuItem("Tools/False Positive/Bootstrap/10 - Build Offline Dialogue Script")]
         public static void Build()
@@ -35,24 +35,24 @@ namespace FalsePositive.Editor
 
             script.p2Recall = new[]
             {
-                Line("spassky_offline_p2_01", "So. What's the last thing you remember?", 4f),
-                Line("spassky_offline_p2_02", "Let's start simple. Were you drinking last night? With who, and until when?", 4f),
-                Line("spassky_offline_p2_03", "Tell me about the argument with Nick. What was it actually about?", 4f),
-                Line("spassky_offline_p2_04", "Did you see Nick go outside?", 3f),
-                Line("spassky_offline_p2_05", "Did you go to the door yourself? Did you call out?", 3.5f),
-                Line("spassky_offline_p2_06", "Was the door locked or unlocked, the last time you had anything to do with it?", 4f),
-                Line("spassky_offline_p2_07", "What did you do afterward? How long were you out for?", 4f),
-                Line("spassky_offline_p2_08", "Walk me through what happened when the body was found the next morning.", 4f),
-                Line("spassky_offline_p2_09", "What happened to Nick?", 3f),
+                Line("SPASSKY-006", "So. What's the last thing you remember?", 4f),
+                Line("SPASSKY-007", "Who else was drinking with you?", 3f),
+                Line("SPASSKY-008", "How much did you have?", 3f),
+                Line("SPASSKY-009", "Tell me about the argument with Nick. What was it really about?", 4f),
+                Line("SPASSKY-011", "What did Nick do after the argument?", 3f),
+                Line("SPASSKY-013", "What did you do next?", 3f),
+                Line("SPASSKY-015", "Was the door locked when you opened it?", 3f),
+                Line("SPASSKY-020", "Walk me through the morning. Start with Priya's scream.", 4f),
+                Line("SPASSKY-024", "What happened to Nick?", 3f),
             };
 
             script.p3Verdict = new[]
             {
-                Line("spassky_offline_p3_01", "Tell me why I should spare your life.", 4f),
-                Line("spassky_offline_p3_02", "If it's not you, then tell me who did it?", 4f),
-                Line("spassky_offline_p3_03", "That's not an answer. Try again.", 3f),
-                Line("spassky_offline_p3_04", "You understand how that sounds, don't you?", 3.5f),
-                Line("spassky_offline_p3_05", "Last chance. Who do you think did this?", 3.5f),
+                Line("SPASSKY-037", "Tell me why I should spare your life.", 4f),
+                Line("SPASSKY-039", "If it's not you, then tell me who did it.", 4f),
+                Line("SPASSKY-049", "That's not an answer. Try again.", 3f),
+                Line("SPASSKY-050", "You understand how that sounds, don't you?", 3.5f),
+                Line("SPASSKY-051", "Last chance. Who do you think did this?", 3.5f),
             };
 
             EditorUtility.SetDirty(script);
@@ -69,7 +69,7 @@ namespace FalsePositive.Editor
         {
             line = text,
             holdSecondsIfNoClip = holdSecondsIfNoClip,
-            voClip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipName + ".mp3"),
+            voClip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipName + ".wav"),
         };
     }
 }

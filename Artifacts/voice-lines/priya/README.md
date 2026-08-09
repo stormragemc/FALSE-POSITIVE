@@ -6,8 +6,9 @@ mono 16-bit PCM WAV per spoken line. Filenames match the stable IDs in
 were approved before the dry-VO cleanup pass. `PRIYA-001` was regenerated on
 9 Aug 2026 for the standardized **DAY-vid** pronunciation and was already
 pending re-review; `PRIYA-014` through `PRIYA-016` were also pending review.
-All eleven cleaned outputs now require a post-cleanup listening pass before
-final approval.
+The cleaned outputs `PRIYA-001` through `PRIYA-008` passed post-cleanup
+listening review on 9 Aug 2026. `PRIYA-014` through `PRIYA-016` passed the same
+review later that day, completing post-cleanup approval for all eleven lines.
 
 ## Selected voice model
 
@@ -47,8 +48,8 @@ compress, or add ambience.
 On 9 Aug 2026, all eleven production WAVs received this cleanup and tail
 treatment. The original `PRIYA-014` ended during sustained speech with no
 natural decay, so it was regenerated after explicit user authorization. The
-replacement passed technical validation and is pending human listening to
-confirm the complete final word and performance.
+replacement passed technical validation and human listening confirmed the
+complete final word and performance on 9 Aug 2026.
 
 ## Line manifest
 

@@ -113,8 +113,7 @@ namespace FalsePositive.Editor
             MemorySceneDressing.DressBothScenes();
             MemorySceneWiring.WireBoth();
             RewriteBuildSettings();
-            CutsceneRecipeBuilder.PopulateRecipes();
-            CutsceneRecipeBuilder.AttachVoClips();
+            VoTimelineBuilder.BuildAll();
             Debug.Log("[ProjectBootstrapBuilder] Full scaffold rebuilt.");
         }
 
@@ -381,10 +380,14 @@ namespace FalsePositive.Editor
             // Cop's uLipSync at this during CutsceneId.SpasskyAnswer so the
             // mouth syncs to the real cutscene VO, not just live dialogue turns.
             ULS.uLipSyncAudioSource cutsceneVoLipSync = voSourceGo.AddComponent<ULS.uLipSyncAudioSource>();
+            GameObject sfxSourceGo = new GameObject("CutsceneSfxSource", typeof(AudioSource));
+            sfxSourceGo.transform.SetParent(cutsceneGo.transform, false);
+            AudioSource cutsceneSfxSource = sfxSourceGo.GetComponent<AudioSource>();
             CutsceneDirector cutsceneDirector = cutsceneGo.AddComponent<CutsceneDirector>();
             SetField(cutsceneDirector, "fader", fader);
             SetField(cutsceneDirector, "subtitles", subtitleUi);
             SetField(cutsceneDirector, "voSource", cutsceneVoSource);
+            SetField(cutsceneDirector, "sfxSource", cutsceneSfxSource);
             SetField(cutsceneDirector, "voSourceLipSync", cutsceneVoLipSync);
 
             // EventSystem — the project uses the new Input System exclusively

@@ -167,6 +167,18 @@ Listen for clipped consonants, swallowed first words, and endings that fall away
 before the sentence finishes. Leave enough clean head and tail for editing and
 in-game triggering. Do not solve a cutoff by adding spoken filler.
 
+A fade can prevent a click, but it cannot restore a truncated word. Regenerate a
+take whose final consonant or vocal decay is missing. Apply any denoising before
+the final fade and silence padding, because a denoiser may introduce filter
+latency or residual energy at the end of the file.
+
+For an Eleven V3 line that repeatedly ends while speech is still active, append
+the supported non-spoken `[short pause]` tag after the canonical words and
+inspect the raw render before cleanup. Accept it only when the vocal decay ends
+before the file boundary and the tag itself is not spoken. This is preferable to
+fading through an active final word. See the
+[ElevenLabs V3 pause guidance](https://elevenlabs.io/docs/help-center/technical/do-pauses-and-ssml-phoneme-tags-work-with-the-api).
+
 ---
 
 ## 4. Breathing and vocal effort
@@ -420,6 +432,10 @@ Track these states separately:
   `Artifacts/voice-lines/<lowercase-character>/`.
 - Target format: mono, 24 kHz, 16-bit PCM WAV unless a character guide records
   an exception.
+- Production dialogue should contain dry speech only. Do not bake static, room
+  tone, wind, fire, radio texture, or other scene ambience into a voice clip;
+  those elements belong in the game mix. Use the least aggressive reproducible
+  denoising that removes audible background noise without making speech metallic.
 - Keep a `README.md` manifest with voice name, voice ID, settings, canonical
   words, delivery direction, and exact prompts.
 - Keep a clearly named generator and single-line playback utility beside the
@@ -483,6 +499,10 @@ Review every production candidate before approval.
 - File opens successfully.
 - Expected channel count, sample rate, and bit depth.
 - No digital clipping, corruption, unexpected long silence, or truncated tail.
+- No audible static, room tone, or other unintended background texture. Confirm
+  that denoising has not introduced pumping, ringing, or metallic speech.
+- The final sample reaches digital zero cleanly, with enough trailing silence
+  for reliable in-game triggering.
 - Native loudness is reasonable beside the same character's other lines.
 - Playback utility resolves the file from its stable ID.
 

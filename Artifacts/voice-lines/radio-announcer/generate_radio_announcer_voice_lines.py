@@ -1,8 +1,10 @@
 """Generate the radio announcer's production lines with Roger."""
 
 from argparse import ArgumentParser
+from array import array
 from pathlib import Path
 import os
+import subprocess
 import sys
 import tempfile
 import wave
@@ -19,6 +21,14 @@ OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
 SAMPLE_WIDTH = 2
 CHANNELS = 1
+FADE_DURATION_SECONDS = 0.020
+SILENCE_DURATION_SECONDS = 0.150
+SILENCE_FRAMES = round(SAMPLE_RATE * SILENCE_DURATION_SECONDS)
+CLEANUP_FILTER = (
+    "afftdn=nr=12:nf=-55:tn=1:gs=5,"
+    f"areverse,afade=t=in:st=0:d={FADE_DURATION_SECONDS},areverse,"
+    f"apad=pad_dur={SILENCE_DURATION_SECONDS}"
+)
 
 VOICE_SETTINGS = VoiceSettings(
     stability=0.50,
@@ -59,7 +69,7 @@ LINE_IDS = tuple(line_id for line_id, _, _ in LINES)
 
 
 def validate_wav(path: Path) -> None:
-    """Raise when a generated file is not nonempty 24 kHz mono 16-bit PCM."""
+    """Raise when a production WAV fails the format, peak, or tail contract."""
     with wave.open(str(path), "rb") as audio:
         if audio.getnchannels() != CHANNELS:
             raise ValueError(f"Unexpected channel count in {path.name}")
@@ -71,10 +81,72 @@ def validate_wav(path: Path) -> None:
             raise ValueError(f"Unexpected compression in {path.name}")
         if audio.getnframes() <= 0:
             raise ValueError(f"No audio frames in {path.name}")
+        samples = array("h", audio.readframes(audio.getnframes()))
+
+    if sys.byteorder != "little":
+        samples.byteswap()
+    if not samples or not any(samples[:-SILENCE_FRAMES]):
+        raise ValueError(f"No non-silent speech content in {path.name}")
+    if any(sample in (-32_768, 32_767) for sample in samples):
+        raise ValueError(f"Sample clipping detected in {path.name}")
+    if len(samples) < SILENCE_FRAMES or any(samples[-SILENCE_FRAMES:]):
+        raise ValueError(
+            f"Less than {SILENCE_DURATION_SECONDS:.3f} s exact zero tail in "
+            f"{path.name}"
+        )
+
+
+def clean_wav_safely(source_path: Path, output_path: Path) -> None:
+    """Denoise, fade, pad, validate, and atomically publish a production WAV."""
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=OUTPUT_DIRECTORY,
+            prefix=f".{output_path.stem}-clean-",
+            suffix=".wav",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+
+        command = (
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source_path),
+            "-af",
+            CLEANUP_FILTER,
+            "-ar",
+            str(SAMPLE_RATE),
+            "-ac",
+            str(CHANNELS),
+            "-c:a",
+            "pcm_s16le",
+            "-map_metadata",
+            "-1",
+            str(temporary_path),
+        )
+        try:
+            subprocess.run(command, check=True)
+        except FileNotFoundError as error:
+            raise RuntimeError("ffmpeg is required for production cleanup") from error
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(
+                f"ffmpeg cleanup failed for {source_path.name}"
+            ) from error
+
+        validate_wav(temporary_path)
+        os.replace(temporary_path, output_path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def write_wav_safely(path: Path, pcm: bytes) -> None:
-    """Validate raw PCM and atomically publish it in a WAV container."""
+    """Wrap raw PCM, apply production cleanup, and publish it atomically."""
     if not pcm:
         raise ValueError(f"Empty audio response for {path.stem}")
     if len(pcm) % SAMPLE_WIDTH:
@@ -96,9 +168,7 @@ def write_wav_safely(path: Path, pcm: bytes) -> None:
             output.setframerate(SAMPLE_RATE)
             output.writeframes(pcm)
 
-        validate_wav(temporary_path)
-        os.replace(temporary_path, path)
-        temporary_path = None
+        clean_wav_safely(temporary_path, path)
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)

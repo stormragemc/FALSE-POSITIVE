@@ -256,7 +256,7 @@ Use these details when selecting or generating character voices. The listed race
 
 **[PRIYA-005] PRIYA:** The door was locked. Who locked it?
 
-**[AARON-003] AARON:** Lift on three.
+**[AARON-003] AARON:** Lift on three. One, two, three.
 
 *They reach the sofa and lower Nick onto it.*
 

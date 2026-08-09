@@ -1,7 +1,8 @@
 # Aaron — voice and script-driven delivery
 
-**Status:** voice **selected** 9 Aug 2026. Production WAV generation, review,
-and Unity integration are pending. This guide supersedes the Eric casting in
+**Status:** voice selected and five production WAVs generated 9 Aug 2026.
+Individual listening review is complete; final Unity integration and in-game
+mix review are pending. This guide supersedes the Eric casting in
 `Assets/_Project/Art/Audio/VO/README.md` where the two conflict.
 
 ---
@@ -31,8 +32,8 @@ Verified against the working tree on 9 Aug 2026.
 | Source | Current reality |
 |---|---|
 | `docs/HUMAN_SCRIPT.md` | Canonical spoken script. Aaron owns `AARON-001` through `AARON-005`. |
-| `Artifacts/voice-auditions/aaron/` | Contains the historical neutral round and a revised grounded-jock V3 round. |
-| `Artifacts/voice-lines/aaron/` | Does not yet exist; no selected-voice production set has been rendered. |
+| Historical auditions | Removed after casting was locked; the selected identity and settings are preserved in this guide and the production generator. |
+| `Artifacts/voice-lines/aaron/` | Contains the complete cleaned Liam production set and reproducible utilities. |
 | `Assets/_Project/Art/Audio/VO/README.md` | Still names Eric as Aaron and is stale. |
 | `Assets/_Project/Art/Audio/VO/` | Contains five Eric-era MP3s with descriptive filenames. |
 | `CutsceneRecipeBuilder.cs` | Uses descriptive stems rather than the stable `AARON-###` contract. |
@@ -43,7 +44,7 @@ Verified against the working tree on 9 Aug 2026.
 |---|---|
 | `AARON-001` | He's freezing. Let's get him inside, onto the sofa by the fire. |
 | `AARON-002` | Priya. Not now. |
-| `AARON-003` | Lift on three. |
+| `AARON-003` | Lift on three. One, two, three. |
 | `AARON-004` | Barely survived it. |
 | `AARON-005` | …Two years? |
 
@@ -62,9 +63,9 @@ stability, and a grounded athletic direction. The user selected **Liam**, who
 was candidate 5, after hearing `AARON-001`. Liam gave the instruction a confident
 physical presence without turning it into a performance of panic.
 
-Additional revised audition files exist for `AARON-002`, `AARON-003`, and
-`AARON-005`, but they had not been played when the casting was locked. They are
-preparation assets, not approved production takes.
+Additional revised auditions existed for `AARON-002`, `AARON-003`, and
+`AARON-005`, but they were preparation assets rather than production takes and
+were removed after the production set was locked.
 
 ### 2.3 Casting decision
 
@@ -129,17 +130,18 @@ Audio tags and punctuation below are synthesis directions, not extra dialogue.
 
 | ID | Performance beat | Exact synthesis prompt |
 |---|---|---|
-| `AARON-001` | Grounded urgency; immediately turn panic into a physical plan | `[confident, athletic, urgent but controlled] He’s freezing. Let’s get him inside—onto the sofa, by the fire.` |
+| `AARON-001` | Controlled urgency; appear calm while immediately turning panic into a physical plan | `[calm on the surface, suppressing urgency, taking charge] He’s freezing.\n\n[steady and decisive] Let’s get him inside.\n\nOnto the sofa, by the fire.` |
 | `AARON-002` | Firm redirection without raising his voice | `[controlled, firm, redirecting] Priya. Not now.` |
-| `AARON-003` | Short team-lifting command with clean timing | `[terse, physically decisive] Lift on three.` |
+| `AARON-003` | Team-lifting command followed by a steady count that cues the movement | `[firm, coordinating the group before a heavy lift] Lift on three. One, two, three.` |
 | `AARON-004` | Easy, dry anniversary joke before the night turns | `[relaxed, dryly joking] Barely survived it.` |
 | `AARON-005` | Flat, slow disbelief; no anger on the surface | `[quiet, flat, stunned] ...Two years?` |
 
-The em dash in `AARON-001` joins the plan into one decisive thought. The leading
+The paragraph breaks in `AARON-001` separate Aaron's assessment, immediate
+decision, and destination while he deliberately appears calm. The leading
 ellipsis in `AARON-005` allows a short beat of realization, but it should not
 become a theatrical pause.
 
-### 4.3 Assets and reproducibility — NOT YET IMPLEMENTED
+### 4.3 Assets and reproducibility — FINALIZED
 
 The intended production set is:
 
@@ -151,9 +153,10 @@ Artifacts/voice-lines/aaron/AARON-004.wav
 Artifacts/voice-lines/aaron/AARON-005.wav
 ```
 
-The future generator should store the public voice ID, settings, and exact
-prompts from §4.1–4.2. It must read `ELEVENLABS_API_KEY` from the environment,
-skip approved files by default, and require an explicit overwrite flag.
+`Artifacts/voice-lines/aaron/generate_aaron_voice_lines.py` stores the public
+voice ID, settings, and exact prompts from §4.1–4.2. It reads
+`ELEVENLABS_API_KEY` from the environment, skips existing approved WAVs by
+default, and requires an explicit overwrite flag for regeneration.
 
 ### 4.4 Unity integration — NOT YET IMPLEMENTED
 
@@ -192,13 +195,12 @@ Completed:
 
 - `HUMAN_SCRIPT.md` contains exactly five Aaron IDs, `AARON-001` through
   `AARON-005`.
-- Revised audition scripts document all eight candidate names and public voice
-  IDs.
-- Liam is consistently candidate 5 and maps to `TX3LPaxmHKxFdv7VOQHJ`.
-- The selected round uses `eleven_v3` and the settings in §4.1.
-- No API key is stored in the audition or guide files.
+- Historical casting records identified Liam as candidate 5 and map him to
+  public voice ID `TX3LPaxmHKxFdv7VOQHJ`.
+- The production generator uses `eleven_v3` and the settings in §4.1.
+- No API key is stored in the guide or production files.
 
-Required after production generation:
+Production review completed:
 
 - Each WAV opens as mono, 24 kHz, 16-bit PCM.
 - Spoken words match the canonical dialogue paired with each ID.
@@ -206,16 +208,15 @@ Required after production generation:
   melodramatic.
 - `AARON-004` sounds comfortably friendly in the warm memory.
 - `AARON-005` stays flat and restrained without sounding robotic.
-- Aaron remains intelligible in the final cabin mix.
+
+Remaining: confirm Aaron remains intelligible in the final cabin mix.
 
 ---
 
 ## 6. Out of scope
 
-- Generating or approving Aaron's production WAVs.
 - Importing or wiring Aaron's files in Unity.
 - Deleting tracked Eric-era MP3s before migration.
-- Rewriting canonical dialogue around a generated performance.
 - Live Aaron TTS; his dialogue is pre-rendered.
 - Destructive per-line mastering.
 
@@ -228,7 +229,6 @@ Required after production generation:
 | Unity continues playing Eric while the guide names Liam | **High** | Treat production generation, import, casting update, and recipe migration as one explicit follow-up change |
 | The jock direction becomes a caricature | Medium | Anchor delivery in concise physical confidence and avoid exaggerated swagger |
 | `AARON-005` reveals anger too openly | Medium | Keep it quiet, flat, and slow as required by the scene direction |
-| Short commands produce unstable or theatrical takes | Medium | Generate multiple takes and approve each line individually |
-| Prepared audition files are mistaken for approved production | Medium | Keep production under the ID-based `Artifacts/voice-lines/aaron/` directory only |
+| Short commands produce unstable or theatrical takes | Medium | Regenerate and review replacement takes individually if an in-game issue appears |
 | Aaron's quieter lines disappear under ambience | Medium | Preserve dynamics and adjust the shared Unity VO mixer non-destructively |
 | Liam becomes unavailable in the Voice Library | Low | Preserve the public voice ID, settings, prompts, and approved WAVs in source control |

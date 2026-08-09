@@ -17,9 +17,16 @@ mono 16-bit PCM WAV per spoken line. Filenames match the stable IDs in
 - Speaker boost: enabled
 - Speed: `1.00`
 - Output: `pcm_24000`
+- Noise cleanup: FFmpeg `afftdn=nr=12:nf=-55:tn=1:gs=5`
+- Tail conditioning: 20 ms fade to digital zero, then 150 ms silence
 
 The API key is read from `ELEVENLABS_API_KEY` at runtime and is never stored in
 this directory.
+
+Every generated take receives conservative broadband noise reduction followed
+by the same tail conditioning. This keeps scene ambience out of the voice asset
+and prevents an active final sample from cutting directly to zero when Unity
+reaches the end of the clip. No normalization or compression is applied.
 
 `NICK-001` uses the synthesis-only alias `Day-vid` for the name `David`,
 enforcing the project-wide **DAY-vid** pronunciation without changing the
@@ -54,13 +61,13 @@ spoken dialogue.
 
 | File | Generation | Technical validation | Performance review |
 |---|---|---|---|
-| `NICK-001.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
-| `NICK-002.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
-| `NICK-003.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
-| `NICK-004.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
-| `NICK-005.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
-| `NICK-006.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
-| `NICK-007.wav` | Generated | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Pending user review |
+| `NICK-001.wav` | Generated, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Passed; pending in-game review |
+| `NICK-002.wav` | Generated, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Passed; pending in-game review |
+| `NICK-003.wav` | Retake 1 selected, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | User selected retake 1; pending in-game review |
+| `NICK-004.wav` | Generated, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Passed; pending in-game review |
+| `NICK-005.wav` | Generated, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Passed; pending in-game review |
+| `NICK-006.wav` | Generated, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Passed; pending in-game review |
+| `NICK-007.wav` | Generated, denoised, and tail-conditioned | Passed: mono, 24 kHz, 16-bit PCM, nonzero frames | Passed; pending in-game review |
 
 ## Utilities
 

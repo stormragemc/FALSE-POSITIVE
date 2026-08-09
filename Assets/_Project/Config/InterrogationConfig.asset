@@ -38,6 +38,7 @@ MonoBehaviour:
   micTooLoudRms: 0.25
   ttsPlaybackGain: 2
   ttsEchoGateTailSeconds: 0.25
+  fillerPlaybackDelaySeconds: 0.15
   calibrationSilenceSeconds: 2
   calibrationSpeechSeconds: 2.5
   calibrationTimeoutSeconds: 8

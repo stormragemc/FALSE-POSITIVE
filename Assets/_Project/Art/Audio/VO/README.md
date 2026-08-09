@@ -42,6 +42,12 @@ Spassky's *live* in-game dialogue is generated turn-by-turn by the sidecar at
 runtime (`Sidecar/tts.py`). Offline-demo and scripted cutscene paths use the
 stable-ID WAVs from `Production/`.
 
+The 10 prerecorded latency acknowledgements in `SpasskyFiller/` play only on
+live interrogation turns, after the player's utterance has been captured and
+while the backend is processing it. Their canonical IDs, wording, synthesis
+settings, and endpoint cleanup are documented in
+`Artifacts/voice-lines/spassky_filler/README.md`.
+
 Pre-rendering P1's answer keeps the longest scripted Spassky line off the live
 turn budget and ensures it uses the same reviewed V3 performance every time.
 

@@ -43,6 +43,16 @@ No room tone, ambience, static, or other background texture is intentionally
 baked into the clips. Human listening is still required for final performance
 approval and to catch perceptual artifacts that numeric QA cannot identify.
 
+## Unity integration
+
+The 10 reviewed WAVs are copied into
+`Assets/_Project/Art/Audio/VO/SpasskyFiller/` and serialized on the
+`DialogueManager` in `Interrogation.unity`. On a live player turn, the backend
+request starts immediately and a filler begins after the configured 0.15 s
+reaction beat. A fast backend response cancels a filler that has not started;
+an already-playing filler is allowed to finish before the generated reply
+begins. Offline demo turns do not play fillers.
+
 ## Line manifest
 
 | ID | Dialogue and exact prompt |

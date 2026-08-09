@@ -212,7 +212,10 @@ class AppFailureIsolationTests(unittest.TestCase):
         )
         tts = _module(
             "tts",
-            synthesize=lambda _text: (b"\x00\x00", 24000, 1, 7),
+            # app.turn passes the mood alongside the text now: tts.synthesize
+            # applies the eleven_v3 accent tag itself, so the second argument is
+            # part of the contract and the stub has to accept it.
+            synthesize=lambda _text, _mood=None: (b"\x00\x00", 24000, 1, 7),
         )
         audio_utils = _module(
             "audio_utils",

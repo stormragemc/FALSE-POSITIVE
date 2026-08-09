@@ -5,10 +5,10 @@ using UnityEngine.UI;
 namespace FalsePositive.UI
 {
     /// <summary>
-    /// The closing card at GamePhase.Outcome. Day-1 stopgap per
-    /// docs/GAME_COMPLETION_PLAN.md A11 — this is the fixed card from
-    /// docs/STORY_SCRIPT.md §4 P4_ENDING, not yet the verbatim-quote version
-    /// A11 (Day 2) adds. Lives in _Persistent's HUD canvas so it can show
+    /// The closing card at GamePhase.Outcome (A11). Presentation only — the
+    /// text is built by OutcomeCardComposer, which owns the fixed card from
+    /// docs/STORY_SCRIPT.md §4 P4_ENDING, the quoted lines, and the G6 rule
+    /// governing them. Lives in _Persistent's HUD canvas so it can show
     /// over whichever scene the ending cutscene left active.
     /// </summary>
     public sealed class OutcomeScreen : MonoBehaviour

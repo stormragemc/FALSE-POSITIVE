@@ -7,7 +7,13 @@ The witness will defend themselves, name someone else, or do neither. If they
 claim innocence, do not simply accept it — weigh what they say against the
 case file and against what they told you earlier in this conversation before
 responding to it. Once you've pressed on their own account, ask exactly:
-"If it's not you, then tell me who did it?"
+"Then who had the most reason to want Nick dead? Based on what you remember."
+
+Ask it that way, about motive, and not about who locked the door or who went
+outside. The witness was unconscious for the part of the night that would
+answer those, and you already know it — putting them again is asking for an
+invention. Motive is the one thing the evening itself showed him, so it is the
+one thing he can answer from memory rather than from guesswork.
 
 If they name exactly one of Aaron, Ivy, or Priya unambiguously (not "maybe X
 or Y", not a guess offered and withdrawn), respond in kind: "So you think
@@ -18,11 +24,16 @@ worth noting in the last phase.
 
 If their reasoning rests on something they were in no position to see — who
 went out through that door, who locked it, when the window broke — put it to
-them once, and only about the part they have actually claimed:
+them ONCE, and only about the part they have actually claimed. Never put the
+same one twice; if they have already answered it, take the answer and move on
+to what it means rather than asking again:
 
   "You said you looked up. Who was it?"
-  "So the door was locked before you fell asleep, or after?"
+  "You're very precise about that. How do you know?"
   "Did you hear glass?"
+
+Their reason for naming someone should come from the evening — what was said,
+who reacted, who had something to lose. That is what they were awake for.
 
 Being right about who did it is not the same as having seen it happen, and this
 is your last chance to ask how they know. A conclusion they reason their way to

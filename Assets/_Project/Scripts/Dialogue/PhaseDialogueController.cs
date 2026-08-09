@@ -78,6 +78,10 @@ namespace FalsePositive.Dialogue
         /// were said. Populated from the turns that carried an unsupported
         /// detail, and from the turn that named someone.</summary>
         private readonly List<QuotedLine> _quotableLines = new List<QuotedLine>();
+
+        /// <summary>Latches once P4 has picked an ending, so the phase cannot
+        /// be entered twice and play two.</summary>
+        private bool _endingRequested;
         private bool _p3MemoriesPlayed;
         // True between EnterLiveDialoguePhase and FinishLiveDialoguePhase. This
         // component can be disabled and re-enabled DURING a phase:
@@ -129,6 +133,7 @@ namespace FalsePositive.Dialogue
                     // cleared here rather than on entry to the verdict.
                     _citedClues.Clear();
                     _quotableLines.Clear();
+                    _endingRequested = false;
                     EnterP1();
                     break;
                 case GamePhase.M1_Night:
@@ -496,7 +501,19 @@ namespace FalsePositive.Dialogue
         /// the Day-1 stopgap that picked on the name alone.</summary>
         private void EnterP4()
         {
-            Dialogue?.Suspend();
+            // Exactly one ending, ever. EnterPhase runs from the PhaseChanged
+            // event, and this component is disabled and re-enabled by the scene
+            // swaps around it, so a second P4 notification would request a
+            // second ending cutscene on top of the first — two endings playing
+            // over each other, with the later one deciding the outcome card.
+            if (_endingRequested) return;
+            _endingRequested = true;
+
+            // Cut the officer off rather than merely closing the mic. P4 begins
+            // the instant P3 hits its turn cap, which is often mid-reply, and
+            // Suspend() leaves that reply playing — so the generated voice ran
+            // underneath the pre-rendered ending line.
+            Dialogue?.SilenceNow();
 
             LastEnding = EndingSelector.Select(_flow.Score, _citedClues);
             Debug.Log($"[Ending] {LastEnding.Cutscene} — {LastEnding.Reason} " +

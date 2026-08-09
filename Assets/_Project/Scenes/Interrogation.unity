@@ -509,7 +509,7 @@ MonoBehaviour:
   pitchAmplitude: 0.18
   rollAmplitude: 0.4
   startSmoothTime: 0.12
-  stopSmoothTime: 0.28
+  stopSmoothTime: 0.09
   idleFrequency: 0.085
   idleVerticalAmplitude: 0.003
   idleLateralAmplitude: 0.004
@@ -1536,6 +1536,18 @@ MonoBehaviour:
   forearmDegrees: 14
   handDegrees: 12
   spineDegrees: 2
+  tableSurface: {fileID: 894156403}
+  reachDelay: 0.75
+  reachSeconds: 1.2
+  handSpread: 0.22
+  handInset: 0.14
+  handHeight: 0.045
+  reachComfort: 0.95
+  elbowSwivelDegrees: 0
+  plantedHandEuler: {x: 0, y: 0, z: 0}
+  tableSlideMetres: 0.035
+  tableLiftMetres: 0.02
+  plantedHandScale: 0.6
 --- !u!1 &587554442
 GameObject:
   m_ObjectHideFlags: 0

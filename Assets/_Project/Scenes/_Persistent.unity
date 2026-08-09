@@ -10589,15 +10589,25 @@ MonoBehaviour:
       memoryFlagToSet: 
     keepScreenLit: 0
   - id: 5
-    fadeOutSeconds: 0.2
-    fadeInSeconds: 0.3
+    fadeOutSeconds: 0
+    fadeInSeconds: 0
     beats:
+    - speaker: 
+      line: 
+      voClip: {fileID: 8300000, guid: f92dfee5d8e1e0f4f91f2e1271b8915a, type: 3}
+      holdSecondsIfNoClip: 3.4
+      memoryFlagToSet: 
     - speaker: RADIO
       line: "\u2026a snow storm. Please stay indoors during these times."
       voClip: {fileID: 8300000, guid: f92dfee5d8e1e0f4f91f2e1271b8915a, type: 3}
       holdSecondsIfNoClip: 3
       memoryFlagToSet: heard_radio_warning
-    keepScreenLit: 0
+    - speaker: 
+      line: 
+      voClip: {fileID: 8300000, guid: f92dfee5d8e1e0f4f91f2e1271b8915a, type: 3}
+      holdSecondsIfNoClip: 0.3
+      memoryFlagToSet: 
+    keepScreenLit: 1
   - id: 6
     fadeOutSeconds: 0.3
     fadeInSeconds: 0.3

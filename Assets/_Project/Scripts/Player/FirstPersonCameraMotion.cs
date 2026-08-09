@@ -20,7 +20,7 @@ namespace FalsePositive.Player
         [SerializeField] private float pitchAmplitude = 0.18f;
         [SerializeField] private float rollAmplitude = 0.4f;
         [SerializeField] private float startSmoothTime = 0.12f;
-        [SerializeField] private float stopSmoothTime = 0.28f;
+        [SerializeField] private float stopSmoothTime = 0.09f;
 
         [Header("Standing Idle")]
         [SerializeField] private float idleFrequency = 0.085f;
@@ -29,6 +29,12 @@ namespace FalsePositive.Player
         [SerializeField] private float idlePitchAmplitude = 0.1f;
         [SerializeField] private float idleRollAmplitude = 0.14f;
         [SerializeField] private float idleSmoothTime = 0.8f;
+
+        /// <summary>SmoothDamp only ever approaches zero, so without a cut-off
+        /// the last sliver of bob rides out a long visible tail after the player
+        /// stops. At this blend the offset is well under a millimetre, so
+        /// snapping it to zero is imperceptible.</summary>
+        private const float WalkSettleThreshold = 0.02f;
 
         private CharacterController _controller;
         private FreeLookCameraRig _standingRig;
@@ -98,6 +104,12 @@ namespace FalsePositive.Player
             float walkSmoothTime = walkTarget > _walkBlend ? startSmoothTime : stopSmoothTime;
             _walkBlend = Mathf.SmoothDamp(_walkBlend, walkTarget, ref _walkBlendVelocity,
                 Mathf.Max(0.01f, walkSmoothTime), Mathf.Infinity, deltaTime);
+            if (walkTarget <= 0f && _walkBlend < WalkSettleThreshold)
+            {
+                _walkBlend = 0f;
+                _walkBlendVelocity = 0f;
+                _walkPhase = 0f;
+            }
 
             bool scripted = IsCutscenePlaying();
             float idleTarget = standing && !walking && !scripted ? 1f : 0f;
@@ -106,7 +118,20 @@ namespace FalsePositive.Player
 
             float cadenceT = Mathf.InverseLerp(1f, 1.6f, speedRatio);
             float cadence = Mathf.Lerp(walkFrequency, sprintFrequency, cadenceT);
-            if (walking || _walkBlend > 0.001f) _walkPhase += deltaTime * cadence * Mathf.PI * 2f;
+            if (walking || _walkBlend > 0f)
+            {
+                _walkPhase += deltaTime * cadence * Mathf.PI * 2f;
+                if (!walking)
+                {
+                    // Keep the cadence running as the bob fades, but pull it
+                    // toward the nearest multiple of PI, where sin(phase) and
+                    // sin(2*phase) are both zero. The residual then resolves to
+                    // a centred head instead of being cut off mid-swing.
+                    float settled = Mathf.Round(_walkPhase / Mathf.PI) * Mathf.PI;
+                    _walkPhase = Mathf.Lerp(_walkPhase, settled,
+                        1f - Mathf.Exp(-deltaTime / Mathf.Max(0.01f, stopSmoothTime)));
+                }
+            }
             _idlePhase += deltaTime * idleFrequency * Mathf.PI * 2f;
 
             float stride = Mathf.Sin(_walkPhase);

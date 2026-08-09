@@ -96,7 +96,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
@@ -148,7 +148,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4d995679856d48c98114604652532d2d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Player.FirstPersonCameraMotion
   referenceWalkSpeed: 3.2
   walkFrequency: 1.7
@@ -158,7 +158,7 @@ MonoBehaviour:
   pitchAmplitude: 0.18
   rollAmplitude: 0.4
   startSmoothTime: 0.12
-  stopSmoothTime: 0.28
+  stopSmoothTime: 0.09
   idleFrequency: 0.085
   idleVerticalAmplitude: 0.003
   idleLateralAmplitude: 0.004
@@ -214,7 +214,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0b15f1a3a2bb3774698e6fe67d0d6fca, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinAnimatorDriver
   defaultProfile: 1
 --- !u!143 &4005779333941546554
@@ -439,7 +439,7 @@ PrefabInstance:
     - target: {fileID: 13700014, guid: 99038cc8636a1834fbf83a430b449773, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
-      objectReference: {fileID: 2100000, guid: 5eb1d490d8669e146ba16c65f1c33d4c, type: 2}
+      objectReference: {fileID: 2100000, guid: df10089273da4844194e2d22ae7e4f9a, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

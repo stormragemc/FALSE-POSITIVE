@@ -124,6 +124,16 @@ namespace FalsePositive.Editor
             EditorSceneManager.SaveScene(scene, NightScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("[MemorySceneDressing] Memory_CabinNight dressed.");
+
+            // FindOrCreateRoot() above destroys every StoryProps child and
+            // AddProp always makes a fresh GameObject, so any scene reference
+            // to the old Prop_Radio (M1NightController.radio, wired by
+            // MemorySceneWiring.WireNight) goes null the instant dressing
+            // re-runs after wiring. Re-wiring here — the same fix
+            // MemorySceneBuilderV2.BuildScene already applies by calling
+            // CabinAnimationBuilder.EnsureBuilt() before the cast build —
+            // makes "dressing invalidates wiring" impossible to forget.
+            MemorySceneWiring.WireNight();
         }
 
         [MenuItem("Tools/False Positive/Bootstrap/8b - Dress Memory_CabinMorning")]
@@ -221,6 +231,13 @@ namespace FalsePositive.Editor
             EditorSceneManager.SaveScene(scene, MorningScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("[MemorySceneDressing] Memory_CabinMorning dressed.");
+
+            // Mirrors DressNight's fix for symmetry and to keep this scene's
+            // wiring (CutsceneStage.liftEffortClip/ivyLiftLineClip) from ever
+            // being forgotten after a re-dress — Prop_FrontDoor_Locked itself
+            // is safe (it's the MemorySceneBuilderV2 Door_v2 instance under
+            // Interior, not a StoryProps child dressing destroys).
+            MemorySceneWiring.WireMorning();
         }
 
         private const string SfxRoot = "Assets/_Project/Art/Audio/SFX/";

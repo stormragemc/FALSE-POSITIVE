@@ -39,29 +39,41 @@ namespace FalsePositive.UI
             Unbind();
             _vad = vad;
             _dialogueManager = dialogueManager;
-            if (_dialogueManager != null)
-            {
-                _dialogueManager.StateChanged += OnDialogueStateChanged;
-                _dialogueManager.TurnCompleted += OnTurnCompleted;
-                _dialogueManager.SessionEnded += OnSessionEnded;
-                _dialogueManager.TurnFailed += OnTurnFailed;
-            }
+            SubscribeToDialogue();
         }
 
         public void Unbind()
         {
-            if (_dialogueManager != null)
-            {
-                _dialogueManager.StateChanged -= OnDialogueStateChanged;
-                _dialogueManager.TurnCompleted -= OnTurnCompleted;
-                _dialogueManager.SessionEnded -= OnSessionEnded;
-                _dialogueManager.TurnFailed -= OnTurnFailed;
-            }
+            UnsubscribeFromDialogue();
             _dialogueManager = null;
             _vad = null;
         }
 
-        private void OnDisable() => Unbind();
+        private void SubscribeToDialogue()
+        {
+            if (_dialogueManager == null) return;
+            _dialogueManager.StateChanged += OnDialogueStateChanged;
+            _dialogueManager.TurnCompleted += OnTurnCompleted;
+            _dialogueManager.SessionEnded += OnSessionEnded;
+            _dialogueManager.TurnFailed += OnTurnFailed;
+        }
+
+        private void UnsubscribeFromDialogue()
+        {
+            if (_dialogueManager == null) return;
+            _dialogueManager.StateChanged -= OnDialogueStateChanged;
+            _dialogueManager.TurnCompleted -= OnTurnCompleted;
+            _dialogueManager.SessionEnded -= OnSessionEnded;
+            _dialogueManager.TurnFailed -= OnTurnFailed;
+        }
+
+        // F1 disables/re-enables this panel's own GameObject, which used to
+        // fully Unbind (nulling _vad/_dialogueManager) with nothing to ever
+        // re-Bind them — freezing the VAD/transcript lines at "-" for the
+        // rest of the session after the first toggle. Re-subscribing here
+        // (refs are kept, only the event hookup is torn down) fixes that.
+        private void OnEnable() => SubscribeToDialogue();
+        private void OnDisable() => UnsubscribeFromDialogue();
 
         private void Update()
         {

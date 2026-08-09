@@ -112,6 +112,7 @@ namespace FalsePositive.Editor
             MemorySceneBuilderV2.BuildBoth();
             MemorySceneDressing.DressBothScenes();
             MemorySceneWiring.WireBoth();
+            RadioTuneTimelineBuilder.BuildAndWire();
             RewriteBuildSettings();
             CutsceneRecipeBuilder.PopulateRecipes();
             CutsceneRecipeBuilder.AttachVoClips();
@@ -1822,6 +1823,17 @@ namespace FalsePositive.Editor
             }
             SetField(gesture, "spine1", FindBone("Spine1"));
             SetField(gesture, "lipSync", cop.GetComponent<ULS.uLipSync>());
+
+            // Table to plant his hands on. The scene's "Table" is a bare
+            // Transform whose only child is the SM_Table visual prefab, scaled
+            // and offset — so its own position says nothing useful about where
+            // the actual top surface is. CopTalkGestureAnimator therefore
+            // measures the renderers underneath it at runtime rather than
+            // taking a hardcoded height from here. Left null in scenes with no
+            // table (the reach then never engages and the gesture stays as it
+            // was), so this is deliberately not an error.
+            GameObject table = GameObject.Find("Table");
+            SetField(gesture, "tableSurface", table != null ? table.transform : null);
 
             // CopTalkGestureAnimator's spine1 accent is additive on top of
             // whatever CopIdleAnimator's breathing curve wrote to spine1

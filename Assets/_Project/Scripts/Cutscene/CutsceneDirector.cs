@@ -39,17 +39,18 @@ namespace FalsePositive.Cutscene
 
     /// <summary>
     /// Person B's ICutscenePlayer implementation. Lives in _Persistent, self-
-    /// registers with GameFlowDirector.Instance in Start(). Every cutscene is
-    /// the §10 cheap form — fade to black, hold each beat's subtitle/VO, fade
-    /// back — never a Timeline asset. That is a Day-1 scope decision, not a
-    /// placeholder: docs/GAME_COMPLETION_PLAN.md §10 explicitly sanctions this
-    /// as the shipped form for every cutscene, and the honesty ledger commits
-    /// to saying so. This class's own job (subtitles, VO, fades) still never
-    /// touches Timeline. The one deliberate exception is character animation:
-    /// Scripts/Cutscene/CutsceneAnimationDirector.cs listens to this class's
-    /// Started/Finished events and plays a Timeline clip on the cop during
-    /// SpasskyAnswer — a second, independent system layered on top, not a
-    /// reversal of this one's scope.
+    /// registers with GameFlowDirector.Instance in Start(). Almost every
+    /// cutscene is the §10 cheap form — fade to black, hold each beat's
+    /// subtitle/VO, fade back — never a Timeline asset; docs/GAME_COMPLETION_
+    /// PLAN.md §10 sanctions this as the shipped form and the honesty ledger
+    /// commits to saying so. This class's own job (subtitles, VO, fades)
+    /// still never touches Timeline. RadioClears is the one exception: its
+    /// Started handler (Scripts/Cutscene/CutsceneStage.cs's RadioTune()) plays
+    /// a real Cutscene_RadioTune.playable — see
+    /// Scripts/Editor/RadioTuneTimelineBuilder.cs. An earlier Timeline pass
+    /// for the cop's SpasskyAnswer body motion (CutsceneAnimationDirector) was
+    /// superseded by procedural lip-sync-driven animation and is retired —
+    /// see that class's own doc comment.
     ///
     /// Deliberately reaches only same-scene _Persistent services (fader,
     /// subtitles, its own VO AudioSource) — never a camera or object in

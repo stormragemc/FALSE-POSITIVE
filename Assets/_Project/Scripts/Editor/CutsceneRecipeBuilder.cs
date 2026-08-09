@@ -27,7 +27,7 @@ namespace FalsePositive.Editor
         {
             { CutsceneId.Wake, new[] { "wake_call_1", "wake_call_2", "wake_call_3" } },
             { CutsceneId.SpasskyAnswer, new[] { "spassky_answer" } },
-            { CutsceneId.RadioClears, new[] { "radio_storm_warning" } },
+            { CutsceneId.RadioClears, new[] { null, "radio_storm_warning" } },
             { CutsceneId.PriyaScreams, new[] { "priya_screams" } },
             { CutsceneId.OutIntoTheSnow, new[] { "priya_what_do_we_do", "ivy_oh_my_god", "aaron_bring_him_in" } },
             { CutsceneId.TheCarry, new[]
@@ -61,6 +61,7 @@ namespace FalsePositive.Editor
                 SerializedProperty beatsProp = recipeProp.FindPropertyRelative("beats");
                 for (int b = 0; b < beatsProp.arraySize && b < clipNames.Length; b++)
                 {
+                    if (string.IsNullOrEmpty(clipNames[b])) continue;
                     AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(VoRoot + clipNames[b] + ".mp3");
                     if (clip == null)
                     {
@@ -265,9 +266,14 @@ namespace FalsePositive.Editor
                 Recipe(CutsceneId.StandFromChair, 0.2f, 0.4f,
                     SfxBeat("chair_creak", 0.6f)),
 
-                Recipe(CutsceneId.RadioClears, 0.2f, 0.3f,
+                // Kept lit for the RadioTuneTimelineBuilder Timeline beat
+                // (CutsceneStage.RadioTune) — a silent lead-in bracketing the
+                // 7.40s clip, then the storm-warning VO, then a short tail.
+                VisibleRecipe(CutsceneId.RadioClears,
+                    Beat(null, null, 3.4f),
                     Beat("RADIO", "…a snow storm. Please stay indoors during these times.", 3f,
-                        MemoryFlagIds.HeardRadioWarning)),
+                        MemoryFlagIds.HeardRadioWarning),
+                    Beat(null, null, 0.3f)),
 
                 Recipe(CutsceneId.SomeoneLeft, 0.3f, 0.3f,
                     SfxBeat("door_latch_close", 1.5f, MemoryFlagIds.SawDoorClose)),

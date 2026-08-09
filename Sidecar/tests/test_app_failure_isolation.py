@@ -51,6 +51,10 @@ class _FakeFastAPI:
         self.post_paths = []
         self.middlewares = []
         self.exception_handlers = {}
+        self.mounts = []
+
+    def mount(self, path, app, name=None):
+        self.mounts.append((path, app, name))
 
     def get(self, path):
         def register(function):
@@ -81,6 +85,11 @@ class _FakeJSONResponse:
     def __init__(self, status_code, content):
         self.status_code = status_code
         self.content = content
+
+
+class _FakeStaticFiles:
+    def __init__(self, **kwargs):
+        self.options = kwargs
 
 
 class _FakeUpload:
@@ -122,6 +131,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             UploadFile=object,
         )
         fastapi_responses = _module("fastapi.responses", JSONResponse=_FakeJSONResponse)
+        fastapi_staticfiles = _module("fastapi.staticfiles", StaticFiles=_FakeStaticFiles)
         request_validation_error = type("RequestValidationError", (Exception,), {})
         fastapi_exceptions = _module(
             "fastapi.exceptions",
@@ -248,6 +258,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             "fastapi": fastapi,
             "fastapi.exceptions": fastapi_exceptions,
             "fastapi.responses": fastapi_responses,
+            "fastapi.staticfiles": fastapi_staticfiles,
             "starlette.exceptions": starlette_exceptions,
             "llm": llm,
             "ser": ser,
@@ -292,14 +303,19 @@ class AppFailureIsolationTests(unittest.TestCase):
             self.app._turn_limiter = self.app.limits.TurnLimiter(40, 2000)
         self.captured_signals.clear()
 
-    def test_health_is_public_and_other_routes_require_the_client_key(self):
+    def test_health_and_fallback_are_public_and_paid_routes_require_the_client_key(self):
         self.assertTrue(hasattr(self.app, "require_client_key"))
 
         async def accepted(_request):
             return "accepted"
 
         public_request = _FakeRequest("/health")
+        fallback_root_request = _FakeRequest("/fallback")
+        fallback_request = _FakeRequest("/fallback/")
+        fallback_asset_request = _FakeRequest("/fallback/app.js")
         missing_key_request = _FakeRequest("/turn")
+        missing_reset_key_request = _FakeRequest("/session/reset")
+        fallback_lookalike_request = _FakeRequest("/fallback-preview")
         valid_key_request = _FakeRequest(
             "/turn",
             headers={
@@ -307,19 +323,46 @@ class AppFailureIsolationTests(unittest.TestCase):
                 "content-length": "0",
             },
         )
+        valid_reset_key_request = _FakeRequest(
+            "/session/reset",
+            headers={"x-fp-client-key": "test-client-key"},
+        )
 
         self.assertEqual(
             asyncio.run(self.app.require_client_key(public_request, accepted)),
             "accepted",
         )
+        self.assertEqual(
+            asyncio.run(self.app.require_client_key(fallback_root_request, accepted)),
+            "accepted",
+        )
+        self.assertEqual(
+            asyncio.run(self.app.require_client_key(fallback_request, accepted)),
+            "accepted",
+        )
+        self.assertEqual(
+            asyncio.run(self.app.require_client_key(fallback_asset_request, accepted)),
+            "accepted",
+        )
+        self.assertEqual(self.app.app.mounts[0][0], "/fallback")
         rejected = asyncio.run(
             self.app.require_client_key(missing_key_request, accepted)
         )
         self.assertEqual(rejected.status_code, 401)
         self.assertEqual(rejected.content["error"], "unauthorized")
         self.assertEqual(set(rejected.content), set(self.app._empty_response()))
+        for protected_request in (missing_reset_key_request, fallback_lookalike_request):
+            protected_response = asyncio.run(
+                self.app.require_client_key(protected_request, accepted)
+            )
+            self.assertEqual(protected_response.status_code, 401)
+            self.assertEqual(protected_response.content["error"], "unauthorized")
         self.assertEqual(
             asyncio.run(self.app.require_client_key(valid_key_request, accepted)),
+            "accepted",
+        )
+        self.assertEqual(
+            asyncio.run(self.app.require_client_key(valid_reset_key_request, accepted)),
             "accepted",
         )
         self.assertEqual(valid_key_request._body, b"")

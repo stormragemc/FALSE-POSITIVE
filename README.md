@@ -233,6 +233,7 @@ Rows marked **⚠** still need their licence confirmed by the owner of that area
 | `superb/hubert-base-superb-er` | Model | Four-class speech-affect observation plus hidden representations | Apache-2.0 (model card) |
 | **IEMOCAP** | Dataset | Training data behind the checkpoint above | ⚠ **Restrictive academic licence.** We use released weights, not the corpus — but G4 covers datasets, so the lineage must be disclosed and the terms checked |
 | Poly Haven asset set | 3D models and PBR textures | Interrogation desk, chairs, light, binder and room surfaces; cabin sofa and boots | CC0 1.0 — exact asset IDs, authors, source URLs and verified hashes in [`Assets/_Project/Art/PolyHaven/README.md`](Assets/_Project/Art/PolyHaven/README.md) |
+| Poly Haven + ambientCG "Sourced" asset set | 3D models and one PBR texture | Cabin interior cozy-decor pass — armchair, cabinet, log basket, table lantern, mantel candlestick, bookcase, books, vase, two rugs and a wall hanging | CC0 1.0 — asset IDs, authors, source URLs and checksums in [`Assets/_Project/Art/Sourced/README.md`](Assets/_Project/Art/Sourced/README.md) |
 | ~~Whisper `small.en`~~ | Model | ~~Speech-to-text weights~~ | **Removed 4 Aug** — replaced by Google Cloud Speech-to-Text |
 | Google Cloud Speech-to-Text v2 | API | Speech-to-text (`short` recognizer, pinned) | Google Cloud Terms of Service ⚠ confirm commercial-use terms |
 | Gemini 3.6 Flash (via Vertex AI) | API | Detective dialogue | Google Cloud Terms of Service ⚠ confirm commercial-use terms |

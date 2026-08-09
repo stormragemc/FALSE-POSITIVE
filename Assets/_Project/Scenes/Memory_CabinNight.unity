@@ -6557,6 +6557,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.Cutscene.CutsceneStage
   isMorning: 0
+  logStagingTiming: 1
   liftEffortClip: {fileID: 0}
   ivyLiftLineClip: {fileID: 0}
 --- !u!4 &619951131

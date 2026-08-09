@@ -151,7 +151,11 @@ namespace FalsePositive.Editor
                 "Aaron and Ivy went up an hour ago.", null);
 
             // In front of BO_WindowGrille on the -Z wall (grille at z~-5.05).
-            AddProp<InspectPoint>(root, "Prop_FrontWindow", new Vector3(2.3f, 1.6f, -4.95f),
+            // 1.6 is the authored window's mid-height; WallHeight re-seats it
+            // on the opening after the room-height raise stretched the wall's
+            // cut-outs with it, so the E prompt still lines up with the glass.
+            AddProp<InspectPoint>(root, "Prop_FrontWindow",
+                new Vector3(2.3f, CabinV2Builder.WallHeight(1.6f), -4.95f),
                 new Vector3(0.1f, 0.7f, 0.9f), new Color(0.15f, 0.2f, 0.35f), "Window (curtained)",
                 "Look at the window", null);
 
@@ -440,8 +444,11 @@ namespace FalsePositive.Editor
         }
 
         // SM_Cabin_Stairs measured in Memory_CabinNight: x in [3.90, 5.00]
-        // (1.10 m wide), rising along +Z from z = -1.43 to y = 2.72 at
-        // z = 3.85. SM_Cabin_StairRailing caps at y = 2.60 on the -X side.
+        // (1.10 m wide), rising along +Z from z = -1.43 to y = 3.05 at
+        // z = 3.85. SM_Cabin_StairRailing caps at y = 2.91 on the -X side.
+        // (Both heights are post-raise: the run is authored to 2.72/2.60 and
+        // scaled by CabinV2Builder.StairHeightScale. Only the X span below is
+        // used in code, and the raise doesn't touch it.)
         private const float StairMinX = 3.90f;
         private const float StairMaxX = 5.00f;
 
@@ -451,11 +458,11 @@ namespace FalsePositive.Editor
         /// 0.18 against the player's stepOffset 0.28) but lead nowhere:
         /// Cabin_v2/README.md records that the second floor was never built,
         /// only "the ceiling slab and stair opening". A player who walks up
-        /// steps off the top tread (y 2.72) onto the ceiling slab's upper face
-        /// (y 2.90 — a 0.18 step-up, inside stepOffset), and is then stranded
+        /// steps off the top tread (y 3.05) onto the ceiling slab's upper face
+        /// (y 3.25 — a 0.20 step-up, inside stepOffset), and is then stranded
         /// on a flat 10.4 x 10.4 m plate inside the roof mesh, hunting for an
         /// invisible hole to get back down. CabinFallRecovery cannot rescue
-        /// them either: its minimumHeight is -4, and they are at +2.9.
+        /// them either: its minimumHeight is -4, and they are at +3.25.
         ///
         /// Prop_BlockedStairs already states the fiction ("Aaron and Ivy went
         /// up an hour ago") but cannot enforce it — it resolves to a real FBX,

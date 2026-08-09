@@ -528,10 +528,12 @@ namespace FalsePositive.Editor
                 Debug.LogWarning($"[MemorySceneBuilderV2] {NightGradeVolumePath} missing or Volume type unresolved — no color grade.");
             }
 
+            // Box sized to the room, so the raised ceiling doesn't leave the
+            // top of the walls outside the probe's influence.
             GameObject probeGo = NewChild(root, "Interior Reflection Probe");
-            probeGo.transform.position = new Vector3(0f, 1.4f, 0f);
+            probeGo.transform.position = new Vector3(0f, CabinV2Builder.CeilingHeight * 0.5f, 0f);
             ReflectionProbe probe = probeGo.AddComponent<ReflectionProbe>();
-            probe.size = new Vector3(9f, 2.7f, 9f);
+            probe.size = new Vector3(9f, CabinV2Builder.CeilingHeight, 9f);
             probe.center = Vector3.zero;
         }
 

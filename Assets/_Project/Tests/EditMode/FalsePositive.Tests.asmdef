@@ -3,6 +3,7 @@
     "rootNamespace": "FalsePositive.Tests",
     "references": [
         "FalsePositive.Runtime",
+        "FalsePositive.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

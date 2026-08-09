@@ -64,6 +64,77 @@ namespace FalsePositive.Editor
         public static readonly Quaternion DoorClosedRotation = Quaternion.Euler(270f, 0f, 0f);
         public const float DoorOpenYawDegrees = 100f;
 
+        // ---- Room height ------------------------------------------------
+        //
+        // Cabin.fbx is authored at a 2.7 m ceiling (Cabin_v2/README.md). The
+        // playable cabin wants a taller room. That raise started life as a
+        // hand-made override on the prefab INSTANCE in each memory scene,
+        // which every T04a/T04b rebuild silently wiped — it lives here now, on
+        // the prefab itself, so it survives a rebuild and there is exactly one
+        // number to change.
+        //
+        // Every shell object carries the FBX importer's baked (270, 0, 0)
+        // rotation (same fact DoorClosedRotation and OrientSofaToFireplace
+        // document), so their LOCAL Z axis is world UP — the vertical scales
+        // below are all localScale.z, never .y. Measured, not assumed: walls
+        // at localScale.z 112.963 read 3.05 m tall in world space.
+        public const float CeilingHeight = 3.05f;
+        private const float AuthoredCeilingHeight = 2.7f;
+
+        // The ceiling slab's TOP face (2.7–2.9 as authored) is the upper floor
+        // the staircase has to land on — a different number from the ceiling
+        // the walls have to meet, and it rises by the same absolute amount.
+        private const float AuthoredFloorToFloor = 2.9f;
+
+        /// <summary>Vertical scale for the wall shell and for anything that
+        /// fills an opening cut INTO it. Scaling the wall mesh stretches its
+        /// door and window cut-outs by this same factor — measured on the
+        /// result: the doorway head goes 2.100 -> 2.372 and the window opening
+        /// 0.950–2.250 -> 1.073–2.542 — so the door leaf and the window grille
+        /// must be stretched with it or each leaves a gap at its head.</summary>
+        public static readonly float WallHeightScale = CeilingHeight / AuthoredCeilingHeight;
+
+        /// <summary>How far the ceiling slab and roof deck move up. They are
+        /// translated, not scaled: their thickness is not a function of the
+        /// room height.</summary>
+        public static readonly float CeilingRise = CeilingHeight - AuthoredCeilingHeight;
+
+        /// <summary>Vertical scale for the stairs and their railing. Derived
+        /// from the FLOOR-TO-FLOOR rise, not the ceiling height — the top
+        /// riser has to land on the upper floor surface, which is the ceiling
+        /// slab's top face. Leaving the stairs at the authored scale strands
+        /// the top tread 0.53 m below the landing.</summary>
+        public static readonly float StairHeightScale =
+            (AuthoredFloorToFloor + CeilingRise) / AuthoredFloorToFloor;
+
+        /// <summary>Re-seats a Y coordinate that was authored against the
+        /// pre-raise wall shell (window furniture, wall-mounted props).</summary>
+        public static float WallHeight(float authoredY) => authoredY * WallHeightScale;
+
+        /// <summary>Re-seats a Y coordinate that was authored against the
+        /// pre-raise stair run (anything standing on a tread or the landing).</summary>
+        public static float StairHeight(float authoredY) => authoredY * StairHeightScale;
+
+        // Scaled by WallHeightScale: the shell itself, plus the two pieces that
+        // fill openings the shell's own scale stretches.
+        private static readonly string[] WallHeightObjects =
+        {
+            "SM_Cabin_Walls", "BO_WindowGrille", "SM_Door",
+        };
+
+        // Scaled by StairHeightScale — the railing follows the stair rake, so
+        // it has to use the stairs' factor and not the wall's.
+        private static readonly string[] StairHeightObjects =
+        {
+            "SM_Cabin_Stairs", "SM_Cabin_StairRailing",
+        };
+
+        // Translated by CeilingRise.
+        private static readonly string[] CeilingRiseObjects =
+        {
+            "SM_Cabin_Ceiling", "SM_Cabin_Roof",
+        };
+
         private static readonly string[] WoodObjects =
         {
             "SM_Cabin_Floor", "SM_Cabin_Walls", "SM_Cabin_Ceiling", "SM_Cabin_Roof",
@@ -263,6 +334,13 @@ namespace FalsePositive.Editor
 
             AddColliders(instance, MeshColliderObjects, useMeshCollider: true);
             AddColliders(instance, BoxColliderObjects, useMeshCollider: false);
+
+            // AFTER the colliders, deliberately. Both branches of AddColliders
+            // read UNSCALED mesh bounds (see ComputeLocalBounds' doc) and Unity
+            // re-applies the transform's own scale on top, so a vertical scale
+            // set here is picked up by the collider automatically — scaling
+            // first would double-apply it.
+            ApplyRoomHeight(instance);
             OrientSofaToFireplace(instance);
 
             // Runs AFTER OrientSofaToFireplace so the sofa's yaw is already on
@@ -276,6 +354,104 @@ namespace FalsePositive.Editor
             System.IO.Directory.CreateDirectory(PrefabRoot);
             PrefabUtility.SaveAsPrefabAsset(instance, PrefabRoot + "Cabin_v2.prefab");
             UnityEngine.Object.DestroyImmediate(instance);
+        }
+
+        /// <summary>Raises the room from the FBX's authored 2.7 m ceiling to
+        /// CeilingHeight, moving every piece that has to stay in contact with
+        /// something else. Runs on the in-memory instance before
+        /// SaveAsPrefabAsset, so the height is baked into Cabin_v2.prefab and
+        /// every scene holding an instance picks it up.
+        ///
+        /// No-ops cleanly when CeilingHeight == AuthoredCeilingHeight (both
+        /// scales become 1 and the rise 0), so reverting the raise is a
+        /// one-constant edit plus a re-run of this menu item.</summary>
+        private static void ApplyRoomHeight(GameObject cabin)
+        {
+            foreach (string objectName in WallHeightObjects) ScaleHeight(cabin, objectName, WallHeightScale);
+            foreach (string objectName in StairHeightObjects) ScaleHeight(cabin, objectName, StairHeightScale);
+            foreach (string objectName in CeilingRiseObjects) RaiseObject(cabin, objectName, CeilingRise);
+            BuildChimneyExtension(cabin);
+        }
+
+        private static void ScaleHeight(GameObject cabin, string objectName, float scale)
+        {
+            Transform t = cabin.transform.Find(objectName);
+            if (t == null)
+            {
+                Debug.LogWarning($"[CabinV2Builder] {objectName} not found on Cabin_v2 — room-height scale skipped for it.");
+                return;
+            }
+            Vector3 s = t.localScale;
+            t.localScale = new Vector3(s.x, s.y, s.z * scale);
+        }
+
+        private static void RaiseObject(GameObject cabin, string objectName, float rise)
+        {
+            Transform t = cabin.transform.Find(objectName);
+            if (t == null)
+            {
+                Debug.LogWarning($"[CabinV2Builder] {objectName} not found on Cabin_v2 — room-height rise skipped for it.");
+                return;
+            }
+            t.localPosition += new Vector3(0f, rise, 0f);
+        }
+
+        private const string ChimneyExtensionName = "SM_Fireplace_ChimneyExt";
+
+        // Measured off SM_Fireplace_Brick's own top face in the built scene
+        // (12 verts at y >= 2.69), not copied from the README: the breast is a
+        // constant-section box, x [-0.5, 0.5] by z [4.3, 5.0].
+        private const float ChimneyBreastMinX = -0.5f;
+        private const float ChimneyBreastMaxX = 0.5f;
+        private const float ChimneyBreastMinZ = 4.3f;
+        private const float ChimneyBreastMaxZ = 5.0f;
+
+        /// <summary>Bridges the chimney breast up to the raised ceiling.
+        ///
+        /// The fireplace is deliberately NOT scaled with the walls. Its four
+        /// objects are interlocking: SM_Fireplace_Brick carries the firebox
+        /// opening, SM_Fireplace_Stone's rim frames that exact opening,
+        /// SM_Fireplace_Wood lines the cavity behind it, and the firewood pile
+        /// sits on the hearth — a vertical scale stretches the opening and the
+        /// three pieces have to be stretched in lockstep to keep up. Worse,
+        /// MemorySceneDressing seats Prop_Radio and Prop_MantelClock on the
+        /// mantel shelf at a measured y 1.380 and derives each prop's y from
+        /// its own model bounds against that number; scaling the stone would
+        /// lift the shelf out from under both of them. Scaling the whole
+        /// fireplace also stretches the log cylinders, which read as squashed.
+        ///
+        /// So the breast keeps its authored geometry and a plain brick box
+        /// fills the band it no longer reaches. Same technique
+        /// MemorySceneBuilderV2 already uses for the woodshed snow cap.</summary>
+        private static void BuildChimneyExtension(GameObject cabin)
+        {
+            Transform existing = cabin.transform.Find(ChimneyExtensionName);
+            if (existing != null) UnityEngine.Object.DestroyImmediate(existing.gameObject);
+            if (CeilingRise <= 0.0001f) return;
+
+            GameObject ext = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ext.name = ChimneyExtensionName;
+            ext.transform.SetParent(cabin.transform, false);
+
+            // A primitive cube has NO baked import rotation, so unlike every
+            // FBX object around it this one's local Y really is world up.
+            ext.transform.localPosition = new Vector3(
+                (ChimneyBreastMinX + ChimneyBreastMaxX) * 0.5f,
+                AuthoredCeilingHeight + CeilingRise * 0.5f,
+                (ChimneyBreastMinZ + ChimneyBreastMaxZ) * 0.5f);
+            ext.transform.localRotation = Quaternion.identity;
+            ext.transform.localScale = new Vector3(
+                ChimneyBreastMaxX - ChimneyBreastMinX,
+                CeilingRise,
+                ChimneyBreastMaxZ - ChimneyBreastMinZ);
+
+            Material brick = LoadMaterial("M_Brick_Red");
+            Renderer renderer = ext.GetComponent<Renderer>();
+            if (renderer != null && brick != null) renderer.sharedMaterial = brick;
+
+            // CreatePrimitive already gives it a BoxCollider, which is what the
+            // rest of the fireplace's MeshColliders would give here anyway on a
+            // shape this simple — the player can't walk into the chimney.
         }
 
         /// <summary>Yaw that turns BO_Sofa's open face toward the fire.
@@ -525,6 +701,17 @@ namespace FalsePositive.Editor
             collider.size = local.size;
 
             instance.AddComponent<DoorInteractable>();
+
+            // Same stretched doorway the in-shell SM_Door leaf fills (see
+            // WallHeightScale): this prefab is the one MemorySceneBuilderV2
+            // places as Prop_FrontDoor_Locked, and at the authored 2.10 m it
+            // leaves 0.27 m of daylight over the head. Local Z is world up
+            // here too — the root carries DoorClosedRotation's baked
+            // (270, 0, 0) — and the BoxCollider assigned just above is built
+            // from unscaled mesh bounds, so it follows this scale for free.
+            Vector3 doorScale = instance.transform.localScale;
+            instance.transform.localScale =
+                new Vector3(doorScale.x, doorScale.y, doorScale.z * WallHeightScale);
 
             System.IO.Directory.CreateDirectory(PrefabRoot);
             PrefabUtility.SaveAsPrefabAsset(instance, PrefabRoot + "Door_v2.prefab");

@@ -17,6 +17,13 @@ the objects whose size is *derived* from the room (walls, slabs, stairs,
 railing, chimney) changed size or position. See "Coordinate reference" below
 for the exact deltas if you need to reconcile against old notes.
 
+⚠️ **The mesh numbers on this page are the FBX's authored geometry. The
+playable cabin is taller than that.** `CabinV2Builder.ApplyRoomHeight` raises
+the room to `CabinV2Builder.CeilingHeight` (**3.05 m**) when it builds
+`Cabin_v2.prefab` — the model file itself is untouched. See "Room height
+raise" below for what that does to each object, and change the constant, not
+this FBX, if the room needs a different height.
+
 ## Object inventory
 
 ### `Cabin.fbx` (everything except the door)
@@ -68,6 +75,46 @@ floor-to-floor)** — the riser height (0.18125 m) is re-derived so
 headroom the same way as before: it starts where clearance over a tread first
 drops under 2.0 m (now tread 4, `y = +0.35`) and runs to `y = −3.95`, just
 past the top landing.
+
+## Room height raise — applied in Unity, not in the FBX
+
+`CabinV2Builder.ApplyRoomHeight` lifts the authored 2.7 m ceiling to
+`CeilingHeight` (3.05 m) as it builds the prefab. It is a transform-only pass;
+no mesh is edited and `Cabin.fbx` still measures everything the table above
+says it does.
+
+Two different factors are in play, because two different surfaces have to be
+met. The walls have to reach the **ceiling** (2.7 → 3.05, ×1.12963); the
+stairs have to land on the **upper floor**, which is the ceiling slab's top
+face (2.9 → 3.25, ×1.12069).
+
+| Object | Treatment |
+|---|---|
+| `SM_Cabin_Walls` | `localScale.z` ×1.12963 → wall top at 3.05 |
+| `SM_Cabin_Ceiling`, `SM_Cabin_Roof` | translated +0.35 m; slab now 3.05–3.25, roof deck 3.25–3.40 |
+| `SM_Cabin_Stairs`, `SM_Cabin_StairRailing` | `localScale.z` ×1.12069 → top tread 3.05, riser 0.203, rail cap 2.91 |
+| `SM_Door`, `BO_WindowGrille` | `localScale.z` ×1.12963 — see below |
+| `SM_Fireplace_ChimneyExt` | **new** brick box, x [−0.5, 0.5] × z [4.3, 5.0] × y [2.70, 3.05] |
+| everything else | untouched |
+
+⚠️ **Scaling the wall mesh scales the openings cut into it.** The doorway head
+goes 2.100 → 2.372 and the window opening 0.950–2.250 → 1.073–2.542. The door
+leaf and the window grille are scaled by the same factor purely so they still
+fill those openings — a 2.37 m door is not a design intent, it is the cost of
+raising the room with a transform. If the door and window should keep
+real-world proportions in a taller room, the wall's top edge has to be
+*extruded* in `ArtSource\Cabin_v2.blend` and re-exported instead, and the two
+scales dropped from `WallHeightObjects`.
+
+The fireplace is deliberately **not** scaled. Its four objects interlock
+around the firebox opening, and `MemorySceneDressing` seats `Prop_Radio` and
+`Prop_MantelClock` on the mantel shelf at a measured y 1.380 — scaling the
+stone would lift the shelf out from under both props, and scaling the log
+cylinders reads as squashed. The 0.35 m band the chimney breast no longer
+reaches is filled by `SM_Fireplace_ChimneyExt` instead.
+
+Set `CeilingHeight` back to `2.7f` and re-run Bootstrap step 0 to revert: both
+scales become 1, the rise becomes 0, and the chimney extension is not built.
 
 ## Fireplace rebuild — `BO_Fireplace` replaced with 4 game-ready objects
 

@@ -15,7 +15,7 @@ human voice actor recorded any line — the same synthetic-VO disclosure that
   and angry in a contained way rather than shouting
 - ElevenLabs voice: Maksim — "Raw, unpolished, deep"
 - ElevenLabs voice ID: `6sXsAlJKKBf265ucBSRt`
-- Model: `eleven_multilingual_v2`
+- Model: `eleven_v3`
 - Output: `pcm_24000`
 
 This is the same voice and model the sidecar uses for Spassky's live turns
@@ -31,11 +31,10 @@ All occurrences of `David` use the synthesis-only alias `Day-vid` to enforce
 the standard **DAY-vid** pronunciation. Canonical text and subtitles remain
 unchanged.
 
-`SPASSKY-001`, `SPASSKY-002`, `SPASSKY-003`, `SPASSKY-061`, and
-`SPASSKY-062` were regenerated with this alias on 9 Aug 2026. Before the
-cleanup pass below, `SPASSKY-001` and `SPASSKY-002` had been approved while
-`SPASSKY-003`, `SPASSKY-061`, and `SPASSKY-062` remained pending re-review. All
-other Spassky performances are unchanged from their original takes.
+All 62 lines were regenerated with ElevenLabs V3 on 9 Aug 2026 using the
+performance configuration introduced on `main` in commit `3d936a6`. The
+existing `SPASSKY-###` filenames were retained and copied byte-for-byte into
+Unity's `Production/` directory while preserving its `.meta` GUIDs.
 
 ## Dry-VO cleanup and review status
 
@@ -52,14 +51,7 @@ The files contain dry dialogue only. Spassky's progressive distance/muffling in
 the opening and every other scene effect remain mix-time work; no room tone,
 static, wind, or scene ambience is intentionally baked into these WAVs.
 
-No line was regenerated during this remediation. A non-listening endpoint audit
-showed each existing performance decaying to low-level tail energy before its
-file boundary, rather than evidence of a missing spoken consonant. The original
-performances, voice, model, pronunciation alias, and delivery registers were
-therefore preserved.
-
 Technical validation is complete for all 62 cleaned files. Human listening of
-the cleaned outputs is still required before final approval, both to confirm
 that no spoken ending was already truncated and to reject any denoising
 pumping, ringing, or metallic texture. Because every production WAV changed,
 all 62 are pending this post-cleanup listening pass; the earlier specific
@@ -68,17 +60,17 @@ applies.
 
 ## Delivery registers
 
-Per-line delivery follows the register table in `Artifacts/voice_guide/Spassky.md`
-§4.3 rather than one uniform setting, so a short press does not read the same as
-a verdict. `similarity_boost` is held at `1.00` everywhere — it is the accent
-carrier, and only delivery is allowed to vary, never voice identity.
+Per-line delivery uses one identity-preserving V3 configuration everywhere:
+stability `1.0`, similarity boost `1.0`, style `0.0`, and speaker boost enabled.
+Every line receives the `strong Russian accent` audio tag; the register selects
+an optional mood and post-render gain.
 
-| Register | stability | similarity_boost | style | speed | gain_db | Lines |
-|---|---|---|---|---|---|---|
-| `FLAT` | 0.28 | 1.00 | 0.62 | 0.92 | 0.0 | 21 |
-| `PRESS` | 0.20 | 1.00 | 0.78 | 0.90 | +1.0 | 12 |
-| `RAISED` | 0.15 | 1.00 | 0.92 | 0.95 | +2.5 | 1 |
-| `LOW` | 0.15 | 1.00 | 0.85 | 0.85 | −1.5 | 28 |
+| Register | V3 mood | gain_db | Lines |
+|---|---|---|---|
+| `FLAT` | none | 0.0 | 21 |
+| `PRESS` | `impatient` | +1.0 | 12 |
+| `RAISED` | `shouting` | +2.5 | 1 |
+| `LOW` | `quietly menacing` | −1.5 | 28 |
 
 The register for each line is derived, not hand-assigned — first match wins:
 
@@ -109,7 +101,7 @@ replaying into a different route does not hear a bit-identical line.
 
 ## Line manifest
 
-| ID | Phase | Register | Speech-take length | Dialogue |
+| ID | Phase | Register | Previous V2 take length | Dialogue |
 |---|---|---|---|---|
 | `SPASSKY-001` | P1_TUTORIAL | `FLAT` | 1.07 s | David. |
 | `SPASSKY-002` | P1_TUTORIAL | `FLAT` | 1.02 s | David. |

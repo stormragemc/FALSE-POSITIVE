@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using FalsePositive.Flow;
 using FalsePositive.Net;
 using FalsePositive.UI;
@@ -10,8 +11,8 @@ namespace FalsePositive.Dialogue
     /// <summary>
     /// Sits above DialogueManager and owns everything phase-shaped: which
     /// system prompt is active, the memory-flag briefing (A7b), turn caps,
-    /// story-mark tracking (A8), and — for Day 1 — the placeholder P4
-    /// hand-off to Outcome. Lives in Interrogation.unity alongside
+    /// story-mark tracking (A8), and the P4 ending selection (A10) and
+    /// outcome card (A11). Lives in Interrogation.unity alongside
     /// DialogueManager; reacts to GameFlowDirector.PhaseChanged rather than
     /// being called directly, so it works whether Interrogation is being
     /// activated for the first time or the fourth.
@@ -22,11 +23,10 @@ namespace FalsePositive.Dialogue
     /// pre-rendered VO played through GameFlowDirector.RequestCutscene.
     /// The first real turn is P2_Recall's opening line.
     ///
-    /// P3_Verdict's suspect-naming and P4's real ending selection are A9/A10
-    /// (Day 2) — until those land, P3 ends purely on its turn cap and P4 is
-    /// a single placeholder cutscene straight through to Outcome, which is
-    /// deliberate: it is what keeps the whole game walkable end to end on
-    /// Day 1 (docs/GAME_COMPLETION_PLAN.md, exit criterion #12).
+    /// P3_Verdict reads the accusation through SuspectNameDetector (A9) and
+    /// P4 picks the ending through EndingSelector (A10), which applies
+    /// docs/STORY_SCRIPT.md §8 in full: credibility, caught unsupported
+    /// details, and — for Aaron — whether the witness cited the reasoning.
     /// </summary>
     public sealed class PhaseDialogueController : MonoBehaviour
     {
@@ -38,6 +38,21 @@ namespace FalsePositive.Dialogue
         [SerializeField] private int p2TurnCap = 14;
         [SerializeField] private int p3TurnCap = 8;
         [SerializeField] private int sessionTurnCap = 30;
+
+        [Header("P3 memory sequence pacing")]
+        /// <summary>Held after the officer's reply finishes, before the folder
+        /// opens and the photograph beat starts.</summary>
+        [SerializeField, Range(0f, 4f)] private float p3BeforePhotographSeconds = 1.0f;
+
+        /// <summary>Held after "Who, David?" before the microphone reopens and
+        /// the live turn is requested.</summary>
+        [SerializeField, Range(0f, 4f)] private float p3AfterMemoriesSeconds = 1.2f;
+
+        /// <summary>Ceiling on waiting for the officer to stop speaking, so a
+        /// stuck AudioSource cannot strand the sequence and leave P3 unable to
+        /// reach its verdict. Generous: real replies run well under this.
+        /// </summary>
+        [SerializeField, Range(1f, 60f)] private float p3MaxWaitForOfficerSeconds = 30f;
 
         public int TurnsThisPhase { get; private set; }
         public int TurnsThisSession { get; private set; }
@@ -53,6 +68,16 @@ namespace FalsePositive.Dialogue
         private bool _hasSeatedOnce;
         private Coroutine _noSpeechNudgeRoutine;
         private Suspect _namedSuspect = Suspect.None;
+
+        /// <summary>Which of §8's seven supporting clues the witness has raised.
+        /// Accumulated across the whole session, not just P3 — see
+        /// ClueCitationDetector's scope note.</summary>
+        private readonly HashSet<CitedClue> _citedClues = new HashSet<CitedClue>();
+
+        /// <summary>Lines the outcome card will quote back, in the order they
+        /// were said. Populated from the turns that carried an unsupported
+        /// detail, and from the turn that named someone.</summary>
+        private readonly List<QuotedLine> _quotableLines = new List<QuotedLine>();
         private bool _p3MemoriesPlayed;
         // True between EnterLiveDialoguePhase and FinishLiveDialoguePhase. This
         // component can be disabled and re-enabled DURING a phase:
@@ -61,7 +86,7 @@ namespace FalsePositive.Dialogue
         // dropped the TurnCompleted subscription and OnEnable only restored
         // PhaseChanged — so after a mid-phase interlude the controller stopped
         // counting turns. P3 never reached its cap, the ending was unreachable,
-        // and DetectNamedSuspect never ran again.
+        // and the accusation was never read.
         private bool _liveDialogueActive;
 
         private DialogueManager Dialogue => binder != null ? binder.Dialogue : null;
@@ -100,6 +125,10 @@ namespace FalsePositive.Dialogue
             switch (phase)
             {
                 case GamePhase.P1_Tutorial:
+                    // Session start. Citations span P2 and P3, so they are
+                    // cleared here rather than on entry to the verdict.
+                    _citedClues.Clear();
+                    _quotableLines.Clear();
                     EnterP1();
                     break;
                 case GamePhase.M1_Night:
@@ -117,7 +146,7 @@ namespace FalsePositive.Dialogue
                     EnterP3();
                     break;
                 case GamePhase.P4_Ending:
-                    EnterP4Placeholder();
+                    EnterP4();
                     break;
                 case GamePhase.Outcome:
                     EnterOutcome();
@@ -266,7 +295,14 @@ namespace FalsePositive.Dialogue
             {
                 foreach (string trapId in response.fabrications)
                 {
-                    _flow.Score.RecordFabrication(trapId);
+                    // RecordFabrication is false for a trap already counted, so
+                    // this quotes each unsupported detail once rather than once
+                    // per time the officer circled back to it.
+                    if (_flow.Score.RecordFabrication(trapId)
+                        && !string.IsNullOrWhiteSpace(response.transcript))
+                    {
+                        _quotableLines.Add(new QuotedLine(TurnsThisSession, response.transcript));
+                    }
                 }
             }
 
@@ -279,9 +315,21 @@ namespace FalsePositive.Dialogue
             }
             _flow.Score.UpdateCredibility(StoryMarkTracker.TotalMarks);
 
+            // Reasoning counts wherever it was offered; §8 only asks that the
+            // witness said why at some point, not that he said it twice.
+            ClueCitationDetector.Observe(response.transcript, _citedClues);
+
             if (_currentPhase == GamePhase.P3_Verdict && _namedSuspect == Suspect.None)
             {
-                _namedSuspect = DetectNamedSuspect(response.transcript);
+                _namedSuspect = SuspectNameDetector.Detect(response.transcript);
+                if (_namedSuspect != Suspect.None)
+                {
+                    // Support is the share of §8's seven clues raised, so the
+                    // score carries *how well* the accusation was argued and not
+                    // only who was named.
+                    _flow.Score.SetAccusation(_namedSuspect, _citedClues.Count / 7f);
+                    _quotableLines.Add(new QuotedLine(TurnsThisSession, response.transcript));
+                }
             }
 
             // One completed turn = the witness has defended themselves, which is
@@ -361,6 +409,39 @@ namespace FalsePositive.Dialogue
         {
             _p3MemoriesPlayed = true;
             Dialogue?.Suspend();
+            StartCoroutine(P3MemorySequenceRoutine());
+        }
+
+        /// <summary>Waits for the officer's live reply to actually finish, then
+        /// runs the §4 photograph-and-memories chain.
+        ///
+        /// The wait is the whole point. DialogueManager raises TurnCompleted the
+        /// moment it calls copVoice.Play — playback has *started*, not finished
+        /// — so kicking the photograph beat off from that event cut Spassky off
+        /// mid-sentence every time the sequence fired. Suspend() only gates the
+        /// microphone and leaves his audio running, so the reply plays out and
+        /// OnCopFinishedSpeaking drops the state to Idle, which is the signal
+        /// waited on here.
+        ///
+        /// Only the lead-in can be a coroutine on this component: the interludes
+        /// deactivate Interrogation's roots, which would kill anything still
+        /// running here. Everything past the first cutscene therefore stays a
+        /// callback chain, and its pacing lives in GameFlowDirector.</summary>
+        private IEnumerator P3MemorySequenceRoutine()
+        {
+            float waited = 0f;
+            while (Dialogue != null && Dialogue.State == DialogueState.Speaking
+                   && waited < p3MaxWaitForOfficerSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            // A held beat after the answer, before the folder opens.
+            if (p3BeforePhotographSeconds > 0f)
+            {
+                yield return new WaitForSeconds(p3BeforePhotographSeconds);
+            }
 
             // §4: Spassky slides a printed group photograph across the table.
             // Laid on the desk by raycast between the two seats — the
@@ -388,61 +469,56 @@ namespace FalsePositive.Dialogue
                                 // "He pulls the photograph back into the folder"
                                 // — it goes before the name is asked for.
                                 FalsePositive.Cutscene.PhotoProps.Discard(groupPhoto);
-                                Dialogue?.Resume();
-                                Dialogue?.RequestOfficerTurn(null);
+                                StartCoroutine(ResumeAfterMemoriesRoutine());
                             })))));
         }
 
-        private void EnterP4Placeholder()
+        /// <summary>Lets "Who, David?" land before the room is live again.
+        ///
+        /// Resume() is deliberately after the wait: it re-opens the microphone,
+        /// and doing that while the closing line is still sounding invites the
+        /// player to answer over it — the same overlap this whole change is
+        /// removing, just at the other end of the sequence.</summary>
+        private IEnumerator ResumeAfterMemoriesRoutine()
         {
-            // Day-1 stopgap ending pick, per docs/STORY_SCRIPT.md §8's rule
-            // that naming nobody (or nobody unambiguously) falls to E_DAVID.
-            // This is deliberately cruder than the real rule — it skips the
-            // credibility/fabrication-count/cited-clues conditions entirely
-            // and picks on the name alone. A10 (Day 2) replaces it with the
-            // full SessionScore-driven EndingSelector. Never claim the full
-            // rule is live while this is — GAME_COMPLETION_PLAN.md §10's
-            // "never fake" rule.
-            Dialogue?.Suspend();
-            CutsceneId ending = _namedSuspect switch
+            if (p3AfterMemoriesSeconds > 0f)
             {
-                Suspect.Aaron => CutsceneId.EndingAaron,
-                Suspect.Ivy => CutsceneId.EndingIvy,
-                Suspect.Priya => CutsceneId.EndingPriya,
-                _ => CutsceneId.EndingDavid,
-            };
-            _flow.RequestCutscene(ending, () => _flow.AdvancePhase());
+                yield return new WaitForSeconds(p3AfterMemoriesSeconds);
+            }
+
+            // Mic back up. Resume the same phase rather than re-entering it:
+            // re-entering would reset the turn counter and the story marks.
+            Dialogue?.Resume();
+            Dialogue?.RequestOfficerTurn(null);
         }
+
+        /// <summary>A10 — docs/STORY_SCRIPT.md §8's full ending rule, replacing
+        /// the Day-1 stopgap that picked on the name alone.</summary>
+        private void EnterP4()
+        {
+            Dialogue?.Suspend();
+
+            LastEnding = EndingSelector.Select(_flow.Score, _citedClues);
+            Debug.Log($"[Ending] {LastEnding.Cutscene} — {LastEnding.Reason} " +
+                $"(credibility {_flow.Score.Credibility:0.00}, " +
+                $"{_flow.Score.CaughtFabrications} unsupported, " +
+                $"{LastEnding.CitedClues} clues)");
+
+            _flow.RequestCutscene(LastEnding.Cutscene, () => _flow.AdvancePhase());
+        }
+
+        /// <summary>The decision EnterP4 reached, for the outcome card to
+        /// explain itself with. Default is E_DAVID so a session that somehow
+        /// reaches Outcome without P4 still reads coherently.</summary>
+        public EndingDecision LastEnding { get; private set; } =
+            new EndingDecision(CutsceneId.EndingDavid, Suspect.None, 0, "session did not reach a verdict");
 
         private void EnterOutcome()
         {
-            const string card = "14:20 — Ivy has asked to make a second statement.\n" +
-                "She is still waiting.\n\nFALSE POSITIVE";
-            // A11 (Day 2) replaces this fixed card with 2-3 verbatim player
-            // lines quoted back with turn numbers, per docs/STORY_SCRIPT.md
-            // §4 P4_ENDING — "It never says they lied" (G6) applies to that
-            // version too.
-            _flow.OutcomeScreen?.Show(card);
-        }
-
-        /// <summary>Day-1 client-side stopgap for A9's SuspectNameDetector —
-        /// a single unambiguous name from {Aaron, Ivy, Priya} in one turn's
-        /// transcript. Deliberately crude: no possessive handling, no
-        /// mid-sentence disambiguation, and "maybe Aaron or Ivy" is rejected
-        /// only because both names appear in the same transcript, not because
-        /// "maybe" was understood as hedging.</summary>
-        private static Suspect DetectNamedSuspect(string transcript)
-        {
-            if (string.IsNullOrEmpty(transcript)) return Suspect.None;
-            string lower = transcript.ToLowerInvariant();
-            bool aaron = lower.Contains("aaron");
-            bool ivy = lower.Contains("ivy");
-            bool priya = lower.Contains("priya");
-            int count = (aaron ? 1 : 0) + (ivy ? 1 : 0) + (priya ? 1 : 0);
-            if (count != 1) return Suspect.None;
-            if (aaron) return Suspect.Aaron;
-            if (ivy) return Suspect.Ivy;
-            return Suspect.Priya;
+            // A11 — the fixed card plus the witness's own lines with turn
+            // numbers, per docs/STORY_SCRIPT.md §4 P4_ENDING. The composer is
+            // where the "It never says they lied" rule (G6) is enforced.
+            _flow.OutcomeScreen?.Show(OutcomeCardComposer.Compose(_quotableLines));
         }
 
         private void SubscribeDialogue()

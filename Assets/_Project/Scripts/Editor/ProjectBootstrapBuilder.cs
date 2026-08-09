@@ -114,8 +114,7 @@ namespace FalsePositive.Editor
             MemorySceneDressing.DressBothScenes();
             MemorySceneWiring.WireBoth();
             RewriteBuildSettings();
-            CutsceneRecipeBuilder.PopulateRecipes();
-            CutsceneRecipeBuilder.AttachVoClips();
+            VoTimelineBuilder.BuildAll();
             Debug.Log("[ProjectBootstrapBuilder] Full scaffold rebuilt.");
         }
 
@@ -258,6 +257,31 @@ namespace FalsePositive.Editor
             SetField(subtitleUi, "lineText", lineText);
             subtitleGo.SetActive(false);
 
+            // TimeCardUI — the "00:50 / About an hour later" caption for jumps
+            // forward in time inside a cutscene. Top-right, opposite the
+            // subtitles at bottom-centre, because it is the film speaking
+            // rather than a character.
+            GameObject timeCardGo = new GameObject("TimeCardUI", typeof(RectTransform));
+            timeCardGo.transform.SetParent(hud.transform, false);
+            AnchorTopRight(timeCardGo, new Vector2(-40f, -40f), new Vector2(420f, 76f));
+            CanvasGroup timeCardGroup = timeCardGo.AddComponent<CanvasGroup>();
+            timeCardGroup.alpha = 0f;
+            timeCardGroup.interactable = false;
+            timeCardGroup.blocksRaycasts = false;
+            Text timeCardTime = CreateText(timeCardGo.transform, "TimeText", string.Empty, 30);
+            timeCardTime.fontStyle = FontStyle.Bold;
+            timeCardTime.alignment = TextAnchor.UpperRight;
+            AnchorTopStretch(timeCardTime.gameObject, 0f, 40f);
+            Text timeCardCaption = CreateText(timeCardGo.transform, "CaptionText", string.Empty, 18);
+            timeCardCaption.alignment = TextAnchor.UpperRight;
+            AnchorBottomStretch(timeCardCaption.gameObject, 0f, 34f);
+            TimeCardUI timeCardUi = timeCardGo.AddComponent<TimeCardUI>();
+            SetField(timeCardUi, "root", timeCardGo);
+            SetField(timeCardUi, "group", timeCardGroup);
+            SetField(timeCardUi, "timeText", timeCardTime);
+            SetField(timeCardUi, "captionText", timeCardCaption);
+            timeCardGo.SetActive(false);
+
             // InteractionPromptUI — centre-screen "[E] <prompt>", the on-
             // screen prompt InteractionRaycaster never had (see its doc
             // comment). Replaces the floating TextMesh labels
@@ -393,10 +417,16 @@ namespace FalsePositive.Editor
             cutsceneVoEcho.decayRatio = 0.35f;
             cutsceneVoEcho.wetMix = 0.5f;
             cutsceneVoEcho.dryMix = 1f;
+
+            GameObject sfxSourceGo = new GameObject("CutsceneSfxSource", typeof(AudioSource));
+            sfxSourceGo.transform.SetParent(cutsceneGo.transform, false);
+            AudioSource cutsceneSfxSource = sfxSourceGo.GetComponent<AudioSource>();
             CutsceneDirector cutsceneDirector = cutsceneGo.AddComponent<CutsceneDirector>();
             SetField(cutsceneDirector, "fader", fader);
             SetField(cutsceneDirector, "subtitles", subtitleUi);
+            SetField(cutsceneDirector, "timeCards", timeCardUi);
             SetField(cutsceneDirector, "voSource", cutsceneVoSource);
+            SetField(cutsceneDirector, "sfxSource", cutsceneSfxSource);
             SetField(cutsceneDirector, "voSourceLipSync", cutsceneVoLipSync);
 
             // DrunkEffectController + DrunkCutsceneBinder — drives the URP drunk

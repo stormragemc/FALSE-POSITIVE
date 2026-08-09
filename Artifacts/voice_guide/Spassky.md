@@ -1,8 +1,17 @@
 # Officer Spassky — voice and script-driven delivery
 
-**Status:** voice **shipped** 7 Aug 2026 (§4.1). Delivery registers (§4.3) designed, not yet
-implemented. Supersedes `STORY_SCRIPT.md` §2's voice-cast note and `GAME_COMPLETION_PLAN.md` §7 B0
-where they are now out of date (see §2).
+> **V3 supersession — 9 Aug 2026.** The shipped configuration now uses
+> `eleven_v3`, stability `1.0`, similarity boost `1.0`, style `0.0`, speaker
+> boost, and a mandatory `strong Russian accent` audio tag. The LLM may emit one
+> validated mood tag, which is stripped from subtitles and passed only to TTS.
+> The 62 prerecorded lines map the existing registers to V3 moods (`PRESS` →
+> `impatient`, `RAISED` → `shouting`, `LOW` → `quietly menacing`; `FLAT` has no
+> mood). The V2 measurements and rejected-design discussion below remain as
+> historical decision context, not current production settings.
+
+**Status:** V3 voice and mood-aware delivery **shipped** 9 Aug 2026. Supersedes
+`STORY_SCRIPT.md` §2's voice-cast note and `GAME_COMPLETION_PLAN.md` §7 B0 where
+they are now out of date (see §2).
 
 ---
 
@@ -296,6 +305,24 @@ therefore not a latency factor — only the model choice is.
 
 `speed` was confirmed to take effect rather than being silently accepted: 0.85 → 3.72 s of audio,
 1.00 → 3.30 s, 1.15 → 3.11 s for the same text.
+
+### 4.7 Prerecorded filler acknowledgements — SHIPPED
+
+Ten short, noncommittal acknowledgements cover the gap between the end of the
+witness's captured voice turn and the start of Spassky's generated response.
+The canonical wording and stable IDs are in `Artifacts/filler_responses.md`;
+the production WAVs, exact synthesis manifest, generator, and playback utility
+are in `Artifacts/voice-lines/spassky_filler/`.
+
+Every filler uses the `FLAT` register. A filler acknowledges that the witness
+was heard but must not imply belief, disbelief, suspicion, or a verdict, and it
+is never a complete interrogation response. Phrases that explicitly announce a
+wait or invite the witness to keep speaking are excluded.
+
+The WAVs are dry mono 24 kHz 16-bit PCM. They receive the same conservative
+broadband denoising as the main production set, a 20 ms endpoint fade, and
+exactly 150 ms of digital-zero tail padding. All ten passed automated format,
+peak, clipping, and tail validation on 9 Aug 2026.
 
 ---
 

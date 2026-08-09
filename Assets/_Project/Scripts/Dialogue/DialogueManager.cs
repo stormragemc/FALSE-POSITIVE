@@ -315,6 +315,12 @@ namespace FalsePositive.Dialogue
 
         private void OnTurnSuccess(SidecarTurnResponse response)
         {
+            // A12. Filtered here, at the single point every consumer reads
+            // from, rather than at each Show() — the subtitle, the debug
+            // overlay and PhaseDialogueController all take reply_text off this
+            // object, and a guard applied per-consumer is a guard with holes.
+            response.reply_text = OutputGuard.Filter(response.reply_text);
+
             // The filler clip plays to cover upload/inference latency —
             // stop it here so it doesn't keep overlapping the reply once
             // the reply itself starts (it was previously never stopped on

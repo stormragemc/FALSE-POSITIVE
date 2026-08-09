@@ -232,15 +232,17 @@ namespace FalsePositive.Tests
         [Test]
         public void Card_without_quotes_is_just_the_fixed_lines()
         {
-            string card = OutcomeCardComposer.Compose(new List<QuotedLine>());
+            string card = OutcomeCardComposer.Compose(Suspect.Aaron, new List<QuotedLine>());
             StringAssert.Contains("FALSE POSITIVE", card);
             StringAssert.DoesNotContain("Turn ", card);
+            // The card must always say what happened, even with nothing to quote.
+            StringAssert.Contains("Aaron Teague was charged", card);
         }
 
         [Test]
         public void Card_quotes_lines_with_their_turn_numbers()
         {
-            string card = OutcomeCardComposer.Compose(new List<QuotedLine>
+            string card = OutcomeCardComposer.Compose(Suspect.Aaron, new List<QuotedLine>
             {
                 new QuotedLine(4, "Aaron locked the door behind him."),
             });
@@ -253,7 +255,7 @@ namespace FalsePositive.Tests
         {
             // G6, and docs/STORY_SCRIPT.md §4 verbatim: "It never says they
             // lied." The card presents the sentences and stops.
-            string card = OutcomeCardComposer.Compose(new List<QuotedLine>
+            string card = OutcomeCardComposer.Compose(Suspect.Aaron, new List<QuotedLine>
             {
                 new QuotedLine(3, "I saw Aaron go through the door."),
                 new QuotedLine(6, "It was exactly one o'clock."),
@@ -276,13 +278,13 @@ namespace FalsePositive.Tests
                 lines.Add(new QuotedLine(i, "A statement number " + i + " here."));
             }
             Assert.AreEqual(OutcomeCardComposer.MaxQuotes,
-                CountQuotes(OutcomeCardComposer.Compose(lines)));
+                CountQuotes(OutcomeCardComposer.Compose(Suspect.Aaron, lines)));
         }
 
         [Test]
         public void Card_quotes_a_turn_once_even_if_it_was_flagged_twice()
         {
-            string card = OutcomeCardComposer.Compose(new List<QuotedLine>
+            string card = OutcomeCardComposer.Compose(Suspect.Aaron, new List<QuotedLine>
             {
                 new QuotedLine(5, "Aaron locked the door and it was one o'clock."),
                 new QuotedLine(5, "Aaron locked the door and it was one o'clock."),
@@ -293,7 +295,7 @@ namespace FalsePositive.Tests
         [Test]
         public void Card_drops_a_fragment_too_short_to_read_as_a_claim()
         {
-            string card = OutcomeCardComposer.Compose(new List<QuotedLine>
+            string card = OutcomeCardComposer.Compose(Suspect.Aaron, new List<QuotedLine>
             {
                 new QuotedLine(2, "Yes."),
             });

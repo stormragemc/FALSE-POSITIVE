@@ -535,7 +535,46 @@ namespace FalsePositive.Dialogue
             // A11 — the fixed card plus the witness's own lines with turn
             // numbers, per docs/STORY_SCRIPT.md §4 P4_ENDING. The composer is
             // where the "It never says they lied" rule (G6) is enforced.
-            _flow.OutcomeScreen?.Show(OutcomeCardComposer.Compose(_quotableLines));
+            _flow.OutcomeScreen?.Show(
+                OutcomeCardComposer.Compose(_flow.Score.Accusation, QuotableLines()));
+        }
+
+        /// <summary>The lines the card will quote, with a fallback.
+        ///
+        /// Normally these are the turns that carried an unsupported detail and
+        /// the turn that named someone. A witness who names nobody and is never
+        /// caught out produces neither, which left the card as three fixed lines
+        /// and nothing of the player's in it at all — and quoting the player
+        /// back to themselves is the entire point of the screen. In that case
+        /// fall back to their longest statements, which are the ones they
+        /// committed to most.</summary>
+        private List<QuotedLine> QuotableLines()
+        {
+            var lines = new List<QuotedLine>(_quotableLines);
+            if (lines.Count >= OutcomeCardComposer.MaxQuotes || _flow.Score == null) return lines;
+
+            var already = new HashSet<int>();
+            foreach (QuotedLine line in lines) already.Add(line.TurnNumber);
+
+            var candidates = new List<TurnRecord>();
+            foreach (TurnRecord turn in _flow.Score.Turns)
+            {
+                if (already.Contains(turn.TurnNumber)) continue;
+                if (string.IsNullOrWhiteSpace(turn.Transcript)) continue;
+                candidates.Add(turn);
+            }
+
+            candidates.Sort((a, b) => b.Transcript.Trim().Length.CompareTo(a.Transcript.Trim().Length));
+
+            foreach (TurnRecord turn in candidates)
+            {
+                if (lines.Count >= OutcomeCardComposer.MaxQuotes) break;
+                lines.Add(new QuotedLine(turn.TurnNumber, turn.Transcript));
+            }
+
+            // Back into the order they were said — the card reads as a sequence.
+            lines.Sort((a, b) => a.TurnNumber.CompareTo(b.TurnNumber));
+            return lines;
         }
 
         private void SubscribeDialogue()

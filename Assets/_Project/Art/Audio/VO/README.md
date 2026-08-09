@@ -18,10 +18,10 @@ Voice casting (ElevenLabs Voice Library / premade voices, not custom clones):
 | Aaron | Liam | `TX3LPaxmHKxFdv7VOQHJ` |
 
 The canonical Unity imports live under `Production/`: exactly 93 mono 24 kHz
-16-bit PCM WAVs named by the stable IDs in `docs/HUMAN_SCRIPT.md`. The current
-62 Spassky files are placeholders while replacement performances are prepared;
-keeping the `SPASSKY-###` filenames lets those replacements drop in without
-changing any recipe, Timeline, or subtitle mapping.
+16-bit PCM WAVs named by the stable IDs in `docs/HUMAN_SCRIPT.md`. On 9 Aug
+2026, all 62 Spassky placeholders were replaced by the completed ElevenLabs V3
+performances. Their stable filenames and existing `.meta` GUIDs were preserved,
+so no recipe, Timeline, or subtitle mapping changed.
 
 `Editor/VoTimelineBuilder.cs` creates one `PlayableDirector` and Timeline per
 authored cutscene. Each Timeline places its VO and SFX at cumulative recipe-beat
@@ -29,13 +29,11 @@ times and binds them to separate audio sources. It also layers existing authored
 character-state animation clips over spoken beats; `CutsceneStage` continues to
 own scene-specific movement and blocking.
 
-If a new Spassky line does need rendering, use `eleven_multilingual_v2` and the
-delivery register that matches it — `Artifacts/voice_guide/Spassky.md` §4.3 has
-the table, and `Artifacts/voice-lines/spassky/generate_spassky_voice_lines.py`
-applies it. The settings quoted here previously (stability `0.15`,
-similarity_boost `1.00`, style `0.85`, speed `0.85`, `−1.5 dB` trim) are the
-`LOW` register specifically, which is right for the verdict and ending lines but
-reads too heavy on a short press like "Then what?".
+If a new Spassky line needs rendering, use `eleven_v3` with stability `1.0`,
+similarity boost `1.0`, style `0.0`, speaker boost enabled, and the explicit
+`strong Russian accent` audio tag. The production generator maps `PRESS` to
+`impatient`, `RAISED` to `shouting`, and `LOW` to `quietly menacing`; `FLAT`
+uses the accent tag alone.
 
 Exact production prompts and settings for every character are recorded beside
 their source WAVs under `Artifacts/voice-lines/<character>/`.
@@ -44,9 +42,8 @@ Spassky's *live* in-game dialogue is generated turn-by-turn by the sidecar at
 runtime (`Sidecar/tts.py`). Offline-demo and scripted cutscene paths use the
 stable-ID WAVs from `Production/`.
 
-Pre-rendering P1's answer matters for more than consistency. It is the longest
-line Spassky has, and `eleven_multilingual_v2` costs 950–2100 ms scaling with
-length — rendering it offline keeps that cost off the live turn budget.
+Pre-rendering P1's answer keeps the longest scripted Spassky line off the live
+turn budget and ensures it uses the same reviewed V3 performance every time.
 
 Offline demo uses 14 canonical Spassky IDs selected by
 `Editor/OfflineScriptBuilder.cs`, rather than the superseded

@@ -19,29 +19,31 @@ import config
 
 _client: ElevenLabs | None = None
 
-# The multilingual model, chosen over eleven_flash_v2_5 by ear in an A/B at
-# matched settings: it is materially the more Russian-sounding of the two, and
-# the accent is the casting brief. It costs 950-2100ms per line against flash's
-# ~215ms, which is the 1-2s turn-latency difference this comment used to warn
-# about — accepted deliberately, see §4.6 of the design spec for what that
-# costs a full playthrough. Confirm the id via ElevenLabs' /v1/models endpoint
-# if TTS calls start failing with an unknown-model error.
-_MODEL_ID = "eleven_multilingual_v2"
+# V3 configuration selected by ear on main. Confirm the model through
+# ElevenLabs if calls start failing with an unknown-model error.
+_MODEL_ID = "eleven_v3"
 
-# Spassky's delivery: contained anger, not shouting — slow and held down rather
-# than loud. Low stability keeps the emotional variance (and the accent, which
-# high stability flattens toward neutral English); similarity_boost at 1.00 is
-# the strongest accent carrier available and measured free.
-#
-# This is the LOW register of the design spec's §4.3 table, applied uniformly.
-# Script-driven register selection is specced but not yet implemented; until it
-# is, every line is delivered in this one.
+# V3 does not preserve this voice's Russian accent by settings alone. Robust
+# stability preserves identity, style must remain zero, and the explicit accent
+# tag below supplies the accent. Mood is optional and validated separately.
 _VOICE_SETTINGS = VoiceSettings(
-    stability=0.15,
+    stability=1.0,
     similarity_boost=1.00,
-    style=0.85,
-    speed=0.85,
+    style=0.0,
+    use_speaker_boost=True,
 )
+
+ACCENT_TAG = "strong Russian accent"
+ALLOWED_MOODS = frozenset(
+    {"angry", "shouting", "quietly menacing", "tired", "impatient"}
+)
+
+
+def _tagged(text: str, mood: str | None) -> str:
+    """Build the validated V3 performance direction for one spoken line."""
+    if mood and mood.lower().strip() in ALLOWED_MOODS:
+        return f"[{ACCENT_TAG}, {mood.lower().strip()}] {text}"
+    return f"[{ACCENT_TAG}] {text}"
 
 
 def _get_client() -> ElevenLabs:
@@ -108,10 +110,10 @@ def _fetch_audio(client: ElevenLabs, text: str) -> tuple[bytes, int, int]:
         return _decode_mp3_to_pcm16(mp3_bytes)
 
 
-def synthesize(text: str) -> tuple[bytes, int, int, int]:
+def synthesize(text: str, mood: str | None = None) -> tuple[bytes, int, int, int]:
     """Returns (pcm16_le_bytes, sample_rate, channels, elapsed_ms)."""
     client = _get_client()
     t0 = time.perf_counter()
-    pcm, rate, channels = _fetch_audio(client, text)
+    pcm, rate, channels = _fetch_audio(client, _tagged(text, mood))
     ms = int((time.perf_counter() - t0) * 1000)
     return pcm, rate, channels, ms

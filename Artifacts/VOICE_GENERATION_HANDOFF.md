@@ -1,7 +1,7 @@
 # Voice generation and review handoff
 
 **Repository:** `D:\SUTD\Hack_Garena'26`  
-**Baseline:** `origin/main` at `c8db278` (`finalize cleaned production voice lines`)  
+**Spassky V3 source:** `origin/main` commit `3d936a6`
 **Prepared:** 9 Aug 2026
 
 This file records the state of the prerecorded character-voice work and the
@@ -50,7 +50,7 @@ the old `Artifacts/voice-auditions/` tree.
 | Nick | 7 | Ivan Energetic, `JKtNvDNrWu33P1xzttP2`, `eleven_v3` | Cleaned and approved by user listening review. In-game review pending. |
 | Priya | 11 | Aaira, `1XNFRxE3WBB7iI0jnm7p`, `eleven_v3` | Cleaned and approved by user listening review. In-game review pending. |
 | Radio announcer | 4 | Roger, `CwhRBWXzGAHq8TQ4Fs17`, `eleven_v3` | Cleaned and approved by user listening review. Radio treatment belongs in the game mix. |
-| Officer Spassky | 62 | Maksim, `6sXsAlJKKBf265ucBSRt`, `eleven_multilingual_v2` | Current files are integrated as placeholders. Replacement performances are being prepared externally and still require review. |
+| Officer Spassky | 62 | Maksim, `6sXsAlJKKBf265ucBSRt`, `eleven_v3` | V3 replacements rendered, cleaned, and integrated. Listening review pending. |
 | David | 0 | Player microphone | Do not generate a production voice unless the user changes the design. |
 
 There are exactly **93 canonical production WAVs**. All passed the last offline
@@ -72,12 +72,11 @@ reachable in Unity. The 59 older descriptive audio assets remain on disk for
 recoverability, but the generated scenes, config, and Timelines reference none
 of them.
 
-The current Spassky imports are placeholders. Replacement WAVs must retain the
-same `SPASSKY-###.wav` filenames and be copied over the corresponding files in
-`Assets/_Project/Art/Audio/VO/Production/`. Unity will preserve their `.meta`
-GUIDs, so no Timeline or recipe remapping is required. Run the Timeline builder
-again only if dialogue structure or clip assignments change; a same-filename
-audio replacement needs only a Unity asset refresh.
+All 62 Spassky placeholders were replaced on 9 Aug 2026 with V3 performances
+derived from the configuration introduced on `main`. Source and Unity copies
+match byte-for-byte, and the existing Unity `.meta` GUIDs were preserved. No
+Timeline or recipe remapping was required; Unity only needs to refresh the
+changed audio assets.
 
 ## Remaining work, in order
 
@@ -121,7 +120,7 @@ Sidecar\.venv\Scripts\python.exe Artifacts\voice-lines\priya\play_priya_voice_li
 ### 2. Review Officer Spassky — 62 lines
 
 Review `SPASSKY-001` through `SPASSKY-062`, four at a time, numbered clearly.
-All files changed during cleanup and need a post-cleanup listening pass. Give
+All files were regenerated with V3 and need a listening pass. Give
 extra attention to `SPASSKY-003`, `SPASSKY-061`, and `SPASSKY-062`, which were
 already awaiting re-review before cleanup. `SPASSKY-001`, `002`, `003`, `061`,
 and `062` use the synthesis-only `Day-vid` pronunciation alias.
@@ -132,9 +131,9 @@ Windows playback command for one line:
 Sidecar\.venv\Scripts\python.exe Artifacts\voice-lines\spassky\play_spassky_voice_line.py SPASSKY-001
 ```
 
-Spassky deliberately remains on `eleven_multilingual_v2` so his prerecorded
-lines match the established Maksim live-TTS voice. Do not migrate him to V3 as
-part of this review.
+Spassky now uses `eleven_v3` for both prerecorded and live TTS. Every line has
+the `strong Russian accent` tag; register-specific mood tags provide the tonal
+variation selected on `main`.
 
 ### 3. Regenerate only rejected lines
 

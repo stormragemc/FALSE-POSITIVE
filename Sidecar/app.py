@@ -670,11 +670,13 @@ async def turn(
             deadline,
         )
 
+        # Keep V3's optional performance direction out of the visible subtitle.
+        reply_text, mood = llm.split_mood_tag(reply_text)
+
         pcm, rate, channels, tts_ms = await _await_before_deadline(
             loop.run_in_executor(
                 _vendor_pool,
-                tts.synthesize,
-                reply_text,
+                partial(tts.synthesize, reply_text, mood),
             ),
             deadline,
         )

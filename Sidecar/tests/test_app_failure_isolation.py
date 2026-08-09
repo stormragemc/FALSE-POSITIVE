@@ -169,6 +169,14 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         import re as _re
 
+        _fake_mood_tag = _re.compile(r"^\s*\[([^\]]{1,40})\]\s*")
+
+        def _fake_split_mood_tag(text):
+            match = _fake_mood_tag.match(text or "")
+            if not match:
+                return text, None
+            return text[match.end():].lstrip(), match.group(1).strip().lower()
+
         _fake_reserved_marker = _re.compile(
             r"WITNESS_TRANSCRIPT|LOCAL_AFFECT_CONTEXT|SCENE_INSTRUCTION|local\s+affect\s+signal",
             _re.IGNORECASE,
@@ -181,6 +189,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             HISTORY_KIND_WITNESS="witness_transcript",
             generate_reply=generate_reply,
             contains_reserved_marker=lambda text: bool(_fake_reserved_marker.search(text or "")),
+            split_mood_tag=_fake_split_mood_tag,
         )
         async def fake_transcribe(_pcm_bytes):
             return "fixture transcript", 5
@@ -198,7 +207,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         )
         tts = _module(
             "tts",
-            synthesize=lambda _text: (b"\x00\x00", 24000, 1, 7),
+            synthesize=lambda _text, _mood=None: (b"\x00\x00", 24000, 1, 7),
         )
         audio_utils = _module(
             "audio_utils",

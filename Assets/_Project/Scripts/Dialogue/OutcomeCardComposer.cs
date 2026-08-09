@@ -57,9 +57,7 @@ namespace FalsePositive.Dialogue
         /// One factual line fixes that without commenting on it.</summary>
         public static string Compose(Suspect outcome, IReadOnlyList<QuotedLine> quotable)
         {
-            var card = new StringBuilder(OutcomeLine(outcome)).Append("
-
-").Append(FixedCard);
+            var card = new StringBuilder(OutcomeLine(outcome)).Append("\n\n").Append(FixedCard);
             if (quotable == null || quotable.Count == 0) return card.ToString();
 
             var kept = new List<QuotedLine>(MaxQuotes);

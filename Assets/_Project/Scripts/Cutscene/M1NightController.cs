@@ -6,12 +6,12 @@ namespace FalsePositive.Cutscene
 {
     /// <summary>
     /// Lives in Memory_CabinNight.unity. Drives the M1_Night beat order from
-    /// docs/HUMAN_SCRIPT.md: argument by the fire -> stand from chair -> free
-    /// roam (objective "Fix the radio") -> radio clears -> someone left (door
-    /// swings shut) -> objective "Go to the door" -> reaching the door triggers
-    /// the loud call-for-Nick prompt -> fuzzy out. "Reaching the door" is a
-    /// trigger volume, not an E-press Interactable — the door is never opened
-    /// by the player here.
+    /// docs/HUMAN_SCRIPT.md: stand from chair (the drunk wake-up) -> argument
+    /// by the fire -> free roam (objective "Fix the radio") -> radio clears ->
+    /// someone left (door swings shut) -> objective "Go to the door" ->
+    /// reaching the door triggers the loud call-for-Nick prompt -> fuzzy out.
+    /// "Reaching the door" is a trigger volume, not an E-press Interactable —
+    /// the door is never opened by the player here.
     /// Only touches same-scene objects and GameFlowDirector.Instance.
     /// </summary>
     public sealed class M1NightController : MonoBehaviour
@@ -40,8 +40,8 @@ namespace FalsePositive.Cutscene
             if (phase != GamePhase.M1_Night) return;
             _radioCleared = false;
             _doorReached = false;
-            _flow.RequestCutscene(CutsceneId.NightArgument, () =>
-                _flow.RequestCutscene(CutsceneId.StandFromChair, () =>
+            _flow.RequestCutscene(CutsceneId.StandFromChair, () =>
+                _flow.RequestCutscene(CutsceneId.NightArgument, () =>
                 {
                     _flow.Objectives?.Set("Fix the radio.");
                 }));

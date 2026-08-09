@@ -133,7 +133,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.21
+      value: 0.25
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: d3f07112c06dc7b45b63cfb33ea41981, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1554,7 +1554,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65205e79ce4597a4595fbf44e7c606b6, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.12884
+      value: -0.047
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65205e79ce4597a4595fbf44e7c606b6, type: 3}
       propertyPath: m_LocalPosition.z
@@ -3190,6 +3190,9 @@ MonoBehaviour:
   p2TurnCap: 14
   p3TurnCap: 8
   sessionTurnCap: 30
+  p3BeforePhotographSeconds: 1
+  p3AfterMemoriesSeconds: 1.2
+  p3MaxWaitForOfficerSeconds: 30
 --- !u!4 &1536084368
 Transform:
   m_ObjectHideFlags: 0

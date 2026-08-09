@@ -86,15 +86,39 @@ namespace FalsePositive.Editor
             // the radio itself. Widened rather than moved — 0.9 x 0.7 x 0.6
             // stays clear of Prop_MantelClock beside it so the clock's own
             // prompt can't get stolen.
-            RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.565f, 3.91f),
-                new Vector3(0.3f, 0.2f, 0.15f), new Color(0.3f, 0.3f, 0.3f), "Radio",
+            //
+            // overrideModel/keepOriginalMaterials: the real Asset Store pack
+            // (HQ_PBR_Radio_Free), not the generic placeholder FBX — real PBR
+            // textures via ConvertMaterialsToUrpRecursive instead of a flat
+            // color. Measured live: local bounds 0.306x0.295x0.081, origin
+            // 0.0868 above the base, front faces the model's own +Z — the
+            // mantel's room-facing side is -Z, hence the 180 turn. y = shelf
+            // top (1.380) minus the base offset.
+            GameObject radioPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/PHOSdigital/HQ_PBR_Radio_Free/Radio.prefab");
+            RadioTuner radio = AddProp<RadioTuner>(root, "Prop_Radio", new Vector3(-0.35f, 1.4668f, 3.91f),
+                Vector3.zero, new Color(0.3f, 0.3f, 0.3f), "Radio",
                 "Tune the radio", null,
+                overrideModel: radioPrefab, keepOriginalMaterials: true,
+                rotation: Quaternion.Euler(0f, 180f, 0f),
                 interactionVolume: new Vector3(0.9f, 0.7f, 0.6f));
             WireRadioAudio(radio);
 
-            InspectPoint clock = AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.505f, 3.93f),
-                new Vector3(0.2f, 0.25f, 0.1f), new Color(0.5f, 0.4f, 0.25f), "Clock (00:52)",
-                "Look at the clock", MemoryFlagIds.SawClock);
+            // overrideModel/keepOriginalMaterials: same reasoning as the radio
+            // above, but the real Clock.prefab turns out to be a flat WALL
+            // clock (measured 0.360x0.360x0.032, all geometry on one face,
+            // origin at the back plate) rather than a free-standing mantel
+            // clock — it has no base to stand on the shelf with. Wall-mounted
+            // on the chimney breast instead: back plate flush to the measured
+            // brick face (~4.00, biased in slightly to avoid z-fighting),
+            // above the shelf, facing -Z into the room. y/z are a first
+            // guess pending a live look, not measured against the brickwork.
+            GameObject clockPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Clock/Prefabs/Clock.prefab");
+            InspectPoint clock = AddProp<InspectPoint>(root, "Prop_MantelClock", new Vector3(0.35f, 1.9f, 3.98f),
+                Vector3.zero, new Color(0.5f, 0.4f, 0.25f), "Clock (00:52)",
+                "Look at the clock", MemoryFlagIds.SawClock,
+                overrideModel: clockPrefab, keepOriginalMaterials: true,
+                rotation: Quaternion.Euler(0f, 180f, 0f));
             // 0.35 was loud enough to sit on top of dialogue from across the
             // room. A mantel clock should only be audible near the fireplace.
             AddAmbientLoop(clock.gameObject, "clock_tick_loop", volume: 0.10f);

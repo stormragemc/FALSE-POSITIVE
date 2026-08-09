@@ -555,19 +555,28 @@ namespace FalsePositive.Flow
             }
 
             Phase = next;
-
-            // Fired after FadeFromBlack completes, not before — a phase
-            // handler (e.g. M2MorningController) commonly reacts by
-            // requesting a cutscene, which starts its own
-            // CutsceneDirector.PlayRoutine fade on the same ScreenFader.
-            // Firing PhaseChanged first used to let that second fade start
-            // concurrently with this routine's own FadeFromBlack; ScreenFader
-            // now tolerates the race via its generation counter, but there's
-            // no reason to invite it — waiting here means the screen is
-            // fully lit and settled before anything downstream can touch the
-            // fader again.
-            if (fader != null) yield return fader.FadeFromBlack(fadeDuration);
             PhaseChanged?.Invoke(next);
+
+            // A phase handler (PhaseDialogueController/M1NightController/
+            // M2MorningController) commonly reacts to PhaseChanged by
+            // requesting a cutscene synchronously -- RequestCutscene ->
+            // ICutscenePlayer.Play -> StartCoroutine runs its first leg
+            // immediately, so IsPlaying is already true here if one started.
+            // That cutscene now owns the reveal: CutsceneDirector.PlayRoutine
+            // calls its own FadeFromBlack at the end (or, for keepScreenLit
+            // recipes, DrunkCutsceneBinder's fade-in has already begun off
+            // the Started event). Running our own FadeFromBlack here too used
+            // to reveal the still-lit room for one fadeDuration before the
+            // cutscene re-blacked it -- that flash was the bug (every scene
+            // entry showed the new room lit for a beat before cutting black).
+            // Firing PhaseChanged before this fade -- instead of after, as it
+            // used to be -- reintroduces the two-fade race the old comment
+            // here warned about, but ScreenFader's generation counter (see
+            // its class doc) already makes that race safe: the newer Fade()
+            // call always wins, the older one just bails.
+            bool cutsceneClaimedReveal = _cutscenePlayer != null && _cutscenePlayer.IsPlaying;
+            if (!cutsceneClaimedReveal && fader != null) yield return fader.FadeFromBlack(fadeDuration);
+
             _transitioning = false;
         }
 

@@ -12,7 +12,7 @@ namespace FalsePositive.CabinNight
     /// "Blocker_Stairs" volume (MemorySceneDressing.AddStairBlocker), which is
     /// what actually stops movement — the second floor was never built
     /// (Cabin_v2/README.md: "only the ceiling slab and stair opening"), so a
-    /// player who gets up there steps onto the ceiling slab at y 2.9 and is
+    /// player who gets up there steps onto the ceiling slab at y 3.25 and is
     /// stranded with no geometry, no rail, and no fall recovery
     /// (CabinFallRecovery only fires below y -4).
     ///

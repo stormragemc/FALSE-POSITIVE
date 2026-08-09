@@ -168,7 +168,8 @@ namespace FalsePositive.Net
                 sceneInstruction,
                 onSuccess,
                 onSessionEnded,
-                onError));
+                onError,
+                sceneInstructionOnce));
         }
 
         /// <summary>Requests a full server-side session reset — dialogue history and the
@@ -207,7 +208,8 @@ namespace FalsePositive.Net
             string sceneInstruction,
             Action<SidecarTurnResponse> onSuccess,
             Action<SidecarTurnResponse> onSessionEnded,
-            Action<string> onError)
+            Action<string> onError,
+            string sceneInstructionOnce)
         {
             IsBusy = true;
 

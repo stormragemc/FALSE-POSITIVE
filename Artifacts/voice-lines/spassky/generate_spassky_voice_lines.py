@@ -11,7 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import wave
 
 import numpy as np
@@ -28,6 +31,12 @@ MODEL_ID = "eleven_multilingual_v2"
 OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
 PEAK_CEILING = 0.97
+CLEANUP_FILTER = (
+    "afftdn=nr=12:nf=-55:tn=1:gs=5,"
+    "areverse,afade=t=in:st=0:d=0.020,areverse,"
+    "apad=pad_dur=0.150"
+)
+ZERO_TAIL_FRAMES = round(SAMPLE_RATE * 0.150)
 
 _LINE_RE = re.compile(r"^\*\*\[(SPASSKY-\d+)\][^*]*\*\*\s*(.+?)\s*$")
 _SCENE_RE = re.compile(r"^##\s+Scene\s+(\d+)\b")
@@ -144,13 +153,86 @@ def apply_gain_db(pcm: bytes, gain_db: float) -> bytes:
     return np.round(samples * 32767.0).astype(np.int16).tobytes()
 
 
-def write_wav(path: Path, pcm: bytes) -> None:
-    """Write raw 24 kHz mono PCM returned by ElevenLabs to a WAV container."""
+def write_pcm_wav(path: Path, pcm: bytes) -> None:
+    """Write raw 24 kHz mono PCM to a WAV container."""
     with wave.open(str(path), "wb") as output:
         output.setnchannels(1)
         output.setsampwidth(2)
         output.setframerate(SAMPLE_RATE)
         output.writeframes(pcm)
+
+
+def read_pcm_wav(path: Path) -> bytes:
+    """Read one canonical production WAV, rejecting unexpected formats."""
+    with wave.open(str(path), "rb") as source:
+        actual = (
+            source.getnchannels(),
+            source.getframerate(),
+            source.getsampwidth(),
+            source.getcomptype(),
+        )
+        expected = (1, SAMPLE_RATE, 2, "NONE")
+        if actual != expected:
+            raise RuntimeError(
+                f"{path.name} has format {actual}; expected {expected}."
+            )
+        pcm = source.readframes(source.getnframes())
+    if not pcm:
+        raise RuntimeError(f"{path.name} contains no audio frames.")
+    return pcm
+
+
+def has_exact_zero_tail(path: Path) -> bool:
+    """Return whether a WAV already has the required exact digital-zero tail."""
+    pcm = read_pcm_wav(path)
+    tail_bytes = ZERO_TAIL_FRAMES * 2
+    return len(pcm) >= tail_bytes and pcm[-tail_bytes:] == bytes(tail_bytes)
+
+
+def write_clean_wav(path: Path, pcm: bytes) -> None:
+    """Denoise, fade, pad, and atomically install one production WAV."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError("FFmpeg is required for production VO cleanup.")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        dir=path.parent,
+        prefix=f".{path.stem}-",
+    ) as temporary_directory:
+        temporary_root = Path(temporary_directory)
+        source_path = temporary_root / "source.wav"
+        cleaned_path = temporary_root / path.name
+        write_pcm_wav(source_path, pcm)
+
+        subprocess.run(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostdin",
+                "-y",
+                "-i",
+                str(source_path),
+                "-af",
+                CLEANUP_FILTER,
+                "-ac",
+                "1",
+                "-ar",
+                str(SAMPLE_RATE),
+                "-c:a",
+                "pcm_s16le",
+                str(cleaned_path),
+            ],
+            check=True,
+        )
+        if not has_exact_zero_tail(cleaned_path):
+            raise RuntimeError(
+                f"FFmpeg did not produce a {ZERO_TAIL_FRAMES}-frame zero tail "
+                f"for {path.name}."
+            )
+        os.replace(cleaned_path, path)
 
 
 def main() -> int:
@@ -172,7 +254,18 @@ def main() -> int:
         action="append",
         help="Render only this line ID. Repeatable.",
     )
+    parser.add_argument(
+        "--clean-existing",
+        action="store_true",
+        help=(
+            "Apply production cleanup to existing WAVs that do not already "
+            "have the required exact zero tail; does not call the API."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.clean_existing and (args.force or args.dry_run):
+        parser.error("--clean-existing cannot be combined with --force or --dry-run")
 
     lines = read_lines()
     if args.only:
@@ -189,17 +282,39 @@ def main() -> int:
         print(f"\n{len(lines)} lines", flush=True)
         return 0
 
-    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-    if not api_key:
-        print("ELEVENLABS_API_KEY is not set.", file=sys.stderr)
-        return 2
+    if args.clean_existing:
+        missing_files = []
+        for line_id, _text, _phase, _delivery in lines:
+            output_path = OUTPUT_DIRECTORY / f"{line_id}.wav"
+            if not output_path.is_file():
+                missing_files.append(output_path.name)
+                continue
+            if has_exact_zero_tail(output_path):
+                print(f"SKIP CLEAN {output_path.name}", flush=True)
+                continue
+            write_clean_wav(output_path, read_pcm_wav(output_path))
+            print(f"CLEANED {output_path.name}", flush=True)
+        if missing_files:
+            print(
+                f"Missing production WAVs: {', '.join(missing_files)}",
+                file=sys.stderr,
+            )
+            return 2
+        return 0
 
-    client = ElevenLabs(api_key=api_key)
+    client = None
     for line_id, text, _phase, delivery in lines:
         output_path = OUTPUT_DIRECTORY / f"{line_id}.wav"
         if output_path.exists() and not args.force:
             print(f"SKIP {output_path.name}", flush=True)
             continue
+
+        if client is None:
+            api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+            if not api_key:
+                print("ELEVENLABS_API_KEY is not set.", file=sys.stderr)
+                return 2
+            client = ElevenLabs(api_key=api_key)
 
         chunks = client.text_to_speech.convert(
             voice_id=VOICE_ID,
@@ -211,7 +326,7 @@ def main() -> int:
         pcm = b"".join(chunks)
         if not pcm:
             raise RuntimeError(f"Empty audio response for {line_id}")
-        write_wav(output_path, apply_gain_db(pcm, delivery.gain_db))
+        write_clean_wav(output_path, apply_gain_db(pcm, delivery.gain_db))
         print(f"GENERATED {output_path.name}  [{delivery.name}]", flush=True)
 
     return 0

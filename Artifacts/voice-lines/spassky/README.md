@@ -1,7 +1,8 @@
 # Officer Spassky production voice lines
 
-This directory contains Spassky's finalized dialogue, one 24 kHz mono 16-bit PCM
-WAV per spoken line. Filenames match the stable IDs in `docs/HUMAN_SCRIPT.md`.
+This directory contains Spassky's production dialogue, one 24 kHz mono 16-bit
+PCM WAV per spoken line. Filenames match the stable IDs in
+`docs/HUMAN_SCRIPT.md`.
 
 All 62 lines are synthetic text-to-speech generated via the ElevenLabs API. No
 human voice actor recorded any line — the same synthetic-VO disclosure that
@@ -31,9 +32,39 @@ the standard **DAY-vid** pronunciation. Canonical text and subtitles remain
 unchanged.
 
 `SPASSKY-001`, `SPASSKY-002`, `SPASSKY-003`, `SPASSKY-061`, and
-`SPASSKY-062` were regenerated with this alias on 9 Aug 2026. `SPASSKY-001`
-and `SPASSKY-002` are approved; `SPASSKY-003`, `SPASSKY-061`, and
-`SPASSKY-062` remain pending re-review. All other Spassky takes are unchanged.
+`SPASSKY-062` were regenerated with this alias on 9 Aug 2026. Before the
+cleanup pass below, `SPASSKY-001` and `SPASSKY-002` had been approved while
+`SPASSKY-003`, `SPASSKY-061`, and `SPASSKY-062` remained pending re-review. All
+other Spassky performances are unchanged from their original takes.
+
+## Dry-VO cleanup and review status
+
+On 9 Aug 2026, all 62 production WAVs were conservatively reprocessed in place
+to remove broadband background noise and make their endpoints safe for game
+playback. Processing is reproducible in the production generator and uses this
+mandatory order:
+
+1. FFmpeg `afftdn=nr=12:nf=-55:tn=1:gs=5` broadband cleanup.
+2. A 20 ms fade of the existing endpoint to digital zero.
+3. Exactly 150 ms (3,600 frames at 24 kHz) of appended digital silence.
+
+The files contain dry dialogue only. Spassky's progressive distance/muffling in
+the opening and every other scene effect remain mix-time work; no room tone,
+static, wind, or scene ambience is intentionally baked into these WAVs.
+
+No line was regenerated during this remediation. A non-listening endpoint audit
+showed each existing performance decaying to low-level tail energy before its
+file boundary, rather than evidence of a missing spoken consonant. The original
+performances, voice, model, pronunciation alias, and delivery registers were
+therefore preserved.
+
+Technical validation is complete for all 62 cleaned files. Human listening of
+the cleaned outputs is still required before final approval, both to confirm
+that no spoken ending was already truncated and to reject any denoising
+pumping, ringing, or metallic texture. Because every production WAV changed,
+all 62 are pending this post-cleanup listening pass; the earlier specific
+re-review requirement for `SPASSKY-003`, `SPASSKY-061`, and `SPASSKY-062` still
+applies.
 
 ## Delivery registers
 
@@ -78,7 +109,7 @@ replaying into a different route does not hear a bit-identical line.
 
 ## Line manifest
 
-| ID | Phase | Register | Length | Dialogue |
+| ID | Phase | Register | Speech-take length | Dialogue |
 |---|---|---|---|---|
 | `SPASSKY-001` | P1_TUTORIAL | `FLAT` | 1.07 s | David. |
 | `SPASSKY-002` | P1_TUTORIAL | `FLAT` | 1.02 s | David. |
@@ -146,7 +177,9 @@ replaying into a different route does not hear a bit-identical line.
 Total runtime 198 s across 62 lines. Manifest order is story order — the
 photograph scene (`SPASSKY-057`–`062`) plays between `SPASSKY-037` and the
 truthful-defense route, and carries high IDs only because it was written after
-the verdict lines were numbered.
+the verdict lines were numbered. The length column and total record the original
+speech takes; each cleaned production WAV is approximately 0.150 s longer due
+to its required exact-zero playback tail.
 
 ## Utilities
 
@@ -161,6 +194,21 @@ Generate only missing lines:
 ```bash
 Sidecar/.venv/bin/python Artifacts/voice-lines/spassky/generate_spassky_voice_lines.py
 ```
+
+New renders are automatically denoised, faded, padded, validated, and installed
+atomically. FFmpeg must be available on `PATH`. Existing WAVs are skipped by
+default, and API credentials are requested only when a render is actually
+needed.
+
+Apply the same cleanup to a legacy production WAV that does not already have the
+required exact-zero tail, without calling the API:
+
+```bash
+Sidecar/.venv/bin/python Artifacts/voice-lines/spassky/generate_spassky_voice_lines.py --clean-existing --only SPASSKY-042
+```
+
+`--clean-existing` skips WAVs that already have the 150 ms exact-zero tail so
+the denoiser is not accidentally applied twice.
 
 Preview which register every line resolves to, without calling the API:
 

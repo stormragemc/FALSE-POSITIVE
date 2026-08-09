@@ -1,8 +1,11 @@
 """Generate Aaron's production dialogue with the selected Liam voice."""
 
 from argparse import ArgumentParser
+from array import array
 from pathlib import Path
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import wave
@@ -18,6 +21,11 @@ OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
 SAMPLE_WIDTH = 2
 CHANNELS = 1
+FFMPEG_BINARY = "ffmpeg"
+CLEANUP_FILTER = "afftdn=nr=12:nf=-55:tn=1:gs=5"
+FADE_DURATION_SECONDS = 0.020
+SILENCE_DURATION_SECONDS = 0.150
+MINIMUM_ZERO_TAIL_FRAMES = round(SAMPLE_RATE * SILENCE_DURATION_SECONDS)
 
 VOICE_SETTINGS = VoiceSettings(
     stability=0.50,
@@ -33,8 +41,10 @@ LINES = (
     (
         "AARON-001",
         "He's freezing. Let's get him inside, onto the sofa by the fire.",
-        "[confident, athletic, urgent but controlled] He’s freezing. "
-        "Let’s get him inside—onto the sofa, by the fire.",
+        "[calm on the surface, suppressing urgency, taking charge] "
+        "He’s freezing.\n\n"
+        "[steady and decisive] Let’s get him inside.\n\n"
+        "Onto the sofa, by the fire.",
     ),
     (
         "AARON-002",
@@ -43,8 +53,9 @@ LINES = (
     ),
     (
         "AARON-003",
-        "Lift on three.",
-        "[terse, physically decisive] Lift on three.",
+        "Lift on three. One, two, three.",
+        "[firm, coordinating the group before a heavy lift] "
+        "Lift on three. One, two, three.",
     ),
     (
         "AARON-004",
@@ -59,8 +70,8 @@ LINES = (
 )
 
 
-def validate_wav(path: Path) -> int:
-    """Validate the production WAV contract and return its frame count."""
+def read_wav_samples(path: Path) -> tuple[int, array[int]]:
+    """Validate the WAV format and return its frame count and PCM samples."""
     with wave.open(str(path), "rb") as audio:
         properties = (
             audio.getnchannels(),
@@ -77,38 +88,132 @@ def validate_wav(path: Path) -> int:
         frame_count = audio.getnframes()
         if frame_count <= 0:
             raise ValueError(f"WAV contains no audio frames: {path.name}")
-        return frame_count
+        samples = array("h", audio.readframes(frame_count))
+
+    if sys.byteorder != "little":
+        samples.byteswap()
+    return frame_count, samples
+
+
+def validate_wav(path: Path, require_clean_tail: bool = True) -> int:
+    """Validate the production WAV contract and return its frame count."""
+    frame_count, samples = read_wav_samples(path)
+    clipping_count = sum(
+        sample in (-32_768, 32_767) for sample in samples
+    )
+    if clipping_count:
+        raise ValueError(
+            f"WAV contains {clipping_count} clipped samples: {path.name}"
+        )
+
+    if require_clean_tail:
+        zero_tail_frames = 0
+        for sample in reversed(samples):
+            if sample != 0:
+                break
+            zero_tail_frames += 1
+        if zero_tail_frames < MINIMUM_ZERO_TAIL_FRAMES:
+            raise ValueError(
+                f"WAV has only {zero_tail_frames} exact-zero tail frames: "
+                f"{path.name}; expected at least {MINIMUM_ZERO_TAIL_FRAMES}"
+            )
+    return frame_count
+
+
+def run_ffmpeg(arguments: list[str]) -> None:
+    """Run FFmpeg without interactive input or noisy routine output."""
+    ffmpeg_path = shutil.which(FFMPEG_BINARY)
+    if ffmpeg_path is None:
+        raise RuntimeError("ffmpeg is required but was not found on PATH")
+    subprocess.run(
+        [
+            ffmpeg_path,
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            *arguments,
+        ],
+        check=True,
+    )
 
 
 def write_wav_safely(path: Path, pcm: bytes) -> None:
-    """Validate raw PCM, then atomically install it in a WAV container."""
+    """Clean raw PCM, add a safe tail, then atomically install the WAV."""
     if not pcm:
         raise ValueError(f"Empty audio response for {path.stem}")
     if len(pcm) % SAMPLE_WIDTH:
         raise ValueError(f"Unaligned PCM response for {path.stem}")
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: Path | None = None
+    temporary_paths: list[Path] = []
     try:
-        with tempfile.NamedTemporaryFile(
-            dir=path.parent,
-            prefix=f".{path.stem}.",
-            suffix=".tmp.wav",
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
+        for stage in ("raw", "denoised", "cleaned"):
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent,
+                prefix=f".{path.stem}.{stage}.",
+                suffix=".tmp.wav",
+                delete=False,
+            ) as temporary:
+                temporary_paths.append(Path(temporary.name))
+        raw_path, denoised_path, cleaned_path = temporary_paths
 
-        with wave.open(str(temporary_path), "wb") as output:
+        with wave.open(str(raw_path), "wb") as output:
             output.setnchannels(CHANNELS)
             output.setsampwidth(SAMPLE_WIDTH)
             output.setframerate(SAMPLE_RATE)
             output.writeframes(pcm)
 
-        validate_wav(temporary_path)
-        os.replace(temporary_path, path)
-        temporary_path = None
+        validate_wav(raw_path, require_clean_tail=False)
+        run_ffmpeg(
+            [
+                "-i",
+                str(raw_path),
+                "-af",
+                CLEANUP_FILTER,
+                "-ac",
+                str(CHANNELS),
+                "-ar",
+                str(SAMPLE_RATE),
+                "-c:a",
+                "pcm_s16le",
+                "-map_metadata",
+                "-1",
+                str(denoised_path),
+            ]
+        )
+
+        denoised_frames, _samples = read_wav_samples(denoised_path)
+        denoised_duration = denoised_frames / SAMPLE_RATE
+        fade_start = max(0.0, denoised_duration - FADE_DURATION_SECONDS)
+        tail_filter = (
+            f"afade=t=out:st={fade_start:.9f}:d={FADE_DURATION_SECONDS:.3f},"
+            f"apad=pad_dur={SILENCE_DURATION_SECONDS:.3f}"
+        )
+        run_ffmpeg(
+            [
+                "-i",
+                str(denoised_path),
+                "-af",
+                tail_filter,
+                "-ac",
+                str(CHANNELS),
+                "-ar",
+                str(SAMPLE_RATE),
+                "-c:a",
+                "pcm_s16le",
+                "-map_metadata",
+                "-1",
+                str(cleaned_path),
+            ]
+        )
+
+        validate_wav(cleaned_path)
+        os.replace(cleaned_path, path)
+        temporary_paths.remove(cleaned_path)
     finally:
-        if temporary_path is not None:
+        for temporary_path in temporary_paths:
             temporary_path.unlink(missing_ok=True)
 
 

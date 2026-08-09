@@ -4,6 +4,9 @@ from argparse import ArgumentParser
 from pathlib import Path
 import os
 import re
+import shutil
+import struct
+import subprocess
 import sys
 import wave
 
@@ -18,6 +21,9 @@ OUTPUT_FORMAT = "pcm_24000"
 SAMPLE_RATE = 24_000
 SAMPLE_WIDTH = 2
 CHANNELS = 1
+FADE_OUT_MILLISECONDS = 20
+TRAILING_SILENCE_MILLISECONDS = 150
+DENOISE_FILTER = "afftdn=nr=12:nf=-55:tn=1:gs=5"
 _DAVID_RE = re.compile(r"\bDavid\b", re.IGNORECASE)
 
 VOICE_SETTINGS = VoiceSettings(
@@ -51,22 +57,92 @@ LINES = (
 )
 
 
-def write_wav_safely(path: Path, pcm: bytes) -> None:
-    """Write raw mono PCM to a temporary WAV, then atomically replace the target."""
+def condition_pcm_tail(pcm: bytes) -> bytes:
+    """Fade the final 20 ms to zero and append 150 ms of digital silence."""
     if not pcm:
-        raise ValueError("Cannot write an empty PCM response.")
+        raise ValueError("Cannot condition an empty PCM response.")
     if len(pcm) % SAMPLE_WIDTH:
         raise ValueError("PCM response does not contain complete 16-bit samples.")
 
-    temporary_path = path.with_name(f".{path.name}.tmp")
+    sample_count = len(pcm) // SAMPLE_WIDTH
+    samples = list(struct.unpack(f"<{sample_count}h", pcm))
+    fade_sample_count = min(
+        sample_count,
+        SAMPLE_RATE * FADE_OUT_MILLISECONDS // 1_000,
+    )
+    fade_start = sample_count - fade_sample_count
+    fade_denominator = max(fade_sample_count - 1, 1)
+    for offset in range(fade_sample_count):
+        gain = (fade_sample_count - 1 - offset) / fade_denominator
+        samples[fade_start + offset] = round(samples[fade_start + offset] * gain)
+
+    silence_sample_count = SAMPLE_RATE * TRAILING_SILENCE_MILLISECONDS // 1_000
+    samples.extend([0] * silence_sample_count)
+    return struct.pack(f"<{len(samples)}h", *samples)
+
+
+def write_pcm_wav(path: Path, pcm: bytes) -> None:
+    """Write raw 24 kHz mono 16-bit PCM to a WAV container."""
+    with wave.open(str(path), "wb") as output:
+        output.setnchannels(CHANNELS)
+        output.setsampwidth(SAMPLE_WIDTH)
+        output.setframerate(SAMPLE_RATE)
+        output.writeframes(pcm)
+
+
+def read_pcm_wav(path: Path) -> bytes:
+    """Read a WAV after checking the production audio format."""
+    with wave.open(str(path), "rb") as source:
+        actual = (
+            source.getnchannels(),
+            source.getframerate(),
+            source.getsampwidth(),
+            source.getcomptype(),
+        )
+        expected = (CHANNELS, SAMPLE_RATE, SAMPLE_WIDTH, "NONE")
+        if actual != expected:
+            raise ValueError(f"Unexpected WAV format from FFmpeg: {actual}")
+        return source.readframes(source.getnframes())
+
+
+def write_wav_safely(path: Path, pcm: bytes) -> None:
+    """Denoise and finish raw PCM before atomically replacing the target WAV."""
+    ffmpeg_path = shutil.which("ffmpeg")
+    if not ffmpeg_path:
+        raise RuntimeError("ffmpeg is required for production voice denoising.")
+
+    source_path = path.with_name(f".{path.stem}.source.wav")
+    denoised_path = path.with_name(f".{path.stem}.denoised.wav")
+    temporary_path = path.with_name(f".{path.stem}.finished.wav")
     try:
-        with wave.open(str(temporary_path), "wb") as output:
-            output.setnchannels(CHANNELS)
-            output.setsampwidth(SAMPLE_WIDTH)
-            output.setframerate(SAMPLE_RATE)
-            output.writeframes(pcm)
+        write_pcm_wav(source_path, pcm)
+        subprocess.run(
+            (
+                ffmpeg_path,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(source_path),
+                "-af",
+                DENOISE_FILTER,
+                "-ar",
+                str(SAMPLE_RATE),
+                "-ac",
+                str(CHANNELS),
+                "-c:a",
+                "pcm_s16le",
+                str(denoised_path),
+            ),
+            check=True,
+        )
+        conditioned_pcm = condition_pcm_tail(read_pcm_wav(denoised_path))
+        write_pcm_wav(temporary_path, conditioned_pcm)
         temporary_path.replace(path)
     finally:
+        source_path.unlink(missing_ok=True)
+        denoised_path.unlink(missing_ok=True)
         temporary_path.unlink(missing_ok=True)
 
 

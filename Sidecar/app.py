@@ -670,11 +670,15 @@ async def turn(
             deadline,
         )
 
+        # The officer may lead with one bracketed mood for eleven_v3 to act.
+        # It is split off here: the voice gets it, reply_text does not, because
+        # reply_text is what the game renders as the on-screen subtitle.
+        reply_text, mood = llm.split_mood_tag(reply_text)
+
         pcm, rate, channels, tts_ms = await _await_before_deadline(
             loop.run_in_executor(
                 _vendor_pool,
-                tts.synthesize,
-                reply_text,
+                partial(tts.synthesize, reply_text, mood),
             ),
             deadline,
         )

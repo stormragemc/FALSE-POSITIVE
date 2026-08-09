@@ -54,6 +54,15 @@ namespace FalsePositive.Dialogue
         private Coroutine _noSpeechNudgeRoutine;
         private Suspect _namedSuspect = Suspect.None;
         private bool _p3MemoriesPlayed;
+        // True between EnterLiveDialoguePhase and FinishLiveDialoguePhase. This
+        // component can be disabled and re-enabled DURING a phase:
+        // RequestMemoryInterlude activates a memory scene, SceneRouter deactivates
+        // Interrogation's roots, and this component goes with them. OnDisable
+        // dropped the TurnCompleted subscription and OnEnable only restored
+        // PhaseChanged — so after a mid-phase interlude the controller stopped
+        // counting turns. P3 never reached its cap, the ending was unreachable,
+        // and DetectNamedSuspect never ran again.
+        private bool _liveDialogueActive;
 
         private DialogueManager Dialogue => binder != null ? binder.Dialogue : null;
 
@@ -66,6 +75,10 @@ namespace FalsePositive.Dialogue
         {
             _flow = GameFlowDirector.Instance;
             if (_flow != null) _flow.PhaseChanged += OnPhaseChanged;
+
+            // Re-entering mid-phase after a memory interlude: no PhaseChanged
+            // fires, so nothing else would put the turn subscription back.
+            if (_liveDialogueActive) SubscribeDialogue();
         }
 
         private void OnDisable()
@@ -157,6 +170,7 @@ namespace FalsePositive.Dialogue
         {
             Marks.Reset();
             _currentTurnCap = turnCap;
+            _liveDialogueActive = true;
 
             DialogueManager dialogue = Dialogue;
             if (dialogue == null || _flow == null)
@@ -198,7 +212,7 @@ namespace FalsePositive.Dialogue
             }
 
             dialogue.Resume();
-            dialogue.TurnCompleted += OnTurnCompleted;
+            SubscribeDialogue();
             dialogue.QueueSceneInstruction(BuildSceneInstruction(phasePrompt));
             dialogue.RequestOfficerTurn(null);
 
@@ -294,6 +308,7 @@ namespace FalsePositive.Dialogue
 
         private void FinishLiveDialoguePhase()
         {
+            _liveDialogueActive = false;
             UnsubscribeDialogue();
             PhaseComplete = true;
             GamePhase finishedPhase = _currentPhase;
@@ -410,6 +425,16 @@ namespace FalsePositive.Dialogue
             if (aaron) return Suspect.Aaron;
             if (ivy) return Suspect.Ivy;
             return Suspect.Priya;
+        }
+
+        private void SubscribeDialogue()
+        {
+            DialogueManager dialogue = Dialogue;
+            if (dialogue == null) return;
+            // -= before += so a re-entrant call cannot register twice and
+            // double-count every turn.
+            dialogue.TurnCompleted -= OnTurnCompleted;
+            dialogue.TurnCompleted += OnTurnCompleted;
         }
 
         private void UnsubscribeDialogue()

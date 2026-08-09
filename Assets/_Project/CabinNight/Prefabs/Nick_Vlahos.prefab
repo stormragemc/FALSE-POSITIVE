@@ -86,6 +86,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: FalsePositive.Runtime::FalsePositive.CabinNight.CabinCharacterIdle
   profile: 0
   seed: 0.462
+  useIdleOverrides: 0
+  leanDegreesOverride: 0
+  breathScale: 1
+  headDriftScale: 1
 --- !u!114 &3615933573478490555
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1116,7 +1120,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3742407835892290726, guid: 2baf92eaece0f7d4fb1c13c59fc9e491, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.0000034505877
+      value: 0.000003450588
       objectReference: {fileID: 0}
     - target: {fileID: 3742407835892290726, guid: 2baf92eaece0f7d4fb1c13c59fc9e491, type: 3}
       propertyPath: m_LocalPosition.y
@@ -1136,11 +1140,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3742407835892290726, guid: 2baf92eaece0f7d4fb1c13c59fc9e491, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.00000008195638
+      value: 0.0000000372529
       objectReference: {fileID: 0}
     - target: {fileID: 3742407835892290726, guid: 2baf92eaece0f7d4fb1c13c59fc9e491, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.000000014901159
+      value: 0.0000000372529
       objectReference: {fileID: 0}
     - target: {fileID: 3873747568480624103, guid: 2baf92eaece0f7d4fb1c13c59fc9e491, type: 3}
       propertyPath: m_LocalPosition.y

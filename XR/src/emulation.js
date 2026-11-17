@@ -21,7 +21,10 @@ export async function setupEmulation() {
   const device = new XRDevice(metaQuest3);
   device.position.set(0, 1.2, 0);
   device.primaryInputMode = 'hand';
-  device.installRuntime();
+  // Chrome may expose navigator.xr while reporting no immersive device.
+  // The support check above preserves real headsets; this explicit QA path
+  // must replace that unsupported stub rather than silently doing nothing.
+  device.installRuntime({ forceInstall: true });
   developerControls = new DevUI(device);
   emulatedDevice = device;
   document.documentElement.dataset.xrEmulated = 'true';

@@ -62,8 +62,8 @@ export class CinematicPresentation {
     this.pillow.quaternion.copy(sofa.getWorldQuaternion(new Quaternion())).multiply(this.pillowLocalRotation);
     if(this.pillow.parent)this.pillow.quaternion.premultiply(this.pillow.parent.getWorldQuaternion(new Quaternion()).invert());
     this.place('aaron',[-1.5,0,-2.9],'guarded',.35);
-    this.place('priya',[1.5,0,-2.9],'guarded',-.35);
-    this.place('ivy',[.45,0,-3.0],'guarded',-.15);
+    this.place('priya',[1.55,0,-2.05],'standing',-.35);
+    this.place('ivy',[.45,0,-3.0],'standing',-.15);
    }
   }
   if(stage==='good-years'){

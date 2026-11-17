@@ -12,16 +12,15 @@ export async function GET() {
     const base = env.SIDECAR_BASE_URL.replace(/\/$/, '');
     // OpenAPI is deliberately disabled on this backend. A GET method-only probe
     // passes its auth middleware without running an LLM turn or changing a
-    // session. Existing POST route => 405/Allow:POST; missing route => 404.
+    // session. Wrong keys are rejected by middleware with 401. The known
+    // POST-only route returns 405 on GET; the host may strip Allow headers.
     const response = await fetch(`${base}/session/reset`, {
       method: 'GET',
       headers: { 'X-FP-Client-Key': key },
       cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     });
-    const allowed = (response.headers.get('allow') || '').split(',').map(value => value.trim().toUpperCase());
-    console.info('[ready] upstream status', response.status, 'allow', allowed.join(','));
-    return Response.json({ ready: response.status === 405 && allowed.includes('POST') }, { headers });
+    return Response.json({ ready: response.status === 405 }, { headers });
   } catch {
     return Response.json({ ready: false }, { headers });
   }

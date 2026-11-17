@@ -42,9 +42,10 @@ export function cabinRoom(){
  box(g,'Snow outside window',[1.22,1.22,.03],[-1.9,1.7,-3.12],snow);
  box(g,'Window crossbar',[.035,1.25,.04],[-1.9,1.7,-3.08],dark);
  box(g,'Window crossbar',[1.25,.035,.04],[-1.9,1.7,-3.08],dark);
+ const cups=new Group();cups.name='Cabin cups';g.add(cups);
  for(let i=0;i<5;i++){
-  const x=-.5+i*.24;const cup=cyl(g,'Cup '+(i+1),.047,.1,[x,.805,-1],mat('#bab7aa'),20);
-  const rim=new Mesh(new TorusGeometry(.043,.004,6,20),steel);rim.rotation.x=Math.PI/2;rim.position.set(x,.857,-1);g.add(rim);
+  const x=-.5+i*.24;const cup=cyl(cups,'Cup '+(i+1),.047,.1,[x,.805,-1],mat('#bab7aa'),20);
+  const rim=new Mesh(new TorusGeometry(.043,.004,6,20),steel);rim.rotation.x=Math.PI/2;rim.position.set(x,.857,-1);cups.add(rim);
  }
  return g;
 }
@@ -77,11 +78,14 @@ export function radio(){
 export function key(){const g=new Group();g.name='Cabin key';const r=new Mesh(new TorusGeometry(.025,.006,8,20),steel);g.add(r);box(g,'Key shaft',[.012,.09,.012],[0,-.06,0],steel);box(g,'Key tooth',[.025,.012,.012],[.008,-.097,0],steel);return g;}
 export function memoryDoor(){
  const g=new Group();g.name='Cabin door fragment';
- box(g,'Door frame',[.83,2.1,.09],[0,1.05,0],wood);
- box(g,'Door slab',[.72,1.95,.11],[0,1.02,.05],mat('#463b2e'));
- for(const y of [.53,1.48])box(g,'Raised door panel',[.51,.64,.035],[0,y,.12],wood);
- const h=cyl(g,'Door latch',.028,.15,[-.24,.94,.18],steel);h.rotation.z=Math.PI/2;
- box(g,'Key plate',[.045,.11,.015],[-.26,.84,.12],steel);return g;
+ for(const x of [-.4,.4])box(g,'Door jamb',[.085,2.1,.13],[x,1.05,0],wood);
+ box(g,'Door lintel',[.88,.085,.13],[0,2.08,0],wood);
+ box(g,'Storm through doorway',[.73,1.98,.025],[0,1.02,.005],new MeshBasicMaterial({color:'#6e8b99'}));
+ const leaf=new Group();leaf.name='Door hinge';leaf.position.set(-.36,0,.075);g.add(leaf);
+ box(leaf,'Door slab',[.72,1.95,.09],[.36,1.02,0],mat('#463b2e'));
+ for(const y of [.53,1.48])box(leaf,'Raised door panel',[.51,.64,.035],[.36,y,.07],wood);
+ const h=cyl(leaf,'Door latch',.028,.15,[.60,.94,.13],steel);h.rotation.z=Math.PI/2;
+ box(leaf,'Key plate',[.045,.11,.015],[.6,.84,.07],steel);return g;
 }
 export function sofa(){
  const g=new Group();g.name='Cabin sofa';const fabric=mat('#414b42');

@@ -91,7 +91,9 @@ export function setupCastActor(root, { pose = 'standing', role = '', seatHeight 
           const reach = upper.getWorldPosition(new Vector3()).distanceTo(lower.getWorldPosition(new Vector3()))
             + lower.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3()));
           let handY = shoulder.y - reach * 0.95, handZ = 0.04, handX = sign * Math.max(0.20, Math.abs(shoulder.x) + 0.035);
-          if (nextPose === 'carry') { handY = hipHeight + 0.23; handZ = 0.40; handX = sign * 0.22; }
+          // The carry holds Nick beneath both ankles. Close palms match the
+          // actual lying rig's ~0.20m ankle separation, at waist height.
+          if (nextPose === 'carry') { handY = hipHeight + 0.10; handZ = 0.40; handX = sign * 0.105; }
           if (nextPose === 'guarded') { handY = hipHeight + 0.18; handZ = 0.18; handX = sign * 0.12; }
           if (nextPose === 'toast' && side === 'Right') { handY = hipHeight + 0.48; handZ = 0.28; handX = -0.30; }
           arm(side, handX, handY, handZ, sign * 0.65, hipHeight + 0.25, -0.12);

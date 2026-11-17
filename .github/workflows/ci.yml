@@ -59,6 +59,9 @@ jobs:
           node-version: "24"
       - name: Check browser speech and server gateway contracts
         run: node --test tests/test_browser_speech.mjs tests/test_vercel_proxy.mjs
+      - name: Check XR case completion and cinematic recovery
+        run: node --test XR/test/*.test.mjs
+        working-directory: ${{ github.workspace }}
 
       # No secrets and no credentials: the suite stubs every vendor client and
       # never loads the HuBERT weights, so this also runs on forked PRs.

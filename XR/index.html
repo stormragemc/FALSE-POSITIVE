@@ -3,7 +3,7 @@
 <body>
 <div id="scene-container" aria-label="Three-dimensional interrogation room"></div>
 <div id="loading"><p id="load-status">Preparing the interrogation room…</p><button id="retry" hidden onclick="location.reload()">Reload scene</button></div>
-<header><a class="wordmark" href="./">FALSE POSITIVE</a><div><span id="mode-badge">Scripted experience</span></div></header>
+<header><a class="wordmark" href="./">FALSE POSITIVE</a><div><span id="mode-badge">Scripted experience</span><button id="xr">Enter VR</button></div></header>
 <main>
 <section id="welcome"><h1>Every fact<br>against you<br>is real.</h1><p class="intro">None of them mean<br>what they look like.</p><button id="begin" class="primary">Take your seat</button><p class="instructions">Stay seated. Pinch to select. Speak, or write your testimony.<br>Headphones recommended.</p></section>
 <section id="game-hud" hidden aria-live="polite"><h2 id="title"></h2><p id="caption"></p><p id="objective"></p><div class="actions"><button id="primary" class="primary">Continue</button><button id="secondary">Open latch</button><button id="inspect">Notice details</button><button id="write">Write statement</button><button id="speak">Speak</button></div><div id="statement-form" hidden><label for="statement">Your statement</label><textarea id="statement" maxlength="2000" placeholder="Tell Spassky what you remember…"></textarea><button id="send" class="primary">Send statement</button></div><p id="feedback" role="status"></p></section>

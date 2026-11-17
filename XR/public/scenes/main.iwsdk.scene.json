@@ -1,0 +1,330 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "DomeGradient": {
+      "sky": [
+        0.03,
+        0.045,
+        0.05,
+        1
+      ],
+      "equator": [
+        0.025,
+        0.035,
+        0.04,
+        1
+      ],
+      "ground": [
+        0.02,
+        0.025,
+        0.03,
+        1
+      ]
+    },
+    "IBLGradient": {
+      "sky": [
+        0.45,
+        0.5,
+        0.52,
+        1
+      ],
+      "equator": [
+        0.3,
+        0.32,
+        0.33,
+        1
+      ],
+      "ground": [
+        0.1,
+        0.12,
+        0.13,
+        1
+      ],
+      "intensity": 0.3
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1.25,
+    "shadows": true,
+    "shadowMapType": "pcf"
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "room",
+      "name": "room",
+      "content": {
+        "type": "asset",
+        "asset": "room"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "cabin",
+      "name": "cabin",
+      "content": {
+        "type": "asset",
+        "asset": "cabin"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "desk",
+      "name": "desk",
+      "content": {
+        "type": "asset",
+        "asset": "desk"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -0.9
+        ]
+      }
+    },
+    {
+      "id": "chair",
+      "name": "chair",
+      "content": {
+        "type": "asset",
+        "asset": "chair"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -1.6
+        ]
+      }
+    },
+    {
+      "id": "officer",
+      "name": "officer",
+      "content": {
+        "type": "asset",
+        "asset": "officer"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -1.5
+        ]
+      }
+    },
+    {
+      "id": "photo",
+      "name": "photo",
+      "content": {
+        "type": "asset",
+        "asset": "photo"
+      },
+      "transform": {
+        "position": [
+          -0.4,
+          0.84,
+          -0.55
+        ],
+        "rotationDeg": [
+          -65,
+          0,
+          0
+        ]
+      },
+      "components": {
+        "OneHandGrabbable": {},
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "radio",
+      "name": "radio",
+      "content": {
+        "type": "asset",
+        "asset": "radio"
+      },
+      "transform": {
+        "position": [
+          0.28,
+          0.78,
+          -0.8
+        ]
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "key",
+      "name": "key",
+      "content": {
+        "type": "asset",
+        "asset": "key"
+      },
+      "transform": {
+        "position": [
+          -0.34,
+          0.84,
+          -0.6
+        ],
+        "rotationDeg": [
+          0,
+          0,
+          45
+        ]
+      },
+      "components": {
+        "OneHandGrabbable": {},
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "memory-door",
+      "name": "memory-door",
+      "content": {
+        "type": "asset",
+        "asset": "door"
+      },
+      "transform": {
+        "position": [
+          0.74,
+          0,
+          -1.35
+        ],
+        "rotationDeg": [
+          0,
+          -20,
+          0
+        ]
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "controls",
+      "name": "controls",
+      "content": {
+        "type": "asset",
+        "asset": "controls"
+      },
+      "transform": {
+        "position": [
+          0,
+          0.84,
+          -0.67
+        ],
+        "rotationDeg": [
+          -15,
+          0,
+          0
+        ]
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "keyboard",
+      "name": "keyboard",
+      "content": {
+        "type": "asset",
+        "asset": "keyboard"
+      },
+      "transform": {
+        "position": [
+          0,
+          0.9,
+          -0.67
+        ],
+        "rotationDeg": [
+          -20,
+          0,
+          0
+        ]
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "ceiling-light",
+      "transform": {
+        "position": [
+          0,
+          2.42,
+          -0.85
+        ]
+      },
+      "components": {
+        "PointLight": {
+          "color": [
+            1,
+            0.87,
+            0.66,
+            1
+          ],
+          "intensity": 9,
+          "distance": 7,
+          "decay": 2,
+          "castShadow": true
+        }
+      }
+    },
+    {
+      "id": "fill-light",
+      "components": {
+        "HemisphereLight": {
+          "skyColor": [
+            0.65,
+            0.77,
+            0.82,
+            1
+          ],
+          "groundColor": [
+            0.19,
+            0.2,
+            0.2,
+            1
+          ],
+          "intensity": 1.2
+        }
+      }
+    }
+  ],
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.2,
+          0
+        ],
+        "target": [
+          0,
+          1.1,
+          -1.5
+        ],
+        "fov": 64
+      }
+    ]
+  }
+}

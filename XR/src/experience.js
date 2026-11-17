@@ -1,0 +1,64 @@
+import { createSystem, Pressed, Grabbed, VisibilityState } from '@iwsdk/core';
+import { createGame, transition, submitStatement, getView } from './game.js';
+import { setupOfficer } from './officer.js';
+import { createVoiceEngine } from './voice.js';
+
+export class Experience extends createSystem({pressed:{required:[Pressed]},held:{required:[Grabbed]}}){
+ init(){
+  this.state=createGame();this.draft='';this.writing=false;this.busy=false;this.recording=false;this.talking=false;this.audioLevel=0;this.error='';this.clock=0;
+  this.ui=this.world.requireSceneObject('controls');this.keyboard=this.world.requireSceneObject('keyboard');
+  this.objects=Object.fromEntries(['room','cabin','officer','chair','radio','key','photo','memory-door','controls','keyboard'].map(id=>[id,this.world.requireSceneObject(id)]));
+  this.actor=setupOfficer(this.objects.officer);
+  this.voice=createVoiceEngine({audioBase:'/media/audio/spassky/',onStatus:(s)=>{this.message=s==='processing'?"Preparing Spassky's reply...":s==='recording'?'Microphone active. Finish speaking to submit.':'';this.render();},onLevel:l=>{this.audioLevel=l;},onSpeaking:s=>{this.talking=s;}});
+  const listen=(el,event,fn)=>{el?.addEventListener(event,fn);this.cleanupFuncs.push(()=>el?.removeEventListener(event,fn));};
+  const bind=(id,fn)=>listen(this.ui.getElementById(id),'click',fn);
+  bind('act-primary',()=>this.primary());bind('act-secondary',()=>this.secondary());bind('act-tertiary',()=>this.inspect());
+  bind('act-write',()=>this.write());bind('act-mic',()=>this.mic());bind('act-reset',()=>this.reset());bind('act-pause',()=>this.pause());
+  for(const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')listen(this.keyboard.getElementById(`key-${c}`),'click',()=>this.key(c.toLowerCase()));
+  for(const [id,value]of [['period','.'],['comma',','],['question','?'],['space',' ']])listen(this.keyboard.getElementById(`key-${id}`),'click',()=>this.key(value));
+  listen(this.keyboard.getElementById('key-back'),'click',()=>{this.draft=this.draft.slice(0,-1);this.render();});
+  listen(this.keyboard.getElementById('key-cancel'),'click',()=>{this.writing=false;this.render();});
+  listen(this.keyboard.getElementById('key-send'),'click',()=>this.submit());
+  for(const [id,fn]of [['begin',()=>this.primary()],['primary',()=>this.primary()],['secondary',()=>this.secondary()],['inspect',()=>this.inspect()],['write',()=>this.write()],['speak',()=>this.mic()],['pause',()=>this.pause()],['reset',()=>this.reset()],['xr',()=>this.enterXR()],['send',()=>this.submit()]])listen(document.getElementById(id),'click',fn);
+  listen(document.getElementById('statement'),'input',e=>{this.draft=e.target.value;this.renderSpatial();});
+  listen(document.getElementById('mode'),'change',e=>{if(e.target.value==='live'&&!this.liveReady){e.target.value=this.state.mode;this.error='Live AI needs its server connection. Scripted rehearsal remains available.';this.render();return;}this.dispatch({type:'SET_MODE',mode:e.target.value});});
+  const onPressed=entity=>{const id=entity.object3D?.name;if(id==='radio')this.tune();if(id==='memory-door')this.secondary();if(id==='key')this.dispatch({type:'TAKE_KEY'});if(id==='photo')this.dispatch({type:'OBSERVE',id:'photo'});};
+  this.cleanupFuncs.push(this.queries.pressed.subscribe('qualify',onPressed));
+  this.cleanupFuncs.push(this.queries.held.subscribe('qualify',entity=>{if(entity.object3D?.name==='key')this.dispatch({type:'TAKE_KEY'});if(entity.object3D?.name==='photo')this.dispatch({type:'OBSERVE',id:'photo'});}));
+  this.cleanupFuncs.push(this.world.visibilityState.subscribe(s=>{document.documentElement.dataset.immersive=s===VisibilityState.NonImmersive?'false':'true';if(s===VisibilityState.VisibleBlurred&&this.state.phase!=='menu'){this.state=transition(this.state,{type:'PAUSE'});this.voice.stopSpeaking();this.render();}}));
+  this.cleanupFuncs.push(()=>{this.voice.dispose();this.actor.restore();});
+  this.render();this.checkConnection();
+ }
+ dispatch(action){if(this.busy&&action.type!=='PAUSE')return;const previous=this.state;this.state=transition(this.state,action);this.error='';this.message='';this.render();if(this.state.phase!==previous.phase){this.voice.stopSpeaking();if(['recall','verdict','ending'].includes(this.state.phase))this.voice.speak(this.state.lastReply);}}
+ primary(){if(this.state.paused){this.pause();return;}if(this.state.phase==='menu'){this.voice.speak(this.state.lastReply);this.dispatch({type:'START'});return;}if(this.state.phase==='ending'){this.reset();return;}if(this.state.phase==='night'&&!this.state.radioTuned){this.tune();return;}if(this.state.phase==='morning'&&!this.state.morningDoorUnlocked){this.secondary();return;}if(getView(this.state).continueAvailable)this.dispatch({type:'CONTINUE'});else this.write();}
+ secondary(){if(this.state.paused||this.busy)return;if(this.state.phase==='menu'){this.enterXR();return;}if(this.state.phase==='night'){this.dispatch({type:'OPEN_NIGHT_DOOR'});return;}if(this.state.phase==='morning'){this.dispatch({type:!this.state.morningDoorTried?'TRY_MORNING_DOOR':!this.state.keyTaken?'TAKE_KEY':'UNLOCK_DOOR'});return;}this.write();}
+ tune(){this.dispatch({type:'TUNE_RADIO',value:Math.min(1,this.state.radio+.1)});}
+ inspect(){const sets={night:['clock','cups','coat'],morning:['glass','grille','body'],verdict:['photo']};const choices=sets[this.state.phase]||[];const id=choices.find(x=>!this.state.observations.includes(x))||choices[0];if(id)this.dispatch({type:'OBSERVE',id});}
+ key(char){if(this.draft.length<2000)this.draft+=char;this.render();}
+ write(){if(!getView(this.state).canSubmit||this.busy)return;this.writing=!this.writing;this.render();if(document.documentElement.dataset.immersive!=='true')document.querySelector('#statement').focus();}
+ async submit(recording){
+  if(this.busy||!getView(this.state).canSubmit)return;const text=this.draft.trim();if(!recording&&!text){this.error='Write a statement first.';this.render();return;}
+  const phase=this.state.phase;this.busy=true;this.error='';this.message=this.state.mode==='live'?'Spassky is considering your statement...':'Preparing the authored response...';this.render();
+  try{
+   let payload=null;let actual=text;
+   if(this.state.mode==='live'){payload=recording?await this.voice.submitAudio(recording,getView(this.state).purpose):await this.voice.submitText(text,getView(this.state).purpose);actual=payload.transcript||text;if(!payload.reply_text)throw new Error('The AI returned no response. Retry or use scripted rehearsal.');}
+   else if(recording){actual=recording.transcript||'';if(!actual)throw new Error('Speech transcription is unavailable. Use Write statement to continue.');}
+   if(this.state.phase!==phase)return;
+   this.state=submitStatement(this.state,actual,{reply:payload?.reply_text,input:recording?'voice':'text',affect:payload?.prosody,unsupportedDetails:payload?.fabrications});
+   this.draft='';this.writing=false;this.message='';await this.voice.speak(this.state.lastReply,payload);
+  }catch(e){this.error=e.message;this.message='';}finally{this.busy=false;this.render();}
+ }
+ async mic(){if(!getView(this.state).canSubmit||this.busy)return;try{if(this.recording){this.recording=false;const take=await this.voice.stopRecording();await this.submit(take);}else{await this.voice.startRecording();this.recording=true;}}catch(e){this.error=e.message;this.recording=false;}this.render();}
+ pause(){this.state=transition(this.state,{type:this.state.paused?'RESUME':'PAUSE'});this.voice.stopSpeaking();this.render();}
+ reset(){this.voice.stopSpeaking();this.voice.resetSession().catch(()=>{});this.state=transition(this.state,{type:'RESET'});this.draft='';this.error='';this.writing=false;this.busy=false;this.render();}
+ async enterXR(){try{await this.world.launchXR();}catch(e){this.error='VR could not start. Use a compatible headset browser, or open the desktop emulator link.';this.render();}}
+ async checkConnection(){let ok=false;try{const response=await fetch('/api/ready');const data=await response.json();ok=response.ok&&data.ready===true;}catch{}this.liveReady=ok;document.querySelector('#live-option').disabled=!ok;document.querySelector('#connection').textContent=ok?'Live AI available':'Live AI awaiting server connection. Scripted rehearsal is playable.';this.render();}
+ labels(){const v=getView(this.state);let primary=v.continueLabel,secondary='Write statement';if(this.state.phase==='menu'){primary='Begin case';secondary='Enter VR';}if(this.state.phase==='night'){primary=this.state.radioTuned?'Return to Spassky':`Tune radio / ${Math.round(this.state.radio*100)}`;secondary='Open latch';}if(this.state.phase==='morning'){primary=this.state.morningDoorUnlocked?v.continueLabel:'Open the door';secondary=!this.state.morningDoorTried?'Try door':!this.state.keyTaken?'Take key':'Unlock door';}if(this.state.phase==='ending')primary='Play again';if(this.state.paused)primary='Resume';return{primary,secondary};}
+ renderSpatial(){const v=getView(this.state),l=this.labels();const set=(id,text)=>this.ui.getElementById(id)?.setProperties({text});set('phase-title',v.heading);set('officer-line',this.error||this.message||this.state.notice||v.officer||v.objective);set('objective',v.objective);set('primary-label',l.primary);set('secondary-label',l.secondary);set('tertiary-label','Notice details');set('mic-label',this.recording?'Finish speaking':'Speak');set('pause-label',this.state.paused?'Resume':'Pause');set('mode-status',`${v.modeLabel}${v.mode==='scripted'?' / fixed authored dialogue':''}${this.recording?' / microphone active':''}`);this.keyboard.getElementById('draft-text')?.setProperties({text:this.draft.slice(-180)||'Write what you remember. Pinch letters, then Send.'});}
+ render(){
+  const v=getView(this.state),memory=v.scene!=='interrogation',l=this.labels();document.documentElement.dataset.phase=this.state.phase;document.documentElement.dataset.mode=this.state.mode;
+  this.objects.room.visible=!memory;this.objects.cabin.visible=memory;this.objects.officer.visible=!memory;this.objects.chair.visible=!memory;this.objects.radio.visible=this.state.phase==='night';this.objects.key.visible=this.state.phase==='morning'&&!this.state.keyTaken;this.objects['memory-door'].visible=memory;this.objects.photo.visible=this.state.phase==='verdict';this.objects.controls.visible=!this.writing;this.objects.keyboard.visible=this.writing;
+  this.renderSpatial();document.querySelector('#title').textContent=v.heading;document.querySelector('#caption').textContent=this.state.notice||v.officer||v.objective;document.querySelector('#objective').textContent=v.objective;document.querySelector('#feedback').textContent=this.error||this.message||'';document.querySelector('#mode-badge').textContent=v.modeLabel;document.querySelector('#primary').textContent=l.primary;document.querySelector('#secondary').textContent=l.secondary;document.querySelector('#pause').textContent=this.state.paused?'Resume':'Pause';document.querySelector('#speak').textContent=this.recording?'Finish speaking':'Speak';document.querySelector('#statement').value=this.draft;document.querySelector('#statement-form').hidden=!this.writing;document.querySelector('#welcome').hidden=this.state.phase!=='menu';document.querySelector('#game-hud').hidden=this.state.phase==='menu';document.querySelector('#inspect').hidden=!memory&&this.state.phase!=='verdict';document.querySelector('#write').hidden=!v.canSubmit;document.querySelector('#speak').hidden=!v.canSubmit;document.querySelector('#mode').value=this.state.mode;
+ }
+ update(delta,time){this.clock+=delta;this.actor?.update(this.talking,delta,time||this.clock,this.audioLevel);}
+}

@@ -1,0 +1,28 @@
+<style>
+.root { width: 84; flex-direction: column; background-color: #182226; border-radius: 1; padding: 2.4; gap: 1.5; }
+.heading { font-size: 3; font-weight: 700; color: #f1e9d5; }
+.body { font-size: 2.5; color: #e3e5e0; }
+.status { font-size: 1.8; color: #b7c9cb; }
+.row { flex-direction: row; gap: 1.2; }
+.action { height: 6; flex-grow: 1; background-color: #d6c69c; color: #162125; border-radius: .7; justify-content: center; align-items: center; padding-left: 1.5; padding-right: 1.5; }
+.secondary { background-color: #34494d; color: #f0eee4; }
+.label { font-size: 2; color: #f0eee4; }
+.primary-label { font-size: 2.2; color: #162125; font-weight: 700; }
+</style>
+<div class="root">
+ <div id="phase-title" class="heading">FALSE POSITIVE</div>
+ <div id="officer-line" class="body">The detective can hear your fear. He cannot tell why you are afraid.</div>
+ <div id="objective" class="status">A seated mystery. Pinch to select. No controllers required.</div>
+ <div class="row">
+  <button id="act-primary" class="action"><div id="primary-label" class="primary-label">Begin</div></button>
+  <button id="act-secondary" class="action secondary"><div id="secondary-label" class="label">Enter VR</div></button>
+  <button id="act-tertiary" class="action secondary"><div id="tertiary-label" class="label">Inspect</div></button>
+ </div>
+ <div class="row">
+  <button id="act-write" class="action secondary"><div class="label">Write statement</div></button>
+  <button id="act-mic" class="action secondary"><div id="mic-label" class="label">Speak</div></button>
+  <button id="act-pause" class="action secondary"><div id="pause-label" class="label">Pause</div></button>
+  <button id="act-reset" class="action secondary"><div class="label">Restart</div></button>
+ </div>
+ <div id="mode-status" class="status">Scripted rehearsal / voice affect is unavailable.</div>
+</div>

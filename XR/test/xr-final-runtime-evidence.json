@@ -1,0 +1,72 @@
+{
+  "observed_at": "2026-11-17",
+  "scope": "Actual FALSE POSITIVE app in an emulated immersive hand session through the first spatial-keyboard submission. Partial hand-only playthrough, not physical-device validation.",
+  "source_base_commit": "b6d3541d79de4ed4c7f07462e13370113bc300d2",
+  "final_pose_matches_commit": "43072c873bce292e6dab3e91f8b64bfba9a5f6b1",
+  "environment": {
+    "provider": "Vercel Sandbox",
+    "vcpus": 4,
+    "memory_mb": 8192,
+    "node": "Node 22 universal image",
+    "iwsdk": "1.1.0",
+    "browser": "Playwright Chromium 159.0.8154.6",
+    "renderer": "Headless software rendering",
+    "device": "IWER Meta Quest 3",
+    "headset_position": [0, 1.2, 0],
+    "headset_orientation": [0, 0, 0, 1],
+    "session_mode": "immersive-vr",
+    "enabled_features": ["hand-tracking", "local-floor", "bounded-floor", "viewer", "local"],
+    "physical_headset": false
+  },
+  "fixture_changes": [
+    "Set world.xr.offer to once, then always in the isolated copy, because official xr enter requires an offered session. Production custom Enter VR entry was checked separately by root in the browser.",
+    "Controls were first tested at z=-0.65, where fixed-body seated input exceeded the harness reach cap. The isolated controls pose was then changed to match the later final production pose recorded below.",
+    "No product game logic, testimony, or phase state was injected. Public Git source and 75 required LFS objects were used; hydrated files passed declared length and SHA256 checks.",
+    "No private account data or paid AI calls were used."
+  ],
+  "controls": {
+    "position": [0, 0.99, -0.60],
+    "rotation_deg": [-10, 0, 0],
+    "scale": [0.75, 0.75, 0.75],
+    "input": {"device": "hand-left", "body": "fixed", "gaze": "fixed", "duration_seconds": 0.05, "press": {"hold": 0, "retract": 0.05}},
+    "successful_begin_contact_ms": 257.4,
+    "successful_begin_result": "phase-title changed from FALSE POSITIVE to The interview",
+    "progression": [
+      {"before": "Tune radio / 20", "after": "Tune radio / 30", "contact_ms": 275.9},
+      {"before": "Tune radio / 30", "after": "Tune radio / 40", "contact_ms": 249.4},
+      {"before": "Tune radio / 40", "after": "Skip scene", "contact_ms": 251.1},
+      {"before": "Skip scene", "after": "Open latch", "contact_ms": 250},
+      {"before": "Open latch", "after": "Skip scene", "contact_ms": 250.5},
+      {"before": "Skip scene", "after": "Return to Spassky", "contact_ms": 223.1},
+      {"before": "Return to Spassky", "after": "Write statement", "contact_ms": 255.2}
+    ]
+  },
+  "keyboard": {
+    "position": [0, 1, -0.52],
+    "rotation_deg": [-10, 0, 0],
+    "open": {"device": "hand-left", "target": "act-primary", "contact_ms": 268.7, "result": "Writing opened and the draft placeholder became visible."},
+    "letter": {"device": "hand-left", "body": "fixed", "target": "key-A", "contact_ms": 272.9, "index_tip_target": [-0.2965307534, 0.9853585362, -0.4666469395], "before": "Write what you remember. Pinch letters, then Send.", "after": "a"},
+    "send": {"device": "hand-right", "body": "fixed", "target": "key-send", "contact_ms": 272, "index_tip_target": [0.0924692526, 0.8376373649, -0.4405997396], "result": "Draft cleared to placeholder, keyboard became hidden, required recall statements changed from 2 to 1, and Spassky's line changed."},
+    "officer_line_after": "Tell me about the argument with Nick. What was it really about?",
+    "reach": "Final successful fixed-body Begin, key-A and Send sequences passed the SDK 0.72m index-tip-to-shoulder check without a reach error. Exact successful shoulder-distance values were not returned.",
+    "sampled_nonactivations": [
+      {"target": "act-primary", "contact_ms": 333.9, "result": "The first short touch did not change state; a focused retry at 257.4ms activated Begin."},
+      {"target": "key-send", "contact_ms": 277, "result": "The first right-hand short touch did not change state; a focused retry at 272ms submitted the draft."}
+    ],
+    "trajectory_warning": "The automated key-A hand path crossed the keyboard/draft surface. The actual draft updated correctly; this alone is not evidence of a native tracking defect."
+  },
+  "not_verified": [
+    "Complete hand-only playthrough through morning, verdict and an ending",
+    "Every keyboard key, correction key and punctuation key",
+    "Real-headset frame rate, tracking, microphone behavior and comfort",
+    "Authenticated live AI through the website gateway",
+    "Auditory voice quality",
+    "A visually inspected final runtime capture in this isolated test"
+  ],
+  "notes": [
+    "Successful interactions used real emulated index-fingertip presses through official IWSDK CLI commands.",
+    "The one-letter statement deliberately tests input and submission, not narrative quality.",
+    "Some earlier software-rendered contacts exceeded UIKit's 800ms click window; those were not counted as successful progression.",
+    "All hand buttons were released after the sequences."
+  ]
+}

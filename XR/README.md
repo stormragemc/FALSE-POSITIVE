@@ -46,3 +46,5 @@ The Cloud Run backend uses Google Speech-to-Text V2 and, by default, Gemini 2.5 
 ## Verification limits
 
 The recorded runtime evidence in test/xr-runtime-evidence.json concerns an earlier source revision and is explicitly scoped. It proves immersive hand-session initialization and an initial spatial poke, plus a separate grab/carry/release probe. It does not prove a complete hands-only playthrough, Quest frame rate, microphone behavior or physical comfort. Those require a real headset test. Desktop end-to-end testing and state/cinematic integration tests are separate checks.
+
+The later `test/xr-final-runtime-evidence.json` records actual emulated fingertip inputs through the radio, latch and first hand-keyboard letter/submission at the final seated pose. It documents the isolated entry fixture, retries and remaining limits. This is a partial hand-only playthrough.

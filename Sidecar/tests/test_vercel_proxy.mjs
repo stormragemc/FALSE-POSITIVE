@@ -249,3 +249,16 @@ test("statement proxy rejects malformed multipart and forwards terminal budgets"
   assert.equal((await response.json()).session_ended, true);
   assert.ok(cookieValue(response));
 });
+
+test("serialized multipart context and multiline testimony pass backend control-character rules", async () => {
+  for (const purpose of ["p2", "p3"]) {
+    const response = await handleStatement(statementRequest({ purpose, statement: "I left the door unlocked.\nThen I slept.\r\nI am unsure." }), ENV, async (url, options) => {
+      const wire = new Request(url, { method: "POST", body: options.body });
+      const decoded = await wire.formData();
+      for (const name of ["scene_instruction", "statement"]) assert.doesNotMatch(decoded.get(name), /[\x00-\x08\x0B-\x1F]/);
+      assert.equal(decoded.get("statement"), "I left the door unlocked. Then I slept. I am unsure.");
+      return Response.json({ ok: true });
+    });
+    assert.equal(response.status, 200);
+  }
+});

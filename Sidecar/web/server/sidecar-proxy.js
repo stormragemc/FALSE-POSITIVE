@@ -13,12 +13,12 @@ export const SCENE_INSTRUCTIONS = Object.freeze({
     "PHASE: P2_RECALL. Ask what David remembers about the night.",
     "Cover drinking by the fire, the argument, Nick leaving, the door, the lock, the blackout, and the morning.",
     "Treat emotion as pressure, never proof. Do not say the witness is lying.",
-  ].join("\n"),
+  ].join(" "),
   p3: [
     "PHASE: P3_VERDICT. David must defend himself and name Aaron, Ivy, or Priya.",
     "Ask for reasoning grounded in observed clues. Do not reveal the ground truth.",
     "Treat affect as pressure, never proof of guilt or deception.",
-  ].join("\n"),
+  ].join(" "),
 });
 
 function json(payload, status = 200, extraHeaders = {}) {
@@ -307,7 +307,7 @@ export async function handleStatement(request, env = process.env, fetchImpl = fe
   const { sessionId, token } = requestSession(request, config.signingSecret);
   const outgoing = new FormData();
   outgoing.append("session_id", sessionId);
-  outgoing.append("statement", statement);
+  outgoing.append("statement", statement.replace(/\r\n?|\n/g, " "));
   outgoing.append("scene_instruction", SCENE_INSTRUCTIONS[purpose]);
   try {
     const upstream = await upstreamFetch(fetchImpl, `${config.baseUrl}/statement`, {

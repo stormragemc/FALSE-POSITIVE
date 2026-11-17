@@ -157,3 +157,72 @@ test('text requests send only purpose and statement through the same-origin gate
   assert.equal(reply.reply_text, 'What happened next?');
   await assert.rejects(() => voice.submitText('hello', 'night'), /not accepting/);
 });
+
+test('uncertainty always reaches an ending within the phase turn caps, in either mode', () => {
+  for (const mode of ['scripted', 'live']) {
+    let state = transition(recall(), { type: 'SET_MODE', mode });
+    const meta = mode === 'live' ? { reply: 'What else can you remember?' } : {};
+    assert.equal(transition(state, { type: 'CONTINUE' }).phase, 'recall');
+    for (let i = 0; i < 4; i++) state = submitStatement(state, 'I do not remember. I cannot say for sure.', meta);
+    assert.equal(getView(state).canSubmit, false);
+    assert.equal(getView(state).continueAvailable, true);
+    assert.equal(getView(state).turnsRemaining, 0);
+    assert.match(getView(state).objective, /complete/);
+    state = transition(state, { type: 'CONTINUE' });
+    state = transition(state, { type: 'TRY_MORNING_DOOR' });
+    state = transition(state, { type: 'TAKE_KEY' });
+    state = transition(state, { type: 'UNLOCK_DOOR' });
+    state = transition(state, { type: 'CONTINUE' });
+    for (let i = 0; i < 4; i++) state = submitStatement(state, 'Maybe Aaron or Ivy. I do not know.', meta);
+    assert.equal(getView(state).canSubmit, false);
+    assert.equal(getView(state).continueAvailable, true);
+    assert.match(getView(state).objective, /finish your statement now/);
+    state = transition(state, { type: 'CONTINUE' });
+    assert.equal(state.phase, 'ending');
+    assert.equal(state.ending.id, 'E_DAVID');
+  }
+});
+
+test('two uncertain verdict statements permit finishing without guessing a suspect', () => {
+  let state = submitStatement(verdict(), 'I do not know who did it.');
+  assert.equal(getView(state).continueAvailable, false);
+  state = submitStatement(state, 'I am not prepared to accuse someone.');
+  assert.equal(getView(state).continueAvailable, true);
+  state = transition(state, { type: 'CONTINUE' });
+  assert.equal(state.phase, 'ending');
+  assert.equal(state.ending.id, 'E_DAVID');
+});
+
+test('failed AI replies can recover through labelled scripted mode without resetting memories', () => {
+  let state = transition(recall(), { type: 'SET_MODE', mode: 'live' });
+  state = submitStatement(state, 'I cannot remember.', { reply: '' });
+  assert.equal(state.statements.length, 0);
+  assert.equal(state.nightDoorOpened, true);
+  state = transition(state, { type: 'SET_MODE', mode: 'scripted' });
+  assert.equal(getView(state).modeLabel, 'Scripted experience');
+  state = submitStatement(state, 'I cannot remember.');
+  state = submitStatement(state, 'I do not know what happened.');
+  state = transition(state, { type: 'CONTINUE' });
+  state = transition(state, { type: 'TRY_MORNING_DOOR' });
+  state = transition(state, { type: 'TAKE_KEY' });
+  state = transition(state, { type: 'UNLOCK_DOOR' });
+  state = transition(state, { type: 'CONTINUE' });
+  state = submitStatement(state, 'I cannot name anyone.');
+  state = submitStatement(state, 'I will not guess.');
+  state = transition(state, { type: 'CONTINUE' });
+  assert.equal(state.phase, 'ending');
+  assert.equal(state.statements.every(turn => turn.source === 'scripted'), true);
+});
+
+test('reset from interrupted or completed phases clears all gates and allows a fresh full run', () => {
+  const states = [createGame(), transition(createGame(), { type: 'START' }), recall(), verdict()];
+  let done = submitStatement(verdict(), 'I think it was Aaron. The door was locked and the key was inside.');
+  done = transition(done, { type: 'CONTINUE' });
+  states.push(done);
+  for (const state of states) {
+    const paused = transition(state, { type: 'PAUSE' });
+    const fresh = transition(paused, { type: 'RESET' });
+    assert.deepEqual(fresh, createGame());
+    assert.equal(transition(fresh, { type: 'START' }).phase, 'night');
+  }
+});

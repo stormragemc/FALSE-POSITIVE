@@ -4,7 +4,7 @@ import { Euler, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 // actual skin retains its face, clothing and hand detail; no proxy is used.
 const officers = new WeakMap();
 
-export function setupOfficer(root, { seatHeight = 0.535 } = {}) {
+export function setupOfficer(root, { seatHeight = 0.535, handHeight = 0.795, handDepth = 0.34 } = {}) {
   if (officers.has(root)) return officers.get(root);
   const bones = new Map();
   const faces = [];
@@ -84,7 +84,7 @@ export function setupOfficer(root, { seatHeight = 0.535 } = {}) {
       aimBone(foot, toe, ankle.add(direction));
     }
     limb(`${side}Arm`, `${side}ForeArm`, `${side}Hand`,
-      rigPoint(sign * 0.205, 0.795, side === 'Left' ? 0.34 : 0.31),
+      rigPoint(sign * 0.205, handHeight, side === 'Left' ? handDepth : handDepth - 0.03),
       rigPoint(sign * 0.65, 0.77, -0.1));
     const rigRotation = rig.getWorldQuaternion(new Quaternion());
     const handRotation = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(

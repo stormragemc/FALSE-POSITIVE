@@ -83,3 +83,14 @@ export function memoryDoor(){
  const h=cyl(g,'Door latch',.028,.15,[-.24,.94,.18],steel);h.rotation.z=Math.PI/2;
  box(g,'Key plate',[.045,.11,.015],[-.26,.84,.12],steel);return g;
 }
+export function sofa(){
+ const g=new Group();g.name='Cabin sofa';const fabric=mat('#414b42');
+ rounded(g,'Sofa base',2.1,.23,.76,0,.25,0,wood,.045);
+ rounded(g,'Upholstered back',2.05,.55,.16,0,.73,-.31,fabric,.065);
+ for(const x of [-.65,0,.65]){
+  const c=rounded(g,'Seat cushion',.64,.64,.15,x,.46,.015,fabric,.06);c.rotation.x=Math.PI/2;
+ }
+ for(const x of [-1,1])rounded(g,'Armrest',.17,.43,.75,x,.54,0,fabric,.055);
+ for(const x of [-.83,.83])for(const z of [-.26,.26])cyl(g,'Sofa foot',.035,.13,[x,.07,z],wood,8);
+ return g;
+}

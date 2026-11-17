@@ -200,7 +200,9 @@ export function submitStatement(state, text, meta = {}) {
   const accusation = state.phase === 'verdict' ? detectAccusation(clean) : '';
   const defaultReply = state.phase === 'recall'
     ? SCRIPTED_RECALL[count]
-    : accusation ? `So you think it's ${accusation[0].toUpperCase() + accusation.slice(1)}, huh? Tell me why.` : VERDICT_OPENING;
+    : count + 1 >= MAX_PHASE_TURNS
+      ? "That's enough from you. I've heard enough."
+      : accusation ? `So you think it's ${accusation[0].toUpperCase() + accusation.slice(1)}, huh? Tell me why.` : VERDICT_OPENING;
   const reply = live ? String(meta.reply).trim() : defaultReply;
   const turn = { phase: state.phase, text: clean, input: meta.input === 'voice' ? 'voice' : 'text', source: live ? 'live' : 'scripted', accusation };
   // Affect is a soft voice cue only. Text submissions cannot silently inherit a vocal reading.
@@ -248,15 +250,18 @@ export function getView(state) {
     phase: state.phase, scene: ['night', 'morning'].includes(state.phase) ? state.phase : 'interrogation',
     officer: state.lastReply, mode: state.mode, modeLabel: state.mode === 'live' ? 'Live AI' : 'Scripted experience',
     notice: state.notice, paused: state.paused, progress: PHASES.indexOf(state.phase) / (PHASES.length - 1),
-    statementCount: count, maxStatements: MAX_PHASE_TURNS, canSubmit: !state.paused && ['recall', 'verdict'].includes(state.phase) && count < MAX_PHASE_TURNS,
+    statementCount: count, maxStatements: MAX_PHASE_TURNS,
+    turnsRemaining: Math.max(0, MAX_PHASE_TURNS - count),
+    minimumTurnsRemaining: ['recall', 'verdict'].includes(state.phase) ? Math.max(0, 2 - count) : 0,
+    canSubmit: !state.paused && ['recall', 'verdict'].includes(state.phase) && count < MAX_PHASE_TURNS,
     ending: state.ending,
   };
   const views = {
     menu: { heading: 'FALSE POSITIVE', objective: 'You are David. Remember what you can. Tell Spassky what you know.', continueAvailable: false, continueLabel: 'Begin case', purpose: '' },
     night: { heading: '00:52. The cabin.', objective: !state.radioTuned ? 'Turn the radio dial until the storm warning becomes clear.' : !state.nightDoorOpened ? 'Open the latch and call into the storm.' : 'Nothing answers. Return to the interrogation.', continueAvailable: state.radioTuned && state.nightDoorOpened, continueLabel: 'Return to Spassky', purpose: '' },
-    recall: { heading: 'What do you remember?', objective: count < 2 ? 'Give your account in your own words. Admitting uncertainty is allowed.' : 'Continue to the morning, or add another detail to your statement.', continueAvailable: count >= 2, continueLabel: 'Remember the morning', purpose: 'p2' },
+    recall: { heading: 'What do you remember?', objective: count >= MAX_PHASE_TURNS ? 'This part of your statement is complete. Continue to the morning.' : count < 2 ? `Give your account in your own words. ${2 - count} statement${count === 0 ? 's' : ''} before the next memory. Admitting uncertainty is allowed.` : 'Continue to the morning, or add another detail to your statement.', continueAvailable: count >= 2, continueLabel: 'Remember the morning', purpose: 'p2' },
     morning: { heading: '09:00. Someone screams.', objective: !state.morningDoorTried ? 'Try the front door.' : !state.keyTaken ? 'Take the key hanging inside the cabin.' : !state.morningDoorUnlocked ? 'Use the key to unlock the door.' : 'Remember what Ivy and Aaron say. Return to Spassky.', continueAvailable: state.morningDoorUnlocked, continueLabel: 'Give your final statement', purpose: '' },
-    verdict: { heading: 'Who, David?', objective: 'Defend your account. If you accuse someone, explain what you actually observed.', continueAvailable: count >= 2 || (count >= 1 && Boolean(detectAccusation(phaseTurns(state).at(-1)?.text)) && CLUES.filter(([, available, pattern]) => available(state) && pattern.test(phaseTurns(state).at(-1)?.text || '')).length >= 2), continueLabel: 'Finish your statement', purpose: 'p3' },
+    verdict: { heading: 'Who, David?', objective: count >= 2 ? 'You can finish your statement now. An uncertain account still receives an ending.' : 'Defend your account. If you accuse someone, explain what you actually observed. You may also admit that you do not know.', continueAvailable: count >= 2 || (count >= 1 && Boolean(detectAccusation(phaseTurns(state).at(-1)?.text)) && CLUES.filter(([, available, pattern]) => available(state) && pattern.test(phaseTurns(state).at(-1)?.text || '')).length >= 2), continueLabel: 'Finish your statement', purpose: 'p3' },
     ending: { heading: state.ending?.title || 'The statement is over.', objective: state.ending?.closing || '', continueAvailable: false, continueLabel: 'Start again', purpose: '' },
   };
   return { ...common, ...views[state.phase], continueAvailable: !state.paused && views[state.phase].continueAvailable };

@@ -19,10 +19,11 @@
   <button id="act-tertiary" class="action secondary"><div id="tertiary-label" class="label">Inspect</div></button>
  </div>
  <div class="row">
-  <button id="act-write" class="action secondary"><div class="label">Write statement</div></button>
+  <button id="act-write" class="action secondary"><div id="write-label" class="label">Write another statement</div></button>
   <button id="act-mic" class="action secondary"><div id="mic-label" class="label">Speak</div></button>
   <button id="act-pause" class="action secondary"><div id="pause-label" class="label">Pause</div></button>
   <button id="act-reset" class="action secondary"><div class="label">Restart</div></button>
  </div>
+ <button id="act-mode" class="action secondary"><div id="mode-label" class="label">Use Live AI</div></button>
  <div id="mode-status" class="status">Scripted rehearsal / voice affect is unavailable.</div>
 </div>

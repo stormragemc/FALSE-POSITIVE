@@ -1,0 +1,73 @@
+{
+  "observed_at": "2026-11-17",
+  "source_base_commit": "163c19a01c24096754850b08639b67b698471d79",
+  "scope": "Actual FALSE POSITIVE XR app initialization and initial hand interaction, not a complete hand-only playthrough",
+  "environment": {
+    "provider": "Vercel Sandbox",
+    "cpu": 2,
+    "memory_mb": 4096,
+    "node": "24.22.3",
+    "iwsdk": "1.1.0",
+    "emulator": "IWER / Meta Quest 3",
+    "browser": "Playwright Chromium 159.0.8154.6",
+    "final_input_test_viewport": [512, 512],
+    "physical_headset": false,
+    "termination": "Nonpersistent sandbox automatically stopped at its 30-minute lifetime"
+  },
+  "temporary_cloud_fixes_applied_to_source_base": [
+    "Added package scripts.dev:runtime = vite (required by official IWSDK dev CLI)",
+    "Disabled environment shadows (matching the pending shipped performance fix)",
+    "Added PokeInteractable to controls and keyboard scene nodes (matching the pending shipped interaction fix)"
+  ],
+  "assets": {
+    "officer": "Original repository Assets/_Project/Art/NewCop.glb",
+    "web_lfs_objects": 24,
+    "hydration": "Fetched immutable public GitHub media URLs and checked each declared LFS object length",
+    "asset_prepare_script": "Passed"
+  },
+  "passed": [
+    "Source syntax checks",
+    "Original assets prepare successfully",
+    "Actual app initializes and presents the FALSE POSITIVE welcome interface",
+    "No app initialization exceptions in captured browser logs",
+    "Active immersive-vr session with hand-tracking, local-floor and bounded-floor features",
+    "Spatial UIKit controls and element IDs resolve in the actual runtime",
+    "Left-hand physical poke activates Begin and transitions menu to night",
+    "After Begin, radio and memory-door become visible and primary native label changes to Tune radio / 20",
+    "Dynamic UIKit div labels update through setProperties({text}); no unsupported text-tag substitution is necessary"
+  ],
+  "successful_begin_press": {
+    "device": "hand-left",
+    "body": "auto",
+    "gaze": "fixed",
+    "duration_seconds": 0.05,
+    "press": {"hold": 0, "retract": 0.05},
+    "target": "act-primary",
+    "completed": true,
+    "contact_ms": 590.9,
+    "warnings": [],
+    "verified_state": {"visible_objects": ["radio", "memory-door"], "primary_label": "Tune radio / 20"}
+  },
+  "findings": [
+    "Local host AF_UNIX socket creation is denied with EPERM; use a supported isolated runtime rather than repeat local managed-browser attempts",
+    "The original controls and keyboard nodes lacked PokeInteractable, which official IWSDK instructions require for fingertip presses",
+    "At seated headset height 1.2m, a fixed-body left-hand Begin target at the original panel position was measured 0.73m from the shoulder (SDK maximum 0.72m); moving panels closer improves seated reach",
+    "Software-rendered cloud frames sometimes stretch presses beyond UIKit's 800ms click window; initial contacts measured 5935.5ms and 1351.4ms before a successful 590.9ms retry",
+    "Bundled immediate repeated presses did not all activate; one later contact was 3011.1ms"
+  ],
+  "not_verified": [
+    "Complete radio/latch/recall interaction sequence with hands",
+    "Hand keyboard entry or submission",
+    "End-to-end hand-only case completion",
+    "Authenticated live AI conversation from this cloud test",
+    "Physical-device rendering rate, hand tracking quality, microphone behavior or comfort",
+    "Final later source commits after the source base and listed temporary fixes"
+  ],
+  "other_probe_separate_from_actual_game": {
+    "scope": "Earlier technical cube probe beside the original officer model",
+    "hand_grab_carry_release": "Passed",
+    "held_component": "Grabbed present while pinching, absent after release",
+    "initial_center": [0.25, 1, -0.45],
+    "released_center": [0.3503961563, 1.1663877964, -0.5499615073]
+  }
+}

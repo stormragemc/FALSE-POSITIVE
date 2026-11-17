@@ -307,6 +307,85 @@
           "intensity": 1.2
         }
       }
+    },
+    {
+      "id": "aaron",
+      "name": "aaron",
+      "content": {
+        "type": "asset",
+        "asset": "aaron"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -2
+        ]
+      }
+    },
+    {
+      "id": "ivy",
+      "name": "ivy",
+      "content": {
+        "type": "asset",
+        "asset": "ivy"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -2
+        ]
+      }
+    },
+    {
+      "id": "nick",
+      "name": "nick",
+      "content": {
+        "type": "asset",
+        "asset": "nick"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -2
+        ]
+      }
+    },
+    {
+      "id": "priya",
+      "name": "priya",
+      "content": {
+        "type": "asset",
+        "asset": "priya"
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -2
+        ]
+      }
+    },
+    {
+      "id": "sofa",
+      "content": {
+        "type": "asset",
+        "asset": "sofa"
+      },
+      "transform": {
+        "position": [
+          1.05,
+          0,
+          -2.7
+        ],
+        "rotationDeg": [
+          0,
+          -20,
+          0
+        ]
+      }
     }
   ],
   "authoring": {

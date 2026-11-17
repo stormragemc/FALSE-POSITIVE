@@ -755,21 +755,37 @@ async def _run_turn(
         # reply_text is what the game renders as the on-screen subtitle.
         reply_text, mood = llm.split_mood_tag(reply_text)
 
-        pcm, rate, channels, tts_ms = await _await_before_deadline(
-            loop.run_in_executor(
-                _vendor_pool,
-                partial(tts.synthesize, reply_text, mood),
-            ),
-            deadline,
-        )
-        norm_pcm, norm_rate = audio_utils.normalize_to_canonical(pcm, rate, channels)
+        # Detective text remains usable if ElevenLabs is absent, expired or
+        # slow. Empty audio lets the client use browser voice or captions;
+        # synthetic silence is never passed off as a spoken performance.
+        norm_pcm, norm_rate, tts_ms = b"", 0, 0
+        if config.TTS_ENABLED:
+            tts_started = time.perf_counter()
+            try:
+                timeout = min(config.SIDECAR_TTS_TIMEOUT_SECONDS, max(0.001, deadline - loop.time()))
+                pcm, rate, channels, tts_ms = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        _vendor_pool,
+                        partial(tts.synthesize, reply_text, mood),
+                    ),
+                    timeout=timeout,
+                )
+                if not pcm:
+                    raise ValueError("empty provider audio")
+                norm_pcm, norm_rate = audio_utils.normalize_to_canonical(pcm, rate, channels)
+                if not norm_pcm:
+                    raise ValueError("empty normalized audio")
+            except Exception as exc:
+                norm_pcm, norm_rate = b"", 0
+                tts_ms = int((time.perf_counter() - tts_started) * 1000)
+                print(f"[Sidecar] TTS unavailable ({tts.failure_reason(exc)}); returning detective text.")
 
         fabrications = await _collect_fabrications(judge_task, deadline)
         judge_task = None
 
-        # Only successful, playable turns become part of the session reference.
-        # A failed TTS attempt may be retried with the same audio and must not be
-        # counted twice in the baseline or temporal trend.
+        # Successful detective text completes a turn even without spoken
+        # audio. Failed transcription/LLM work still never commits; clients
+        # must not retry a successful text-only reply as a failed turn.
         if turn_reset_generation == _session_reset_generations.get(session_id, 0):
             if prosody_tracker is not None and pending_prosody_update is not None:
                 prosody_signal = prosody_tracker.update(**pending_prosody_update, commit=True)
@@ -799,7 +815,7 @@ async def _run_turn(
             "prosody": prosody_signal.to_dict(),
             "reply_text": reply_text,
             "audio_b64": base64.b64encode(norm_pcm).decode("ascii"),
-            "audio_sample_rate": norm_rate, "audio_channels": 1,
+            "audio_sample_rate": norm_rate, "audio_channels": 1 if norm_pcm else 0,
             "stt_ms": stt_ms, "ser_ms": ser_ms, "llm_ms": llm_ms, "tts_ms": tts_ms,
             "total_ms": total_ms,
             "fabrications": fabrications,

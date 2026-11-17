@@ -63,6 +63,33 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             module.validate()
 
+    def test_missing_elevenlabs_key_allows_google_speech_startup(self):
+        module = self._load_isolated("sidecar_config_optional_tts", {
+            "GCP_PROJECT": "test-project", "FP_CLIENT_KEY": "test-client-key",
+        })
+        module.validate()
+        self.assertTrue(module.TTS_ENABLED)
+        self.assertEqual(module.TTS_PROVIDER, "google")
+        self.assertEqual(module.GOOGLE_TTS_MODEL, "gemini-2.5-flash-tts")
+        self.assertEqual(module.GOOGLE_TTS_VOICE, "Charon")
+
+    def test_tts_opt_in_without_credentials_stays_disabled(self):
+        module = self._load_isolated("sidecar_config_empty_tts", {
+            "GCP_PROJECT": "test-project", "FP_CLIENT_KEY": "test-client-key",
+            "TTS_ENABLED": "true", "TTS_PROVIDER": "elevenlabs", "ELEVENLABS_API_KEY": "",
+        })
+        module.validate()
+        self.assertFalse(module.TTS_ENABLED)
+
+    def test_tts_can_be_disabled_with_an_expired_key_still_present(self):
+        module = self._load_isolated("sidecar_config_disabled_tts", {
+            "GCP_PROJECT": "test-project", "FP_CLIENT_KEY": "test-client-key",
+            "TTS_ENABLED": "false", "ELEVENLABS_API_KEY": "expired-fixture-key",
+        })
+        module.validate()
+        self.assertFalse(module.TTS_ENABLED)
+        self.assertEqual(module.SIDECAR_TTS_TIMEOUT_SECONDS, 6.0)
+
     def test_turn_limit_defaults_are_bounded_and_positive(self):
         module = self._load_isolated("sidecar_config_limit_defaults_test", {})
 

@@ -50,6 +50,20 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
+# Google speech uses the same project/ADC as the detective, with no new key.
+# Spoken audio remains optional; provider failures preserve detective text.
+TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "google").strip().lower()
+TTS_ENABLED = _env_bool("TTS_ENABLED", True) and TTS_PROVIDER != "none"
+if TTS_PROVIDER == "elevenlabs":
+    TTS_ENABLED = TTS_ENABLED and bool(ELEVENLABS_API_KEY.strip() and ELEVENLABS_VOICE_ID.strip())
+GOOGLE_TTS_MODEL = os.environ.get("GOOGLE_TTS_MODEL", "gemini-2.5-flash-tts").strip()
+GOOGLE_TTS_VOICE = os.environ.get("GOOGLE_TTS_VOICE", "Charon").strip()
+GOOGLE_TTS_LOCATION = os.environ.get("GOOGLE_TTS_LOCATION", GCP_LOCATION).strip()
+SIDECAR_TTS_TIMEOUT_SECONDS = min(
+    15.0, max(0.1, float(os.environ.get("SIDECAR_TTS_TIMEOUT_SECONDS", "6")))
+)
+
+
 HUBERT_MODEL_ID = os.environ.get("HUBERT_MODEL_ID", "superb/hubert-base-superb-er")
 HUBERT_MODEL_REVISION = os.environ.get(
     "HUBERT_MODEL_REVISION",
@@ -111,13 +125,12 @@ TURN_DEADLINE_SECONDS = min(
 
 def validate() -> None:
     """Fail fast at startup rather than three minutes into a playtest."""
+    if TTS_PROVIDER not in {"google", "elevenlabs", "none"}:
+        print("[Sidecar] FATAL: TTS_PROVIDER must be google, elevenlabs or none", file=sys.stderr)
+        sys.exit(1)
     missing = []
     if not GCP_PROJECT:
         missing.append("GCP_PROJECT")
-    if not ELEVENLABS_API_KEY:
-        missing.append("ELEVENLABS_API_KEY")
-    if not ELEVENLABS_VOICE_ID:
-        missing.append("ELEVENLABS_VOICE_ID")
     if not FP_CLIENT_KEY:
         missing.append("FP_CLIENT_KEY")
 

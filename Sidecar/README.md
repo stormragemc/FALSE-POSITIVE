@@ -13,8 +13,8 @@ for why, and [`../docs/PRIVACY.md`](../docs/PRIVACY.md) for what that means for
 player audio.
 
 Unity still never holds a vendor API key. It holds one shared client key that
-gates this service (see [Auth](#auth)); the ElevenLabs key and the Google
-credentials live in Secret Manager and are injected into the container.
+gates this service (see [Auth](#auth)). Google APIs use the runtime service
+account. Only the optional legacy ElevenLabs mode needs its vendor secret.
 
 See [`../docs/HUBERT_ORCHESTRATION_PLAN.md`](../docs/HUBERT_ORCHESTRATION_PLAN.md)
 for the primary-source HuBERT research, model limits, reviewed architecture, and
@@ -344,8 +344,9 @@ is not a fear or deception detector. The backend retains its full probability
 distribution and combines it with uncertainty, pauses, energy/pitch variation,
 hidden-state change, response onset, and an in-memory early-session reference.
 Raw cosine distance remains debug data; actionable change is normalized to the
-spread of that player's early reference turns. Only a successfully synthesized
-turn is committed, preventing TTS retries from double-counting it. Low-quality
+spread of that player's early reference turns. A successful detective reply
+commits once even when optional TTS is unavailable; clients must not retry an
+`ok: true` text-only reply as a failed turn. Low-quality
 readings are visible in debug data but suppressed from Gemini, and witness text
 is escaped into a separate trust block so it cannot imitate the sensor marker.
 HuBERT and the classical features inspect the same `HUBERT_MAX_SECONDS` prefix;
@@ -508,3 +509,32 @@ ignored. Its input stream is capped at 20,000 bytes before multipart parsing.
 Configure the same server environment variables as `/api/turn`; never embed
 `FP_CLIENT_KEY` in the XR client. A newly added route requires a backend
 redeployment before live text statements will work.
+
+
+## Spoken audio: Google Gemini TTS
+
+The default is `TTS_PROVIDER=google`, using `gemini-2.5-flash-tts` on Vertex AI
+with voice `Charon`. It uses the same Google project and Application Default
+Credentials as the detective, with no new API key or ElevenLabs subscription.
+The voice prompt requests English with a Russian accent, low male register and
+controlled anger; the audible result still needs listening QA. Speech recognition
+remains Google Speech-to-Text v2 with the existing `long` model.
+
+Google's documented Vertex response is raw PCM16, 24 kHz mono, without a WAV
+header. It passes through the existing canonical audio normalizer and unchanged
+turn DTO. `GOOGLE_TTS_MODEL`, `GOOGLE_TTS_VOICE` and `GOOGLE_TTS_LOCATION` are
+configurable. [Google's primary request/format documentation](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts#use-vertex-ai-api).
+
+Set `TTS_ENABLED=false` or `TTS_PROVIDER=none` to use detective text with client
+voice/captions. `TTS_PROVIDER=elevenlabs` is a legacy opt-in and requires a usable
+key/voice; it is never chosen automatically if Google fails. The deploy script
+binds ElevenLabs secrets only for that explicit provider.
+
+A provider failure, inaccessible voice, empty audio or TTS timeout returns the
+successful detective text with `ok: true`, `audio_b64: ""`,
+`audio_sample_rate: 0` and `audio_channels: 0`. History and progress are preserved;
+the browser can use its available voice or captions. Provider diagnostics log
+only a bounded status/exception class. `SIDECAR_TTS_TIMEOUT_SECONDS` defaults to
+6 (bounded to 0.1–15 seconds). The deployment's existing single turn probe now
+reports whether actual speech audio was returned; mocked tests alone do not
+establish model availability or project IAM permissions.

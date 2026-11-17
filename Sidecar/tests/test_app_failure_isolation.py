@@ -168,6 +168,8 @@ class AppFailureIsolationTests(unittest.TestCase):
             GCP_LOCATION="global",
             STT_MODEL="short",
             STT_LANGUAGE="en-US",
+            TTS_ENABLED=True,
+            SIDECAR_TTS_TIMEOUT_SECONDS=6.0,
             TRAP_JUDGE_ENABLED=True,
             TRAP_JUDGE_GRACE_SECONDS=1.5,
         )
@@ -226,6 +228,7 @@ class AppFailureIsolationTests(unittest.TestCase):
             # applies the eleven_v3 accent tag itself, so the second argument is
             # part of the contract and the stub has to accept it.
             synthesize=lambda _text, _mood=None: (b"\x00\x00", 24000, 1, 7),
+            failure_reason=lambda exc: type(exc).__name__,
         )
         audio_utils = _module(
             "audio_utils",
@@ -827,7 +830,45 @@ class AppFailureIsolationTests(unittest.TestCase):
 
         self.assertNotIn("session-a", self.app._scene_instructions)
 
-    def test_tts_failure_does_not_commit_prosody_reference_state(self):
+    def test_disabled_tts_returns_text_without_calling_the_provider(self):
+        with patch.object(self.app.config, "TTS_ENABLED", False), patch.object(
+            self.app.tts, "synthesize", side_effect=AssertionError("disabled TTS was called")
+        ):
+            result = asyncio.run(self.app.statement("text-only", "I left the door unlocked.", "", ""))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["reply_text"], "Next question.")
+        self.assertEqual(result["audio_b64"], "")
+        self.assertEqual(result["audio_sample_rate"], 0)
+        self.assertEqual(result["audio_channels"], 0)
+        self.assertEqual(result["tts_ms"], 0)
+        self.assertEqual(len(self.app._history_for("text-only")), 2)
+
+    def test_tts_timeout_returns_text_and_preserves_progress(self):
+        def slow_tts(*_args):
+            time.sleep(0.08)
+            return b"\x00\x00", 24000, 1, 80
+        with patch.object(self.app.config, "SIDECAR_TTS_TIMEOUT_SECONDS", 0.01), patch.object(
+            self.app.tts, "synthesize", side_effect=slow_tts
+        ):
+            started = time.perf_counter()
+            result = asyncio.run(self.app.statement("tts-timeout", "I do not remember the time.", "", ""))
+            elapsed = time.perf_counter() - started
+        self.assertTrue(result["ok"])
+        self.assertLess(elapsed, 0.07)
+        self.assertEqual(result["reply_text"], "Next question.")
+        self.assertEqual(result["audio_b64"], "")
+        self.assertEqual(len(self.app._history_for("tts-timeout")), 2)
+
+    def test_tts_error_logs_do_not_include_provider_body_or_credentials(self):
+        output = io.StringIO()
+        with redirect_stdout(output), patch.object(self.app.tts, "synthesize", side_effect=RuntimeError("fake-secret-provider-body")):
+            result = asyncio.run(self.app.statement("tts-expired", "I remember the fire.", "", ""))
+        self.assertTrue(result["ok"])
+        self.assertIn("TTS unavailable (RuntimeError)", output.getvalue())
+        self.assertNotIn("fake-secret-provider-body", output.getvalue())
+        self.assertEqual(result["audio_b64"], "")
+
+    def test_tts_failure_commits_successful_text_and_reference_once(self):
         sample_count = 16000 * 2
         pcm = (np.sin(np.arange(sample_count) * 0.1) * 8000).astype("<i2").tobytes()
         observation = SimpleNamespace(
@@ -849,9 +890,13 @@ class AppFailureIsolationTests(unittest.TestCase):
                 self.app.turn("session-a", 16000, 0, _FakeUpload(pcm))
             )
 
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 0)
-        self.assertEqual(self.app._session_store.history("session-a"), [])
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["reply_text"], "Next question.")
+        self.assertEqual(response["audio_b64"], "")
+        self.assertEqual(response["audio_sample_rate"], 0)
+        self.assertEqual(response["audio_channels"], 0)
+        self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
+        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
 
     def test_failed_new_session_does_not_evict_live_session_state(self):
         # A single-slot store, already full: a failing turn must not evict the
@@ -863,7 +908,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         pcm = (np.sin(np.arange(16000 * 2) * 0.1) * 8000).astype("<i2").tobytes()
 
         with patch.object(self.app, "_session_store", store), patch.object(
-            self.app.tts, "synthesize", side_effect=RuntimeError("forced TTS failure")
+            self.app.llm, "generate_reply", side_effect=RuntimeError("forced reply failure")
         ):
             response = asyncio.run(
                 self.app.turn("failed-session", 16000, 0, _FakeUpload(pcm))
@@ -1016,7 +1061,7 @@ class AppFailureIsolationTests(unittest.TestCase):
         self.assertEqual(set(off), dto_fields)
         self.assertEqual(set(on) - dto_fields, {"affect_prompt_context"})
 
-    def test_failed_second_turn_does_not_mutate_registered_tracker_or_history(self):
+    def test_text_only_second_turn_preserves_progress_when_tts_fails(self):
         sample_count = 16000 * 2
         pcm = (np.sin(np.arange(sample_count) * 0.1) * 8000).astype("<i2").tobytes()
         observation = SimpleNamespace(
@@ -1042,9 +1087,11 @@ class AppFailureIsolationTests(unittest.TestCase):
                 )
 
         self.assertTrue(first["ok"])
-        self.assertEqual(second.status_code, 500)
-        self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 1)
-        self.assertEqual(len(self.app._session_store.history("session-a")), 2)
+        self.assertTrue(second["ok"])
+        self.assertEqual(second["reply_text"], "Next question.")
+        self.assertEqual(second["audio_b64"], "")
+        self.assertEqual(self.app._prosody_registry.get("session-a").reference_count, 2)
+        self.assertEqual(len(self.app._session_store.history("session-a")), 4)
 
     def test_affect_and_classical_features_use_same_bounded_audio_window(self):
         sample_count = 16000 * 2

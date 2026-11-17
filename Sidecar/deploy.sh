@@ -25,6 +25,14 @@ REPO="us-central1-docker.pkg.dev/${PROJECT}/false-positive/backend"
 # an always-on instance billed against the $300 credit — set MIN_INSTANCES=0
 # between demos if that matters more than the first-request failure.
 MIN_INSTANCES="${MIN_INSTANCES:-1}"
+# Gemini TTS reuses Vertex/ADC. ElevenLabs is legacy opt-in only; no expired
+# account secret is required for the default Google provider.
+TTS_ENABLED="${TTS_ENABLED:-true}"
+TTS_PROVIDER="${TTS_PROVIDER:-google}"
+FP_DEPLOY_SECRET_BINDINGS="FP_CLIENT_KEY=fp-client-key:latest"
+if [ "${TTS_PROVIDER}" = "elevenlabs" ] && { [ "${TTS_ENABLED}" = "true" ] || [ "${TTS_ENABLED}" = "1" ]; }; then
+  FP_DEPLOY_SECRET_BINDINGS="${FP_DEPLOY_SECRET_BINDINGS},ELEVENLABS_API_KEY=elevenlabs-api-key:latest,ELEVENLABS_VOICE_ID=elevenlabs-voice-id:latest"
+fi
 
 cd "$(dirname "$0")"
 
@@ -65,8 +73,8 @@ gcloud run deploy "${SERVICE}" \
   --memory 4Gi \
   --timeout 60 \
   --labels "git-sha=${SHA//[^a-z0-9_-]/-}" \
-  --set-env-vars "GCP_PROJECT=${PROJECT},GCP_LOCATION=global,SIDECAR_MAX_SESSIONS=200" \
-  --set-secrets "ELEVENLABS_API_KEY=elevenlabs-api-key:latest,ELEVENLABS_VOICE_ID=elevenlabs-voice-id:latest,FP_CLIENT_KEY=fp-client-key:latest"
+  --set-env-vars "GCP_PROJECT=${PROJECT},GCP_LOCATION=global,SIDECAR_MAX_SESSIONS=200,TTS_ENABLED=${TTS_ENABLED},TTS_PROVIDER=${TTS_PROVIDER}" \
+  --set-secrets "${FP_DEPLOY_SECRET_BINDINGS}"
 
 # --- Verify -----------------------------------------------------------------
 # A deploy that returns 200 on /health only proves the process booted. The
@@ -79,10 +87,11 @@ echo "==> health"
 curl -fsS -m 60 -o /dev/null -w '    HTTP %{http_code} in %{time_total}s\n' "${URL}/health"
 
 echo "==> turn (checking the live persona)"
-REPLY="$(curl -fsS -m 90 -X POST "${URL}/turn" \
+PROBE_RESPONSE="$(curl -fsS -m 90 -X POST "${URL}/turn" \
   -H "x-fp-client-key: ${KEY}" \
-  -F session_id="deploy-probe-${SHA}" \
-  | python -c 'import json,sys; print(json.load(sys.stdin).get("reply_text",""))')"
+  -F session_id="deploy-probe-${SHA}")"
+REPLY="$(printf '%s' "${PROBE_RESPONSE}" | python -c 'import json,sys; print(json.load(sys.stdin).get("reply_text",""))')"
+printf '%s' "${PROBE_RESPONSE}" | python -c 'import json,sys; r=json.load(sys.stdin); print("    speech probe: provider=" + sys.argv[1] + "; audio=" + str(bool(r.get("audio_b64"))) + "; rate=" + str(r.get("audio_sample_rate",0)) + "; tts_ms=" + str(r.get("tts_ms",0)))' "${TTS_PROVIDER}"
 
 echo "    ${REPLY}"
 if printf '%s' "${REPLY}" | grep -qi "halden\|convenience store\|mara voss"; then

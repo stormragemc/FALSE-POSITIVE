@@ -47,7 +47,7 @@
   "environment": {
     "toneMapping": "aces",
     "exposure": 1.25,
-    "shadows": true,
+    "shadows": false,
     "shadowMapType": "pcf"
   },
   "resources": {},
@@ -227,7 +227,7 @@
         "position": [
           0,
           0.84,
-          -0.67
+          -0.55
         ],
         "rotationDeg": [
           -15,
@@ -236,7 +236,8 @@
         ]
       },
       "components": {
-        "RayInteractable": {}
+        "RayInteractable": {},
+        "PokeInteractable": {}
       }
     },
     {
@@ -250,7 +251,7 @@
         "position": [
           0,
           0.9,
-          -0.67
+          -0.52
         ],
         "rotationDeg": [
           -20,
@@ -259,7 +260,8 @@
         ]
       },
       "components": {
-        "RayInteractable": {}
+        "RayInteractable": {},
+        "PokeInteractable": {}
       }
     },
     {
@@ -282,7 +284,7 @@
           "intensity": 9,
           "distance": 7,
           "decay": 2,
-          "castShadow": true
+          "castShadow": false
         }
       }
     },

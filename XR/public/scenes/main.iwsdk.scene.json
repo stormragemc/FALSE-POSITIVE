@@ -226,11 +226,11 @@
       "transform": {
         "position": [
           0,
-          0.84,
+          1.04,
           -0.55
         ],
         "rotationDeg": [
-          -15,
+          -10,
           0,
           0
         ]
@@ -250,11 +250,11 @@
       "transform": {
         "position": [
           0,
-          0.9,
+          1,
           -0.52
         ],
         "rotationDeg": [
-          -20,
+          -10,
           0,
           0
         ]

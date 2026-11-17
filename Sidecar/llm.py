@@ -412,6 +412,7 @@ def generate_reply(
     has_audio: bool = True,
     prosody_signal: "ProsodySignal | None" = None,
     scene_instruction: str = "",
+    has_statement: bool = False,
 ) -> tuple[str, int]:
     """Returns (reply_text, elapsed_ms). Never raises — a game must not
     hard-fail mid-conversation, so any error degrades to FALLBACK_LINE.
@@ -421,7 +422,9 @@ def generate_reply(
     audio-less turn (a phase transition, where the game wants the officer
     to speak next with no witness utterance to react to) — the two are
     disambiguated by `is_opening` so a phase change never replays the
-    "you've just sat down" kickoff line.
+    "you've just sat down" kickoff line. `has_statement` identifies a typed
+    witness response: it uses the same escaped transcript boundary as speech,
+    with an explicitly unavailable vocal-affect signal.
     """
     client = _get_client()
     t0 = time.perf_counter()
@@ -430,7 +433,7 @@ def generate_reply(
 
     if is_opening:
         turn_texts = scene_part + [OPENING_KICKOFF_TEXT]
-    elif not has_audio:
+    elif not has_audio and not has_statement:
         turn_texts = scene_part + [PHASE_CONTINUATION_TEXT]
     else:
         # Gemini has no per-message system role, so the local sensor block

@@ -251,6 +251,84 @@ export async function handleTurn(request, env = process.env, fetchImpl = fetch) 
   }
 }
 
+// Text statements make the experience usable with tracked hands alone. Only
+// the statement and a canonical phase leave this boundary: client-supplied
+// session IDs, scene instructions and sensor impressions are ignored.
+export async function handleStatement(request, env = process.env, fetchImpl = fetch) {
+  if (!sameOrigin(request)) return json({ ok: false, error: "invalid origin" }, 403);
+
+  let config;
+  try {
+    config = getPrivateConfig(env);
+  } catch (error) {
+    return serverError(error, "configuration");
+  }
+
+  const maximumBytes = 20_000;
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (declaredLength > maximumBytes) {
+    return json({ ok: false, error: "statement request is too large" }, 413);
+  }
+  let incoming;
+  const reader = request.body?.getReader();
+  if (!reader) return json({ ok: false, error: "invalid multipart request" }, 400);
+  try {
+    const chunks = [];
+    let totalBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maximumBytes) {
+        await reader.cancel();
+        return json({ ok: false, error: "statement request is too large" }, 413);
+      }
+      chunks.push(value);
+    }
+    incoming = await new Response(new Blob(chunks), {
+      headers: { "Content-Type": request.headers.get("content-type") || "" },
+    }).formData();
+  } catch (_error) {
+    return json({ ok: false, error: "invalid multipart request" }, 400);
+  } finally {
+    reader.releaseLock();
+  }
+
+  const purpose = String(incoming.get("purpose") || "");
+  if (!Object.hasOwn(SCENE_INSTRUCTIONS, purpose)) {
+    return json({ ok: false, error: "invalid interrogation phase" }, 400);
+  }
+  const rawStatement = incoming.get("statement");
+  const statement = typeof rawStatement === "string" ? rawStatement.trim() : "";
+  if (!statement || statement.length > 4000 || /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(statement)) {
+    return json({ ok: false, error: "statement must contain 1-4000 printable characters" }, 400);
+  }
+
+  const { sessionId, token } = requestSession(request, config.signingSecret);
+  const outgoing = new FormData();
+  outgoing.append("session_id", sessionId);
+  outgoing.append("statement", statement);
+  outgoing.append("scene_instruction", SCENE_INSTRUCTIONS[purpose]);
+  try {
+    const upstream = await upstreamFetch(fetchImpl, `${config.baseUrl}/statement`, {
+      method: "POST",
+      headers: { "X-FP-Client-Key": config.clientKey },
+      body: outgoing,
+    });
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": upstream.headers.get("content-type") || "application/json",
+        "Set-Cookie": sessionCookie(token),
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    return serverError(error, "statement");
+  }
+}
+
 export async function handleHealth(request, env = process.env, fetchImpl = fetch) {
   let baseUrl;
   try {

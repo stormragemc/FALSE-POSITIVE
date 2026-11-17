@@ -27,6 +27,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The web contract checks real image/audio bytes, not LFS pointer files.
+      # Fetch only the small web asset set; the Unity art is not needed here.
+      - name: Retrieve web assets for contract tests
+        run: |
+          git lfs install --local
+          git lfs pull --include="Sidecar/web/**" --exclude=""
+        working-directory: ${{ github.workspace }}
+
       # 3.12 matches the Dockerfile's python:3.12-slim. test_container_contract
       # asserts that exact base image, so pinning it here keeps CI and the
       # deployed container from drifting apart silently.
@@ -45,6 +53,12 @@ jobs:
           pip install --index-url https://download.pytorch.org/whl/cpu torch
           pip install -r requirements.txt
           pip install pytest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Check browser speech and server gateway contracts
+        run: node --test tests/test_browser_speech.mjs tests/test_vercel_proxy.mjs
 
       # No secrets and no credentials: the suite stubs every vendor client and
       # never loads the HuBERT weights, so this also runs on forked PRs.
@@ -112,6 +126,14 @@ jobs:
             echo "No backend changes - skipping deploy."
             echo "deploy=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # The container also serves the browser fallback. Hydrate its assets
+      # without downloading the unrelated Unity models and texture library.
+      - name: Retrieve web assets for the deployed fallback
+        if: steps.gate.outputs.deploy == 'true'
+        run: |
+          git lfs install --local
+          git lfs pull --include="Sidecar/web/**" --exclude=""
 
       # deploy.sh's verification step pipes the /turn reply through `python`.
       # ubuntu-latest ships python3 but not always a bare `python`.

@@ -153,7 +153,7 @@ async def require_client_key(request, call_next):
         result = _empty_response()
         result["error"] = "unauthorized"
         return JSONResponse(status_code=401, content=result)
-    if request.url.path == "/turn":
+    if request.url.path in {"/turn", "/statement"}:
         if not await _cache_bounded_request_body(request):
             result = _empty_response()
             result["error"] = "request too large"
@@ -209,7 +209,7 @@ def _empty_response() -> dict:
 
 
 def _invalid_request_response(path: str, status_code: int) -> JSONResponse:
-    if path == "/turn":
+    if path in {"/turn", "/statement"}:
         result = _empty_response()
         result["error"] = "invalid request"
     else:
@@ -224,7 +224,7 @@ async def validation_error(request, _exc):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_error(request, exc):
-    if request.url.path in {"/turn", "/session/reset"} and exc.status_code in {400, 422}:
+    if request.url.path in {"/turn", "/statement", "/session/reset"} and exc.status_code in {400, 422}:
         return _invalid_request_response(request.url.path, exc.status_code)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
@@ -252,6 +252,16 @@ def _validate_scene_instruction(scene_instruction: str) -> str:
         raise ClientInputError("scene_instruction must not contain control characters")
     if llm.contains_reserved_marker(normalized):
         raise ClientInputError("scene_instruction must not contain a reserved context marker")
+    return normalized
+
+
+def _validate_statement(statement: str) -> str:
+    """Typed testimony is witness data, never a scene or sensor instruction."""
+    normalized = (statement or "").strip()
+    if not normalized or len(normalized) > 4000:
+        raise ClientInputError("statement must contain 1-4000 characters")
+    if any(ord(char) < 32 and char not in "\n\t" for char in normalized):
+        raise ClientInputError("statement must not contain control characters")
     return normalized
 
 
@@ -492,6 +502,49 @@ async def turn(
     # one-turn instruction must not.
     scene_instruction_once: str = Form(""),
 ):
+    return await _run_turn(
+        session_id=session_id,
+        sample_rate=sample_rate,
+        onset_delay_ms=onset_delay_ms,
+        audio=audio,
+        scene_instruction=scene_instruction,
+        scene_instruction_once=scene_instruction_once,
+    )
+
+
+@app.post("/statement")
+async def statement(
+    session_id: str = Form(...),
+    statement: str = Form(...),
+    scene_instruction: str = Form(""),
+    scene_instruction_once: str = Form(""),
+):
+    """Hand-operated text alternative; shares voice history and paid-turn caps.
+
+    The authenticated game gateway supplies the scene briefing. The statement
+    itself follows the exact quoted-witness prompt boundary used by STT.
+    """
+    return await _run_turn(
+        session_id=session_id,
+        sample_rate=16000,
+        onset_delay_ms=0,
+        audio=None,
+        scene_instruction=scene_instruction,
+        scene_instruction_once=scene_instruction_once,
+        statement_text=statement,
+    )
+
+
+async def _run_turn(
+    *,
+    session_id: str,
+    sample_rate: int,
+    onset_delay_ms: int,
+    audio: Optional[UploadFile],
+    scene_instruction: str,
+    scene_instruction_once: str,
+    statement_text: Optional[str] = None,
+):
     t_total0 = time.perf_counter()
     loop = asyncio.get_running_loop()
     deadline = loop.time() + config.TURN_DEADLINE_SECONDS
@@ -504,6 +557,9 @@ async def turn(
     try:
         session_id = _validate_session_id(session_id)
         scene_instruction = _validate_scene_instruction(scene_instruction)
+        scene_instruction_once = _validate_scene_instruction(scene_instruction_once)
+        if statement_text is not None:
+            statement_text = _validate_statement(statement_text)
         _expire_idle_sessions()
         if sample_rate < 8000 or sample_rate > 192000:
             raise ClientInputError("sample_rate must be between 8000 and 192000")
@@ -521,6 +577,8 @@ async def turn(
                     f"audio exceeds {config.SIDECAR_MAX_AUDIO_SECONDS:g} second limit"
                 )
         has_audio = len(raw_bytes) > 0
+        has_statement = statement_text is not None
+        has_witness_input = has_audio or has_statement
         if has_audio and len(raw_bytes) % 2:
             raise ClientInputError("audio must be aligned little-endian PCM16")
 
@@ -542,7 +600,7 @@ async def turn(
         # where the officer speaks first with no witness utterance to
         # react to) is NOT a session opening, and must not replay the
         # "you've just sat down" kickoff line every time a phase changes.
-        is_session_opening = not has_audio and not history
+        is_session_opening = not has_witness_input and not history
 
         # The active phase briefing is NOT stored inside `history` — every
         # entry appended to `history` must be part of a strictly alternating
@@ -569,7 +627,15 @@ async def turn(
                 else scene_instruction_once
             )
 
-        if not has_audio:
+        if has_statement:
+            transcript, emotion, emotion_conf = statement_text, "", 0.0
+            stt_ms = ser_ms = 0
+            # No measurements are invented, and typing never changes the
+            # voice baseline used by later audio turns in this session.
+            prosody_signal = prosody.ProsodySignal(
+                reliability_reason="text_input", flags=["text_input"]
+            )
+        elif not has_audio:
             transcript, emotion, emotion_conf = "", "", 0.0
             stt_ms = ser_ms = 0
             prosody_signal = prosody.ProsodySignal(
@@ -652,7 +718,7 @@ async def turn(
         # _collect_fabrications — so that a slow judge cannot eat the turn
         # deadline. Skipped entirely when there is nothing to judge: an opening
         # turn, a phase transition, or a silent recording.
-        if has_audio and transcript.strip() and active_scene_instruction:
+        if has_witness_input and transcript.strip() and active_scene_instruction:
             judge_task = asyncio.ensure_future(
                 loop.run_in_executor(
                     _judge_pool,
@@ -676,6 +742,7 @@ async def turn(
                     confidence=emotion_conf,
                     is_opening=is_session_opening,
                     has_audio=has_audio,
+                    has_statement=has_statement,
                     prosody_signal=prosody_signal,
                     scene_instruction=active_scene_instruction,
                 ),
@@ -709,11 +776,11 @@ async def turn(
 
             if is_session_opening:
                 user_text = llm.OPENING_KICKOFF_TEXT
-            elif not has_audio:
+            elif not has_witness_input:
                 user_text = llm.PHASE_CONTINUATION_TEXT
             else:
                 user_text = transcript
-            is_scene_kind = is_session_opening or not has_audio
+            is_scene_kind = is_session_opening or not has_witness_input
             _commit_history(session_id, history, user_text, reply_text, is_scene_kind)
             if prosody_tracker is not None:
                 _prosody_registry.commit(session_id, prosody_tracker)

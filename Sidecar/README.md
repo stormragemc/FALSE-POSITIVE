@@ -484,3 +484,27 @@ so an old history/reference cannot reappear after the reset completes.
   `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1` via an
   elevated PowerShell, no reboot needed on current Windows builds) and change
   `VENV_DIR` in `run_sidecar.bat` back to `.venv`.
+
+
+## Controller-free XR text statements
+
+`POST /statement` is an additive, authenticated alternative to the existing
+PCM `POST /turn`. Send multipart fields `session_id`, `statement` (1–4,000
+characters), and optionally the same trusted `scene_instruction` and
+`scene_instruction_once` fields used by the game client. It returns the existing
+turn response schema, including the officer's spoken response.
+
+Typed testimony uses the same witness prompt boundary, session history, turn
+caps, fabrication checks, reset protection and TTS. It skips STT and HuBERT.
+`prosody.available` and `prosody.reliable` remain false, with
+`reliability_reason: "text_input"`; typing never advances the voice baseline.
+An empty statement is rejected rather than treated as a phase-transition turn.
+
+The browser must use the same-origin `/api/statement` gateway. That gateway
+accepts only `purpose` (`p2` or `p3`) and `statement`, supplies canonical scene
+instructions, and owns the signed HTTP-only session cookie and server-only
+backend key. Player-supplied session IDs and scene/sensor instructions are
+ignored. Its input stream is capped at 20,000 bytes before multipart parsing.
+Configure the same server environment variables as `/api/turn`; never embed
+`FP_CLIENT_KEY` in the XR client. A newly added route requires a backend
+redeployment before live text statements will work.

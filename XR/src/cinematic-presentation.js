@@ -5,7 +5,7 @@ import { StoryPerformances } from './story-performances.js';
 /** Real cast, stable viewpoints and authored blocking for the Unity story beats. */
 export class CinematicPresentation {
  constructor(world,{officerActor}={}){
-  this.world=world;this.objects=Object.fromEntries(['room','cabin','desk','chair','officer','radio','key','photo','memory-door','sofa'].map(id=>[id,world.requireSceneObject(id)]));
+  this.world=world;this.objects=Object.fromEntries(['room','cabin','desk','chair','officer','radio','key','photo','memory-door','sofa','controls'].map(id=>[id,world.requireSceneObject(id)]));
   this.cast=Object.fromEntries(['aaron','ivy','nick','priya'].map(role=>{const root=world.requireSceneObject(role);root.visible=false;return [role,{root,actor:setupCastActor(root,{role})}];}));
   // Reuse the authored furniture, including its actual seat height. Priya's
   // seated memory must have a chair; shared geometry is never disposed here.
@@ -16,13 +16,20 @@ export class CinematicPresentation {
   this.pillowLocalRotation=this.pillow.quaternion.clone();
   this.fade=new Mesh(new PlaneGeometry(8,8),new MeshBasicMaterial({color:0x000000,transparent:true,opacity:0,depthTest:false,depthWrite:false}));this.fade.renderOrder=10000;this.fade.position.z=-.1;world.camera.add(this.fade);this.fadeAge=9;
   const texture=AssetManager.getTexture('cast-photo');if(texture){texture.colorSpace=SRGBColorSpace;const face=this.objects.photo.getObjectByName('Photograph image');if(face){face.material=face.material.clone();face.material.map=texture;face.material.color.set('#ffffff');face.material.needsUpdate=true;}}
+  this.controlsPosition=this.objects.controls.position.clone();this.controlsQuaternion=this.objects.controls.quaternion.clone();
   this.motion=new StoryPerformances(this,officerActor);this.clear();
  }
- rest(phase){this.clear();this.objects.desk.visible=phase!=='morning';const cups=this.objects.cabin.getObjectByName('Cabin cups');if(cups)cups.visible=phase==='night';if(phase==='night'||phase==='morning'){this.show({cutscene:'rest-'+phase,stage:phase,speaker:''});this.active=false;this.fade.material.opacity=0;}}
- clear(){this.motion?.clear();this.active=false;this.current=null;this.lastScene='';for(const v of Object.values(this.cast))v.root.visible=false;this.objects.sofa.visible=false;this.memoryChair.visible=false;this.pillow.visible=false;this.fade.material.opacity=0;}
+ rest(phase){this.clear();this.objects.desk.visible=phase!=='morning';const cups=this.objects.cabin.getObjectByName('Cabin cups');if(cups)cups.visible=phase==='night';if(phase==='night'||phase==='morning'){this.show({cutscene:'rest-'+phase,stage:phase,speaker:''});this.active=false;this.fade.material.opacity=0;}this.cinematicUI(false);}
+ cinematicUI(active){
+  const ui=this.objects.controls;if(!this.controlsPosition)return;
+  if(active){ui.position.set(0,.875,-.42);ui.rotation.set(-Math.PI*65/180,0,0);}else{ui.position.copy(this.controlsPosition);ui.quaternion.copy(this.controlsQuaternion);}
+  for(const id of ['objective','mode-status'])ui.getElementById(id)?.setProperties({display:active?'none':'flex'});
+  ui.getElementById('officer-line')?.setProperties({fontSize:active?3.3:2.5});
+ }
+ clear(){this.cinematicUI(false);this.motion?.clear();this.active=false;this.current=null;this.lastScene='';for(const v of Object.values(this.cast))v.root.visible=false;this.objects.sofa.visible=false;this.memoryChair.visible=false;this.pillow.visible=false;this.fade.material.opacity=0;}
  place(role,position,pose='standing',yaw=0){const {root,actor}=this.cast[role];root.visible=true;root.position.set(...position);root.rotation.y=yaw;actor.setPose(pose);return root;}
  show(beat){
-  this.active=true;this.current=beat;this.speaker=String(beat.speaker||'').toLowerCase();
+  this.active=true;this.cinematicUI(true);this.current=beat;this.speaker=String(beat.speaker||'').toLowerCase();
   const sceneKey=beat.cutscene+':'+beat.stage;
   this.motion.onBeat(beat);
   if(this.lastScene===sceneKey)return;

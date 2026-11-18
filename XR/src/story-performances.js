@@ -44,7 +44,7 @@ export class StoryPerformances {
   this.landing=new Group();this.extra.add(this.landing);
   box(this.landing,'Stair landing',[1.25,.1,.9],[-1.7,.5,-2.8],timber);
   for(let i=0;i<4;i++)box(this.landing,'Stair tread',[1,.12,.26],[-1.7,.06+i*.13,-1.45-i*.28],timber);
-  this.keyHook=box(this.landing,'Cabin key hook',[.022,.04,.075],[1.04,1.36,-3.04],metal);
+  this.keyHook=box(this.landing,'Cabin key hook',[.022,.04,.25],[1.04,1.36,-3.13],metal);
   this.baseDoor=presentation.objects['memory-door'].position.clone();
   this.baseKey=presentation.objects.key.position.clone();this.keyQ=presentation.objects.key.quaternion.clone();this.baseChair=presentation.objects.chair.position.clone();
   this.basePhoto=presentation.objects.photo.position.clone();this.photoQ=presentation.objects.photo.quaternion.clone();

@@ -21,7 +21,7 @@ export class StoryPerformances {
   box(this.glassSet,'Observation top',[3.4,.06,.10],[0,2.25,-1.05],metal);
   this.folderHinge=new Group();this.folderHinge.position.set(-.59,.812,-.99);this.extra.add(this.folderHinge);
   this.folderCover=box(this.folderHinge,'Closing case cover',[.30,.006,.4],[.15,0,0],material('#77694b'));
-  this.phone=box(this.extra,'Priya phone',[.073,.014,.145],[0,0,0],material('#151b1c',.3));
+  this.phone=box(this.extra,'Priya phone',[.073,.145,.014],[0,0,0],material('#151b1c',.3));
   this.outside=new Group();this.extra.add(this.outside);
   const snow=material('#adbcc4',1),wood=material('#503c2d');
   const tex=AssetManager.getTexture('cabin-wood');if(tex){wood.map=tex;wood.needsUpdate=true;}
@@ -72,7 +72,7 @@ export class StoryPerformances {
  start(beat){
   this.clear();this.beat=beat;this.stage=beat.stage;this.extra.visible=true;this.departureAt=Infinity;this.snow.material.opacity=.65;this.coldLight.color.set('#759ec3');this.coldLight.intensity=8;
   this.glassSet.visible=this.stage?.startsWith('ending-')&&this.stage!=='ending-david';
-  this.outside.visible=['truth-window','truth-cold','truth-coats'].includes(this.stage);
+  this.outside.visible=['truth-window','truth-cold','truth-coats','outside'].includes(this.stage);
   this.landing.visible=this.stage==='truth-lock';this.folderHinge.visible=this.stage==='ending-david';this.phone.visible=beat.cutscene==='TheSofa';
   const {objects,cast}=this.p;
   if(this.glassSet.visible){
@@ -81,6 +81,7 @@ export class StoryPerformances {
    const role=this.stage.slice(7);this.p.place(role,[0,0,-2.2],'sitting');
   }else objects.chair.position.set(0,0,-1.6);
   if(this.stage==='ending-david'){objects.photo.visible=false;this.folderHinge.rotation.z=.72;}
+  if(this.stage==='outside'){objects.room.visible=false;objects.cabin.visible=false;objects.desk.visible=false;objects['memory-door'].visible=false;this.windowGlass.visible=false;this.shards.visible=true;this.coldLight.color.set('#adc6d5');this.snow.material.opacity=.35;this.p.place('nick',[-.4,0,-2.95],'lying',0);this.sound('menu_storm_bed.mp3',{loop:true,gain:.5});}
   if(beat.cutscene==='SomeoneLeft')this.p.setDoorOpen(true);
   if(this.stage?.startsWith('truth-')){
    for(const {root}of Object.values(cast))root.visible=false;
@@ -106,6 +107,7 @@ export class StoryPerformances {
   const {cast,objects}=this.p;const handled=new Set();const stage=this.stage;
   if(this.paused!==paused){for(const s of this.sounds){if(paused){s.wasPlaying=!s.audio.paused;s.audio.pause();}else if(s.wasPlaying)s.audio.play().catch(()=>{});}this.paused=paused;}
   if(paused)return new Set(Object.keys(cast));
+  if(stage==='outside'){const n=cast.nick;n.actor.update({time:t,delta,dead:true});n.actor.rig.quaternion.copy(n.actor.restRig.quaternion).multiply(new Quaternion().setFromEuler(new Euler(Math.PI/2,0,0)));handled.add('nick');}
   if(this.beat?.cutscene==='SomeoneLeft'){
    const hinge=objects['memory-door'].getObjectByName('Door hinge');if(hinge)hinge.rotation.y=mix(-.65,0,ramp(t,.1,1.0));this.cue('latch',t,.946,'door_latch_close.mp3');
   }

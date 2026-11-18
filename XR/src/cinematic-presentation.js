@@ -76,6 +76,8 @@ export class CinematicPresentation {
     this.place('ivy',[.45,0,-3.0],'standing',-.15);
    }
   }
+  // The body is outside; it is revealed only after the locked door opens.
+  if(stage==='morning'||stage==='morning-reveal')this.cast.nick.root.visible=false;
   if(stage==='good-years'){
    this.place('priya',[-1.12,0,-2.4],'toast',.3);this.place('nick',[-.4,0,-2.1],'toast',.1);this.place('ivy',[.4,0,-2.1],'toast',-.1);this.place('aaron',[1.12,0,-2.4],'toast',-.3);
   }

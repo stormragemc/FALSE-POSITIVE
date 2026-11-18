@@ -81,7 +81,7 @@ export class StoryPerformances {
    const role=this.stage.slice(7);this.p.place(role,[0,0,-2.2],'sitting');
   }else objects.chair.position.set(0,0,-1.6);
   if(this.stage==='ending-david'){objects.photo.visible=false;this.folderHinge.rotation.z=.72;}
-  if(this.stage==='outside'){objects.room.visible=false;objects.cabin.visible=false;objects.desk.visible=false;objects['memory-door'].visible=false;this.windowGlass.visible=false;this.shards.visible=true;this.coldLight.color.set('#adc6d5');this.snow.material.opacity=.35;this.p.place('nick',[-.4,0,-2.95],'lying',0);this.sound('menu_storm_bed.mp3',{loop:true,gain:.5});}
+  if(this.stage==='outside'){objects.room.visible=false;objects.cabin.visible=false;objects.desk.visible=false;objects['memory-door'].visible=false;this.windowGlass.visible=false;this.shards.visible=true;this.coldLight.color.set('#adc6d5');this.snow.material.opacity=.35;this.p.place('nick',[.85,.086,-3],'lying',-Math.PI/2);this.sound('menu_storm_bed.mp3',{loop:true,gain:.5});}
   if(beat.cutscene==='SomeoneLeft')this.p.setDoorOpen(true);
   if(this.stage?.startsWith('truth-')){
    for(const {root}of Object.values(cast))root.visible=false;
@@ -94,7 +94,9 @@ export class StoryPerformances {
    if(this.stage==='truth-coats'){this.p.place('nick',[0,0,-2.4],'guarded',.1);}
    if(this.stage==='truth-window'){this.p.place('nick',[-.4,0,-2.75],'guarded',0);this.p.place('aaron',[-.4,0,-2.17],'guarded',Math.PI);}
    if(this.stage==='truth-lock'){this.p.place('aaron',[1.52,0,-2.85],'standing',Math.PI);this.p.place('ivy',[-1.7,.55,-2.8],'standing',.25);this.p.setDoorOpen(false);objects.key.visible=true;}
-   if(this.stage==='truth-cold')this.p.place('nick',[-.4,0,-2.95],'lying',0);
+   // The broadside silhouette stays above the low caption panel. The old
+   // head-toward-camera blocking hid most of Nick behind the Skip controls.
+   if(this.stage==='truth-cold')this.p.place('nick',[.85,.086,-3],'lying',-Math.PI/2);
    if(this.stage==='truth-morning'){
     objects.sofa.visible=true;objects.sofa.position.set(0,0,-2.35);objects.sofa.rotation.set(0,0,0);
     const body=this.p.place('nick',[.83,.605,-2.23],'lying',Math.PI/2);
@@ -147,13 +149,14 @@ export class StoryPerformances {
    if(stage==='truth-coats'){cast.nick.actor.update({time:t,delta,talking:false,performance:{right:[-.23,1.20,.20],gaze:-.15}});handled.add('nick');}
    if(stage==='truth-window'){
     const hit=ramp(t,1.7,2.6),fall=ramp(t,2.7,5.7),aaron=cast.aaron,nick=cast.nick;
-    nick.root.position.set(-.4,.07*fall,-2.75-.48*hit+.28*fall);nick.root.rotation.y=0;
+    nick.root.position.set(mix(-.4,.85,fall),.086*fall,-2.75-.48*hit+.23*fall);nick.root.rotation.y=-Math.PI/2*fall;
     nick.actor.update({time:t,delta,dead:fall>.5,performance:{lean:-.10*hit}});
     nick.actor.rig.quaternion.copy(nick.actor.restRig.quaternion).multiply(new Quaternion().setFromEuler(new Euler(Math.PI/2*fall,0,0)));nick.actor.rig.position.copy(nick.actor.restRig.position);nick.actor.rig.position.y+=.125*fall;
     nick.root.updateWorldMatrix(true,true);handled.add('nick');
-    aaron.root.position.set(-.4,0,-2.30-.48*hit+.50*ramp(t,3.0,5.8));aaron.root.rotation.y=Math.PI;aaron.root.updateWorldMatrix(true,true);
+    // A lateral stance exposes Nick and the impact from the seated view.
+    aaron.root.position.set(-.78,0,-2.30-.48*hit+.50*ramp(t,3.0,5.8));aaron.root.rotation.y=Math.PI;aaron.root.updateWorldMatrix(true,true);
     const contact=ramp(t,1.2,1.8)*(1-ramp(t,2.65,3.5));
-    const shoulder=nick.actor.bones.get('LeftArm').getWorldPosition(new Vector3());const local=aaron.actor.rig.worldToLocal(shoulder);
+    const shoulder=nick.actor.bones.get('RightArm').getWorldPosition(new Vector3());const local=aaron.actor.rig.worldToLocal(shoulder);
     aaron.actor.update({time:t,delta,performance:{right:[mix(-.23,local.x,contact),mix(.98,local.y,contact),mix(.04,local.z,contact)],lean:.06*hit}});handled.add('aaron');
     this.windowGlass.visible=t<2.5;this.shards.visible=t>=2.5;this.cue('impact',t,2.5,'glass_crunch.mp3',.65);
    }
@@ -166,7 +169,7 @@ export class StoryPerformances {
     this.cue('lock',t,2.732,'door_bolt_lock.mp3');this.cue('stairs',t,5.8,'footsteps_stairs.mp3',.65);
    }
    if(stage==='truth-cold'){
-    const nick=cast.nick;nick.root.position.x=-.35+.004*(1-ramp(t,0,7))*Math.sin(t*19);nick.actor.update({time:t,delta,dead:true});nick.actor.rig.quaternion.copy(nick.actor.restRig.quaternion).multiply(new Quaternion().setFromEuler(new Euler(Math.PI/2,0,0)));handled.add('nick');
+    const nick=cast.nick;nick.root.position.x=.85+.004*(1-ramp(t,0,7))*Math.sin(t*19);nick.actor.update({time:t,delta,dead:true});nick.actor.rig.quaternion.copy(nick.actor.restRig.quaternion).multiply(new Quaternion().setFromEuler(new Euler(Math.PI/2,0,0)));handled.add('nick');
     this.coldLight.color.copy(new Color('#41618e')).lerp(new Color('#adc6d5'),ramp(t,5.5,10));this.coldLight.intensity=mix(4,10,ramp(t,5.5,10));
     this.snow.material.opacity=mix(.78,.35,ramp(t,6,10));
    }

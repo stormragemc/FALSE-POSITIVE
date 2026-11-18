@@ -1341,7 +1341,7 @@ export function createCinematicPlayer({
         }
       };
       // The watchdog starts before audio.play(), so even an unresolved play promise ends.
-      schedule(beat.audio ? Math.min(limit,8) : Math.max(Number(beat.duration) || Number(beat.holdSeconds) || 2.5, minimumMs / 1000));
+      schedule(beat.audio ? Math.min(limit,Math.max(8,minimumMs/1000)) : Math.max(Number(beat.duration) || Number(beat.holdSeconds) || 2.5, minimumMs / 1000));
       const fallback = (error) => {
         if (done || current !== run || run.generation !== generation) return;
         report({ type: 'audio', ...context, message: String(error?.message || 'Audio unavailable; captions continue.') });

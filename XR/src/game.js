@@ -93,6 +93,8 @@ export function transition(state, action) {
         ? enterPhase(state, 'night')
         : notice(state, 'The case has already started.');
     case 'TUNE_RADIO': {
+      // Hearing the warning completes this clue; later touches cannot undo it.
+      if(state.phase==='night'&&state.radioTuned)return notice(state,'You heard the warning. Open the latch and call for Nick.');
       if (state.phase !== 'night') return notice(state, 'The radio is part of your night memory.');
       if (state.radioTuned) return state;
       const value = Number(action.value);

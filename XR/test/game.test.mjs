@@ -226,3 +226,11 @@ test('reset from interrupted or completed phases clears all gates and allows a f
     assert.equal(transition(fresh, { type: 'START' }).phase, 'night');
   }
 });
+
+
+test('retuning after hearing the radio cannot remove the clue or trap the night phase',()=>{
+ let s=transition(createGame(),{type:'START'});s=transition(s,{type:'TUNE_RADIO',value:.5});
+ for(let i=0;i<20;i++)s=transition(s,{type:'TUNE_RADIO',value:1});
+ s=transition(s,{type:'OPEN_NIGHT_DOOR'});s=transition(s,{type:'CONTINUE'});
+ assert.equal(s.phase,'recall');
+});

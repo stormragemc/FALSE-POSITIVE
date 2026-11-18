@@ -1,7 +1,10 @@
+import { audioGain } from './audio-gains.js';
+import { TRUTH_CINEMATICS, TRUTH_SEQUENCE } from './truth-reveal.js';
 /** Canonical shipped Unity recipes, extracted from _Persistent.unity at baseline b26a3f7.
  * Dialogue, original audio IDs, flags, order and pacing are preserved.
  * Staging is performed by the XR scene; these are not video placeholders. */
 export const CINEMATICS = Object.freeze({
+  ...TRUTH_CINEMATICS,
   "Wake": {
     "id": "Wake",
     "canonId": "CS-01",
@@ -236,8 +239,8 @@ export const CINEMATICS = Object.freeze({
       {
         "speaker": "",
         "text": "",
-        "audio": "/media/sfx/door_latch_close.mp3",
-        "duration": 1.228,
+        "audio": null,
+        "duration": 1.6,
         "holdSeconds": 1.5,
         "stage": "night",
         "timeCard": "",
@@ -821,7 +824,8 @@ export const CINEMATICS = Object.freeze({
         "text": "…snow storm…",
         "audio": "/media/vo/RADIO-002.wav",
         "duration": 1.51,
-        "holdSeconds": 1.2,
+        "holdSeconds": 4.5,
+        "minimumSeconds": 4.5,
         "stage": "went-wrong",
         "timeCard": "1420",
         "timeCardCaption": "Later. The fire is dying.",
@@ -860,7 +864,8 @@ export const CINEMATICS = Object.freeze({
         "text": "…please stay indoors…",
         "audio": "/media/vo/RADIO-003.wav",
         "duration": 1.99,
-        "holdSeconds": 1.2,
+        "holdSeconds": 4.5,
+        "minimumSeconds": 4.5,
         "stage": "went-wrong",
         "timeCard": "",
         "timeCardCaption": "",
@@ -925,7 +930,8 @@ export const CINEMATICS = Object.freeze({
         "text": "…during these times.",
         "audio": "/media/vo/RADIO-004.wav",
         "duration": 1.51,
-        "holdSeconds": 1.2,
+        "holdSeconds": 4.5,
+        "minimumSeconds": 4.5,
         "stage": "went-wrong",
         "timeCard": "",
         "timeCardCaption": "",
@@ -936,9 +942,10 @@ export const CINEMATICS = Object.freeze({
       {
         "speaker": "",
         "text": "",
-        "audio": "/media/sfx/door_latch_close.mp3",
-        "duration": 1.228,
-        "holdSeconds": 1.2,
+        "audio": null,
+        "duration": 4.5,
+        "holdSeconds": 4.5,
+        "minimumSeconds": 4.5,
         "stage": "went-wrong",
         "timeCard": "",
         "timeCardCaption": "",
@@ -1035,6 +1042,7 @@ export const CINEMATICS = Object.freeze({
         "audio": "/media/vo/SPASSKY-053.wav",
         "duration": 3.59,
         "holdSeconds": 4,
+        "minimumSeconds": 10,
         "stage": "ending-david",
         "timeCard": "",
         "timeCardCaption": "",
@@ -1059,6 +1067,7 @@ export const CINEMATICS = Object.freeze({
         "audio": "/media/vo/SPASSKY-054.wav",
         "duration": 6.71,
         "holdSeconds": 4,
+        "minimumSeconds": 12,
         "stage": "ending-aaron",
         "timeCard": "",
         "timeCardCaption": "",
@@ -1083,6 +1092,7 @@ export const CINEMATICS = Object.freeze({
         "audio": "/media/vo/SPASSKY-055.wav",
         "duration": 5.43,
         "holdSeconds": 4,
+        "minimumSeconds": 10,
         "stage": "ending-ivy",
         "timeCard": "",
         "timeCardCaption": "",
@@ -1107,6 +1117,7 @@ export const CINEMATICS = Object.freeze({
         "audio": "/media/vo/PRIYA-008.wav",
         "duration": 4.39,
         "holdSeconds": 4,
+        "minimumSeconds": 5.5,
         "stage": "ending-priya",
         "timeCard": "",
         "timeCardCaption": "",
@@ -1120,6 +1131,7 @@ export const CINEMATICS = Object.freeze({
         "audio": "/media/vo/SPASSKY-056.wav",
         "duration": 3.67,
         "holdSeconds": 4,
+        "minimumSeconds": 6,
         "stage": "ending-priya",
         "timeCard": "",
         "timeCardCaption": "",
@@ -1132,6 +1144,7 @@ export const CINEMATICS = Object.freeze({
 });
 
 export const SEQUENCES = Object.freeze({
+  truthReveal: TRUTH_SEQUENCE,
   "start": [
     "Wake",
     "SpasskyAnswer",
@@ -1246,7 +1259,7 @@ export const CINEMATIC_SOURCE_FILES = Object.freeze([
 
 /** Bounded, cancellable authored playback. onBeat stages the actual XR scene. */
 export function createCinematicPlayer({
-  onBeat = () => {}, onFinish = () => {}, onError = () => {},
+  onBeat = () => {}, onFinish = () => {}, onError = () => {}, onAudioState = () => {},
   AudioClass = typeof Audio === 'undefined' ? null : Audio,
   setTimer = setTimeout, clearTimer = clearTimeout, maxBeatSeconds = 45,
   now = () => (typeof performance === 'undefined' ? Date.now() : performance.now()),
@@ -1257,8 +1270,10 @@ export function createCinematicPlayer({
   const report = (detail) => { try { onError(detail); } catch { /* Presentation errors cannot stall the case. */ } };
   function stopAudio(run) {
     if (!run.audio) return;
+    try { onAudioState({active:false,...run.audioContext}); } catch { /* UI cannot trap playback. */ }
     run.audio.onended = null;
     run.audio.onerror = null;
+    run.audio.onplaying = null;
     try { run.audio.pause(); } catch { /* An unavailable audio device is recoverable. */ }
     run.audio = null;
   }
@@ -1282,6 +1297,9 @@ export function createCinematicPlayer({
       let timer = null;
       let remainingMs = 0;
       let deadline = 0;
+      let activeStarted = now(), elapsedBeforePause = 0, audioEnded = false;
+      const elapsed = () => elapsedBeforePause + (run.paused ? 0 : now() - activeStarted);
+      const minimumMs = Math.max(0, Math.min(limit, Number(beat.minimumSeconds) || 0)) * 1000;
       const finish = () => {
         if (done) return;
         // A timer/audio-ended event already queued before pause must not advance it.
@@ -1304,6 +1322,7 @@ export function createCinematicPlayer({
       run.settle = finish;
       run.pauseCurrent = () => {
         if (done) return;
+        elapsedBeforePause += Math.max(0, now() - activeStarted);
         if (timer !== null) {
           remainingMs = Math.max(0, deadline - now());
           clearTimer(timer);
@@ -1313,20 +1332,21 @@ export function createCinematicPlayer({
       };
       run.resumeCurrent = () => {
         if (done) return;
+        activeStarted = now();
         deadline = now() + remainingMs;
-        timer = setTimer(finish, Math.max(1, remainingMs));
-        if (run.audio) {
+        timer = setTimer(finish, Math.max(1, remainingMs, minimumMs - elapsedBeforePause));
+        if (run.audio && !audioEnded) {
           try { const started = run.audio.play(); if (started?.catch) started.catch(fallback); }
           catch (error) { fallback(error); }
         }
       };
       // The watchdog starts before audio.play(), so even an unresolved play promise ends.
-      schedule((Number(beat.duration) || Number(beat.holdSeconds) || 2.5) + (beat.audio ? 0.65 : 0));
+      schedule(beat.audio ? Math.min(limit,8) : Math.max(Number(beat.duration) || Number(beat.holdSeconds) || 2.5, minimumMs / 1000));
       const fallback = (error) => {
         if (done || current !== run || run.generation !== generation) return;
         report({ type: 'audio', ...context, message: String(error?.message || 'Audio unavailable; captions continue.') });
         stopAudio(run);
-        schedule(beat.holdSeconds || beat.duration || 2.5);
+        schedule(Math.max(beat.holdSeconds || beat.duration || 2.5,(minimumMs-elapsed())/1000));
       };
       try {
         onBeat({ ...beat, ...context });
@@ -1337,9 +1357,23 @@ export function createCinematicPlayer({
       try {
         const audio = new AudioClass(beat.audio);
         run.audio = audio;
+        audio.volume = audioGain(beat.audio);
         audio.preload = 'auto';
-        audio.onended = finish;
+        audio.onended = () => {
+          audioEnded = true;
+          try { onAudioState({active:false,speaker:beat.speaker,...context}); } catch {}
+          const remaining = minimumMs - elapsed();
+          if (remaining > 0) schedule(remaining / 1000);
+          else finish();
+        };
+        audio.onplaying = () => {
+          if (done || run.paused || current !== run) return;
+          try { onAudioState({active:true,speaker:beat.speaker,...context}); } catch {}
+          const duration = Number.isFinite(audio.duration) ? audio.duration : Number(beat.duration) || 2.5;
+          schedule(Math.max(duration - (audio.currentTime || 0) + 2, (minimumMs - elapsed()) / 1000));
+        };
         audio.onerror = fallback;
+        run.audioContext={speaker:beat.speaker,...context};
         const started = audio.play();
         if (started?.catch) started.catch(fallback);
       } catch (error) { fallback(error); }

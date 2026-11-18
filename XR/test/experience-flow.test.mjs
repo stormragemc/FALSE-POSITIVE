@@ -100,7 +100,7 @@ for (const [name, statement] of [
     const expected = [
       ...SEQUENCES.start, ...SEQUENCES.wakeNight, ...SEQUENCES.radio, ...SEQUENCES.nightEnd,
       ...SEQUENCES.morningStart, ...SEQUENCES.morningEnd, ...SEQUENCES.verdictMemory,
-      ...(SEQUENCES[`accusation${name}`] || []), ...SEQUENCES[`ending${name}`],
+      ...(SEQUENCES[`accusation${name}`] || []), ...SEQUENCES[`ending${name}`], ...SEQUENCES.truthReveal,
     ];
     assert.deepEqual(ordered, expected);
     assert.ok(f.finished.every(result => result.status === 'completed'));
@@ -172,6 +172,7 @@ test('reset during the accusation flashback never plays a stale reply over the n
   f.scheduler.hold = true;
   f.e.draft = 'I think it was Aaron. The locked door and key were inside.';
   const running = f.e.submit();
+  for(let i=0;i<6;i++)await Promise.resolve();
   assert.equal(f.e.inCinematic, true);
   const spoken = f.speech.length;
   f.e.reset();
@@ -200,17 +201,25 @@ test('a terminal live response arriving after reset cannot change the new case m
   assert.equal(f.e.error, '');
 });
 
-test('officer playback startup cannot hold the completed statement or Continue button busy', async () => {
+test('reply completion gates the next memory; Skip reply releases audio without advancing', async () => {
   const f = fixture();
   await reachRecall(f);
-  f.e.voice.speak = () => new Promise(() => {});
+  let finish;
+  f.e.voice.speak = () => new Promise(resolve => { finish=resolve; });
+  f.e.voice.stopSpeaking = () => finish?.({status:'cancelled'});
   f.e.draft = 'I do not remember the night.';
   const running = f.e.submit();
-  // Flushing promises is sufficient: no network request or wall-clock audio is involved.
-  for (let i = 0; i < 6; i++) await Promise.resolve();
-  assert.equal(f.e.state.statements.length, 1);
-  assert.equal(f.e.busy, false);
+  for (let i=0;i<6;i++) await Promise.resolve();
+  assert.equal(f.e.state.statements.length,1);
+  assert.equal(f.e.busy,false);
+  assert.equal(f.e.replyPending,true);
+  await f.e.dispatch({type:'CONTINUE'});
+  assert.equal(f.e.state.phase,'recall');
+  assert.equal(f.e.inCinematic,false);
+  f.e.primary();
   await running;
+  assert.equal(f.e.replyPending,false);
+  assert.equal(f.e.state.phase,'recall');
 });
 
 test('duplicate scene input during a pending cinematic cannot queue another phase transition', async () => {

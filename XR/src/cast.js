@@ -50,6 +50,16 @@ export function setupCastActor(root, { pose = 'standing', role = '', seatHeight 
     const elbow = start.clone().addScaledVector(axis, along).addScaledVector(bend, Math.sqrt(Math.max(0, a * a - along * along)));
     aim(upper, lower, elbow); aim(lower, hand, target);
   }
+  function foot(side,x,y,z) {
+    const upper=bones.get(side+'UpLeg'),lower=bones.get(side+'Leg'),end=bones.get(side+'Foot');
+    const start=upper.getWorldPosition(new Vector3()),middle=lower.getWorldPosition(new Vector3()),tip=end.getWorldPosition(new Vector3());
+    const target=localPoint(x,y,z),a=start.distanceTo(middle),b=middle.distanceTo(tip),axis=target.clone().sub(start);
+    const d=Math.min(a+b-.0001,Math.max(Math.abs(a-b)+.0001,axis.length()));axis.normalize();
+    const along=(a*a-b*b+d*d)/(2*d),bend=localPoint(x,.5,.8).sub(start);bend.addScaledVector(axis,-bend.dot(axis)).normalize();
+    const knee=start.clone().addScaledVector(axis,along).addScaledVector(bend,Math.sqrt(Math.max(0,a*a-along*along)));
+    aim(upper,lower,knee);aim(lower,end,target);
+    const toe=bones.get(side+'ToeBase');if(toe)aim(end,toe,end.getWorldPosition(new Vector3()).add(localPoint(0,-.05,.14).sub(localPoint(0,0,0))));
+  }
   function morph(name, value) {
     for (const face of faces) {
       const index = face.morphTargetDictionary[name];
@@ -118,19 +128,35 @@ export function setupCastActor(root, { pose = 'standing', role = '', seatHeight 
       posed.clear(); for (const [name, bone] of bones) posed.set(name, bone.quaternion.clone());
       return actor;
     },
-    update({ time, delta = 1 / 60, talking = false, walking = false, dead = false, audioLevel } = {}) {
+    update({ time, delta = 1 / 60, talking = false, walking = false, walkPhase, dead = false, audioLevel, performance = {} } = {}) {
       clock = Number.isFinite(time) ? time : clock + Math.min(delta, 0.1);
-      if (seated) { seated.update(talking, delta, clock, audioLevel); return; }
+      if (seated) { seated.update(talking, delta, clock, audioLevel, performance); return; }
       speech += ((talking && !dead ? 1 : 0) - speech) * Math.min(1, delta * 10);
       apply('Spine2', dead ? 0 : 0.007 * Math.sin(clock * 1.3));
       apply('Head', dead ? 0 : 0.009 * Math.sin(clock * 0.8), dead ? 0 : 0.025 * Math.sin(clock * 0.34));
       apply('LeftArm', 0); apply('RightArm', 0);
       if (walking && currentPose !== 'lying') {
-        const stride = Math.sin(clock * 6.1);
+        const phase=Number.isFinite(walkPhase)?walkPhase:clock*.98,stride=Math.sin(phase*Math.PI*2);
         apply('LeftUpLeg', stride * 0.24); apply('RightUpLeg', -stride * 0.24);
         apply('LeftLeg', -Math.max(0, -stride) * 0.32); apply('RightLeg', -Math.max(0, stride) * 0.32);
         if (currentPose === 'standing') { apply('LeftArm', -stride * 0.13); apply('RightArm', stride * 0.13); }
+        root.updateWorldMatrix(true,true);
+        for(const [side,offset,sign]of [['Left',0,1],['Right',.5,-1]]){
+          const p=(phase+offset)%1;let forward,height=.08;
+          if(p<.6)forward=.15-.3*p/.6;
+          else {const u=(p-.6)/.4;forward=-.15+.3*(u*u*(3-2*u));height+=.09*Math.sin(Math.PI*u);}
+          foot(side,sign*.10,height,forward);
+        }
       } else for (const name of ['LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg']) apply(name, 0);
+      if (performance.lean) apply('Spine',performance.lean);
+      if (performance.gaze || performance.nod) apply('Head',performance.nod||0,performance.gaze||0);
+      root.updateWorldMatrix(true,true);
+      for (const [side,key,sign] of [['Left','left',1],['Right','right',-1]]) {
+        const target=performance[key]; if (!target) continue;
+        for(const part of ['Arm','ForeArm','Hand']) bones.get(side+part).quaternion.copy(posed.get(side+part));
+        root.updateWorldMatrix(true,true);
+        arm(side,...target,sign*.55,1.12,-.1);
+      }
       const envelope = Number.isFinite(audioLevel) ? Math.max(0, Math.min(1, audioLevel * 4)) : 0.3 + 0.7 * Math.abs(Math.sin(clock * 9.1));
       morph('jawOpen', speech * envelope * 0.2); morph('mouthOpen', speech * envelope * 0.16); morph('viseme_aa', speech * envelope * 0.1);
       const blinkPhase = (clock + 1.1) % 4.7;
@@ -142,6 +168,8 @@ export function setupCastActor(root, { pose = 'standing', role = '', seatHeight 
       for (const name of ['mouthOpen', 'jawOpen', 'viseme_aa', 'eyeBlinkLeft', 'eyeBlinkRight', 'eyesClosed']) morph(name, 0);
     },
   };
+  actor.rig=rig;
+  actor.restRig=originalRig;
   function apply(name, x, y = 0, z = 0) {
     const bone = bones.get(name); if (!bone || !posed.has(name)) return;
     bone.quaternion.copy(posed.get(name)).multiply(rotation.setFromEuler(euler.set(x, y, z)));

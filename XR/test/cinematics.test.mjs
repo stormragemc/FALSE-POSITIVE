@@ -5,7 +5,8 @@ import { CINEMATICS, SEQUENCES, CINEMATIC_SOURCE_FILES, createCinematicPlayer } 
 const immediate = { setTimer: fn => { queueMicrotask(fn); return 1; }, clearTimer: () => {} };
 
 test('all 24 canonical variants and four connective recipes have actual authored beats', () => {
-  assert.equal(Object.keys(CINEMATICS).length, 28);
+  assert.equal(Object.keys(CINEMATICS).length,34);
+  assert.equal(Object.keys(CINEMATICS).filter(id=>id.startsWith('Truth')).length,6);
   const canonical = new Set(Object.values(CINEMATICS).map(x => x.canonId).filter(x => x.startsWith('CS-')));
   assert.equal(canonical.size, 24);
   assert.equal(CINEMATIC_SOURCE_FILES.length, 51);
@@ -41,6 +42,25 @@ test('a never-settling audio playback promise is bounded by the watchdog', async
     setTimer: (fn, ms) => { delays.push(ms); queueMicrotask(fn); return 1; }, clearTimer: () => {} });
   assert.equal((await player.play('start')).status, 'completed');
   assert.ok(delays.every(ms => ms > 0 && ms <= 3000));
+});
+
+test('audio startup is bounded but a playing long line keeps its complete duration',async()=>{
+ let audio;const timers=new Map();let id=0;
+ class Voice {constructor(){audio=this;this.duration=25;this.currentTime=0;}play(){return Promise.resolve();}pause(){}}
+ const player=createCinematicPlayer({AudioClass:Voice,setTimer:(fn,ms)=>{timers.set(++id,{fn,ms});return id;},clearTimer:id=>timers.delete(id)});
+ const run=player.play('start');assert.equal([...timers.values()][0].ms,8000);
+ audio.onplaying();assert.equal([...timers.values()][0].ms,27000);
+ player.cancel();await run;
+});
+
+test('short ending voice does not cut off its authored visual performance',async()=>{
+ let clock=0,audio;const timers=new Map();let id=0;
+ class Voice {constructor(){audio=this;}play(){return Promise.resolve();}pause(){}}
+ const player=createCinematicPlayer({AudioClass:Voice,now:()=>clock,setTimer:(fn,ms)=>{timers.set(++id,{fn,ms});return id;},clearTimer:id=>timers.delete(id)});
+ const run=player.play('EndingIvy');clock=1000;audio.onended();
+ assert.equal([...timers.values()][0].ms,9000);
+ player.pause();clock=11000;player.resume();assert.equal([...timers.values()][0].ms,9000);
+ player.cancel();await run;
 });
 
 test('skip advances the requested hook once and releases the current audio', async () => {

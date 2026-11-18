@@ -51,7 +51,7 @@ export function cabinRoom(){
 }
 export function desk(){
  const g=new Group();g.name='Interview table';
- const top=rounded(g,'Tabletop',1.7,.94,.06,0,.74,0,steel);top.rotation.x=Math.PI/2;
+ const top=rounded(g,'Tabletop',1.7,.94,.06,0,.7545,0,steel);top.rotation.x=Math.PI/2;
  for(const x of [-.7,.7])for(const z of [-.34,.34])box(g,'Table leg',[.045,.7,.045],[x,.35,z],steel);
  box(g,'Cross brace',[1.4,.045,.045],[0,.2,.32],steel);
  rounded(g,'Case folder',.3,.015,.4,-.44,.79,-.09,mat('#70634b'));
@@ -84,8 +84,8 @@ export function memoryDoor(){
  const leaf=new Group();leaf.name='Door hinge';leaf.position.set(-.36,0,.075);g.add(leaf);
  box(leaf,'Door slab',[.72,1.95,.09],[.36,1.02,0],mat('#463b2e'));
  for(const y of [.53,1.48])box(leaf,'Raised door panel',[.51,.64,.035],[.36,y,.07],wood);
- const h=cyl(leaf,'Door latch',.028,.15,[.60,.94,.13],steel);h.rotation.z=Math.PI/2;
- box(leaf,'Key plate',[.045,.11,.015],[.6,.84,.07],steel);return g;
+ const h=cyl(leaf,'Door latch',.028,.15,[.60,1.22,.13],steel);h.rotation.z=Math.PI/2;
+ box(leaf,'Key plate',[.045,.11,.015],[.6,1.10,.07],steel);return g;
 }
 export function sofa(){
  const g=new Group();g.name='Cabin sofa';const fabric=mat('#414b42');

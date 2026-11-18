@@ -1,4 +1,5 @@
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import sharp from 'sharp';
 import { basename } from 'node:path';
 import { prepareCast } from './prepare-cast.mjs';
 import { CINEMATIC_SOURCE_FILES } from '../src/cinematics.js';
@@ -23,3 +24,8 @@ for (const source of CINEMATIC_SOURCE_FILES) {
  await writeFile(new URL(`public/media/${folder}/${basename(source)}`,base),bytes);
 }
 console.log('Prepared all canonical cinematic voices, effects and cast models.');
+await sharp(new URL('../Assets/_Project/Art/Cabin_v2/Textures/weathered_plank_siding_diff_4k.jpg',base).pathname).resize(1024).jpeg({quality:85}).toFile(new URL('public/media/images/cabin-wood.jpg',base).pathname);
+const effects=new URL('../Assets/_Project/Art/Audio/SFX/',base);
+for(const name of await readdir(effects))if(/\.(mp3|wav)$/i.test(name))await cp(new URL(name,effects),new URL(`public/media/sfx/${name}`,base));
+
+for(const name of ['desk','chair','sofa'])await cp(new URL(`../Assets/_Project/Art/XR/Cinematic/${name}.glb`,base),new URL(`public/models/${name}-detail.glb`,base));

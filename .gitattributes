@@ -169,3 +169,6 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# Small browser-ready cinematic props are ordinary Git assets.
+Assets/_Project/Art/XR/Cinematic/*.glb -filter -diff -merge -text

@@ -1,3 +1,4 @@
+import { audioGain } from './audio-gains.js';
 /** Browser audio boundary. Audio remains in memory; credentials never enter this module. */
 const SAMPLE_RATE = 16000;
 const MAX_RECORDING_MS = 19000;
@@ -53,7 +54,7 @@ export function createVoiceEngine({
   audioBase = './audio/spassky',
   onStatus = () => {}, onLevel = () => {}, onSpeaking = () => {},
   onRecordingReady = () => {}, browserTranscription = false,
-  fetchImpl = (...args) => fetch(...args),
+  fetchImpl = (...args) => fetch(...args), playbackSetTimer = setTimeout, playbackClearTimer = clearTimeout,
 } = {}) {
   let context;
   let stream;
@@ -68,6 +69,7 @@ export function createVoiceEngine({
   let playbackGeneration = 0;
   let recordingGeneration = 0;
   let destroyed = false;
+  let playbackRun;
   const requests = new Set();
 
   async function audioContext() {
@@ -81,6 +83,7 @@ export function createVoiceEngine({
   }
 
   function stopSpeaking() {
+    playbackRun?.finish('cancelled');
     playbackGeneration++;
     if (activeAudio) { activeAudio.pause(); activeAudio = undefined; }
     if (activeSource) { try { activeSource.stop(); } catch { /* already ended */ } activeSource = undefined; }
@@ -88,19 +91,41 @@ export function createVoiceEngine({
     onSpeaking(false);
   }
 
+  function createPlayback(text, generation) {
+    let resolve;
+    const run = { generation, promise: new Promise(r => { resolve = r; }), timer: null, done: false };
+    run.finish = status => {
+      if (run.done) return;
+      run.done = true; playbackClearTimer(run.timer);
+      if (playbackRun === run) { playbackRun = undefined; onSpeaking(false); }
+      resolve({status});
+    };
+    run.watch = seconds => {
+      playbackClearTimer(run.timer);
+      run.timer = playbackSetTimer(() => {
+        if (playbackRun !== run) return;
+        stopSpeaking();
+      }, Math.max(3, Math.min(180, seconds)) * 1000);
+    };
+    playbackRun = run;
+    run.watch(Math.max(18, text.split(/\s+/).length / 1.7 + 12));
+    return run;
+  }
+
   function browserSpeak(text, generation) {
     if (generation !== playbackGeneration) return false;
-    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { onSpeaking(false); return false; }
+    const run = playbackRun;
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { run?.finish('unavailable'); return false; }
     const speech = new window.SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
     speech.voice = voices.find(v => /^en/.test(v.lang) && /daniel|alex|george|arthur/i.test(v.name)) || voices.find(v => /^en/.test(v.lang)) || null;
     speech.lang = speech.voice?.lang || 'en-GB';
     speech.rate = 0.88;
     speech.pitch = 0.8;
-    speech.onend = () => { if (generation === playbackGeneration) onSpeaking(false); };
+    speech.onend = () => { if (generation === playbackGeneration) run?.finish('completed'); };
     speech.onerror = speech.onend;
     onSpeaking(true);
-    window.speechSynthesis.speak(speech);
+    try { window.speechSynthesis.speak(speech); } catch { run?.finish('unavailable'); }
     return true;
   }
 
@@ -109,6 +134,7 @@ export function createVoiceEngine({
     stopSpeaking();
     if (!clean || destroyed) return false;
     const generation = playbackGeneration;
+    const run = createPlayback(clean, generation);
     if (payload.audio_b64) {
       try {
         const ctx = await audioContext();
@@ -125,29 +151,35 @@ export function createVoiceEngine({
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
-        source.onended = () => { if (generation === playbackGeneration) { activeSource = undefined; onSpeaking(false); } };
+        source.onended = () => { if (generation === playbackGeneration) { activeSource = undefined; run.finish('completed'); } };
         activeSource = source;
         onSpeaking(true);
+        run.watch(buffer.duration + 3);
         source.start();
-        return true;
+        return run.promise;
       } catch { /* Keep the returned text available when live PCM cannot play. */ }
     }
     const recording = RECORDINGS.get(clean);
-    if (!recording) return browserSpeak(clean, generation);
+    if (!recording) { browserSpeak(clean, generation); return run.promise; }
     const player = new Audio(`${audioBase.replace(/\/$/, '')}/${recording}.wav`);
+    player.volume = audioGain(`/media/audio/spassky/${recording}.wav`);
     activeAudio = player;
     player.preload = 'auto';
     let fellBack = false;
     const fallback = () => {
       if (fellBack || generation !== playbackGeneration) return;
       fellBack = true;
+      player.onended = null; player.onerror = null; player.onplaying = null;
+      try { player.pause(); } catch { /* Failed media is no longer an owner. */ }
       activeAudio = undefined;
       browserSpeak(clean, generation);
     };
-    player.onended = () => { if (generation === playbackGeneration) { activeAudio = undefined; onSpeaking(false); } };
+    player.onended = () => { if (generation === playbackGeneration) { activeAudio = undefined; run.finish('completed'); } };
+    player.onplaying = () => { if (Number.isFinite(player.duration)) run.watch(player.duration - player.currentTime + 3); };
     player.onerror = fallback;
     onSpeaking(true);
-    try { await player.play(); return true; } catch { fallback(); return false; }
+    try { const started = player.play(); started?.catch(fallback); } catch { fallback(); }
+    return run.promise;
   }
 
   function releaseMicrophone() {

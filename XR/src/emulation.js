@@ -27,6 +27,7 @@ export async function setupEmulation() {
   device.installRuntime({ forceInstall: true });
   developerControls = new DevUI(device);
   emulatedDevice = device;
+  if(new URL(location.href).searchParams.get('qa')==='1')window.falsePositiveEmulator=device;
   document.documentElement.dataset.xrEmulated = 'true';
   return device;
 }

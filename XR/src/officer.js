@@ -4,7 +4,7 @@ import { Euler, Matrix4, Quaternion, Vector3 } from '@iwsdk/core';
 // actual skin retains its face, clothing and hand detail; no proxy is used.
 const officers = new WeakMap();
 
-export function setupOfficer(root, { seatHeight = 0.535, handHeight = 0.795, handDepth = 0.34 } = {}) {
+export function setupOfficer(root, { seatHeight = 0.535, handHeight = 0.827, handDepth = 0.34 } = {}) {
   if (officers.has(root)) return officers.get(root);
   const bones = new Map();
   const faces = [];
@@ -117,7 +117,7 @@ export function setupOfficer(root, { seatHeight = 0.535, handHeight = 0.795, han
     bones,
     // talking is an audio-playback state, not testimony sentiment or guilt.
     // An optional measured audio level makes jaw motion follow actual speech.
-    update(talking = false, delta = 1 / 60, time, audioLevel) {
+    update(talking = false, delta = 1 / 60, time, audioLevel, performance = {}) {
       clock = Number.isFinite(time) ? time : clock + Math.min(delta, 0.1);
       const target = talking ? 1 : 0;
       speech += (target - speech) * Math.min(1, Math.max(0, delta) * 10);
@@ -127,9 +127,33 @@ export function setupOfficer(root, { seatHeight = 0.535, handHeight = 0.795, han
       head.quaternion.copy(posed.get('Head')).multiply(deltaRotation);
       euler.set(0.006 * Math.sin(clock * 1.25), 0, 0);
       chest.quaternion.copy(posed.get('Spine2')).multiply(deltaRotation.setFromEuler(euler));
-      const rightArm = bones.get('RightArm');
-      euler.set(speech * 0.015 * Math.sin(clock * 1.7), 0, 0);
-      rightArm.quaternion.copy(posed.get('RightArm')).multiply(deltaRotation.setFromEuler(euler));
+      for (const name of ['Spine','Spine1']) {
+        const bone = bones.get(name); if (!bone) continue;
+        euler.set((performance.lean || 0) * (name === 'Spine' ? 1 : .35),0,0);
+        bone.quaternion.copy(posed.get(name)).multiply(deltaRotation.setFromEuler(euler));
+      }
+      if (performance.gaze || performance.nod) {
+        head.quaternion.multiply(deltaRotation.setFromEuler(euler.set(performance.nod || 0,performance.gaze || 0,0)));
+      }
+      root.updateWorldMatrix(true,true);
+      // Re-solve against the table/lap after breathing and leaning. A fixed arm
+      // rotation alone lets the hands drift with every parent spine movement.
+      for (const [side,sign] of [['Left',1],['Right',-1]]) {
+        for (const part of ['Arm','ForeArm','Hand']) bones.get(side+part).quaternion.copy(posed.get(side+part));
+        root.updateWorldMatrix(true,true);
+        const target=performance[side.toLowerCase()] || [sign*.205,handHeight,handDepth-(side==='Right'?.03:0)];
+        limb(side+'Arm',side+'ForeArm',side+'Hand',rigPoint(...target),rigPoint(sign*.42,.88,-.02));
+        const palm=new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(1,0,0),new Vector3(0,0,1),new Vector3(0,-1,0)));
+        worldRotation(bones.get(side+'Hand'),rig.getWorldQuaternion(new Quaternion()).multiply(palm));
+        // Flatten the thumb against the table; imported thumb bind poses point down.
+        for(const i of [1,2]){
+          const bone=bones.get(`${side}HandThumb${i}`),child=bones.get(`${side}HandThumb${i+1}`);
+          if(!bone||!child)continue;
+          bone.quaternion.copy(posed.get(`${side}HandThumb${i}`));root.updateWorldMatrix(true,true);
+          const start=bone.getWorldPosition(new Vector3()),end=child.getWorldPosition(new Vector3());
+          end.y=start.y;aimBone(bone,child,end);
+        }
+      }
       const envelope = Number.isFinite(audioLevel)
         ? Math.max(0, Math.min(1, audioLevel * 4))
         : 0.3 + 0.7 * Math.abs(Math.sin(clock * 9.1) * Math.cos(clock * 3.7));
